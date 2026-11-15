@@ -126,12 +126,13 @@ test('Draft from text: withholds per-serving values, never replaces unsaved deta
   const { form, mealLog, panel, review, state, text } = await openMealLog(page);
 
   await form.getByLabel('Title').fill('My own note');
-  await text.fill('Lunch: lentil soup, 300 kcal per serving; fat 0 g in total');
+  await text.fill('Lunch: lentil soup, 300 kcal per serving; in total I ate 0 g fat');
   await panel.getByRole('button', { name: 'Propose draft' }).click();
   await expect(review).toBeVisible();
   await expect(review.locator('[data-draft-field="energyKcal"]')).toHaveAttribute('data-draft-status', 'withheld');
   await expect(review.locator('[data-draft-field="energyKcal"]')).toContainText('per 100 g, per serving or per piece');
-  // A written zero, stated as a total in its own sentence, is a value (the per-serving qualifier does not reach it).
+  // A written zero, stated as eaten in total in its own sentence, is a value (the per-serving qualifier does not reach
+  // it). Since the third grounding correction a summing phrase alone ("fat 0 g in total") is not enough beside it.
   await expect(review.locator('[data-draft-field="fatG"]')).toContainText('0 g');
   expect(await fitsWidth(page)).toBe(true);
 
