@@ -6,6 +6,8 @@
 - Amended: 2026-11-14, grounding corrections (qualifier scope, signs, exact decimals); see "Amendment" below.
 - Amended again: 2026-11-14, second grounding correction (a label's "total", ranges split by a line break); see
   "Amendment 2" below.
+- Amended a third time: 2026-11-15, third grounding correction (a summing phrase is not consumption; mixed-unit ranges);
+  see "Amendment 3" below.
 - Date: 2026-11-14
 - Relates to: ADR-0083 (the meal log, its contract, idempotent creation per form session, `source: manual`, erasure),
   ADR-0057 and its addendum (proposals that change nothing until accepted; admission; request and operation lifetimes),
@@ -75,30 +77,51 @@ a nutrition value only if **all** of these hold:
    multiplication marker, no bound or range (up to, at least, `500-600`, `500−600`, `~`, a question) and no negation
    (not, no, without, не, без…), and the **whole text** has no hedge (about, roughly, estimate(s), approximately,
    примерно, около, наверное…), since a hedge in another clause or sentence still makes the numbers estimates.
-   **Ranges are also read in the original text around the number**, not only in its clause: another number directly
-   before it or directly after it (and its unit), joined by any minus or dash (`-`, `‐`, `‑`, `‒`, `–`, `—`, `−`, `﹣`,
-   `－`), "to", "or", "до" or "или" with only whitespace around it, line breaks included, makes it `ambiguous`
-   ("Soup, 500 -\n600 kcal", "500 to\n600 kcal", "от 500 до\n600 ккал", "5 -\n6 g protein", and from the lower end
-   "500 kcal to\n600"). Two numbers are not a range when other punctuation stands between them ("Rice 150 g.\n— 600
-   kcal"), when the other number has a different kind of unit ("300 kcal –\n5 g protein", "200 ml – 120 kcal"), or when
-   it states a different nutrient ("protein 30 g\n– 5 g fat").
+   **Ranges are also read in the original text around the number**, not only in its clause, from the number and from
+   both edges of its statement (so "fat 5 g", "5 g of fat" and a shorter excerpt are all read the same way), in both
+   directions, with only whitespace (line breaks included) around the connector. Units are never converted or compared
+   numerically. The connector decides:
+   - **"to", "or", "до", "или"** joined to another number make it `ambiguous` **whatever the endpoints' units**: the
+     same unit ("500 to\n600 kcal", "от 500 до\n600 ккал"), different units of one measure ("500 kcal to\n2500 kJ",
+     "fat 5 g to\n6000 mg", "5 g of fat или 0.2 oz"), an unsupported unit or another measure ("2 cups or\n500 kcal",
+     "300 kcal or\n5 g protein"). At most three words (a unit, "of fat") may stand between the other number and the
+     connector. These words do not separate two statements.
+   - **A dash** (`-`, `‐`, `‑`, `‒`, `–`, `—`, `−`, `﹣`, `－`) joined to another number makes it `ambiguous` when that
+     number states the **same measure** (energy: kcal, calories, kJ, кДж; mass: g, mg, mcg, kg, oz, lb) or carries no
+     unit ("500 -\n600 kcal", "500 kcal –\n2500 kJ", "6000 mg –\n5 g fat"). A dash also separates statements, so two
+     numbers are not a range when the other number states a different measure ("300 kcal –\n5 g protein", "200 ml –
+     120 kcal") or is itself a statement of a different nutrient ("protein 30 g\n– 5 g fat").
+   - Other punctuation between the numbers makes them separate statements ("Rice 150 g.\n— 600 kcal").
 6. Its **whole-entry scope** is established. Per-portion qualifiers (per, each, serving, portion, piece, `/100 g`,
    `in/for/на/в/за/для 100`, `для 30 г`, `по` before a number, `x2`, twice, каждый, порция, штука…) and nutrition-label
    headings (nutrition facts, nutritional value, label, пищевая/энергетическая ценность, этикетка, на упаковке) can stand
    before a list, after it, in a heading above lines, or in another sentence; commas, list formatting, line breaks and a
-   short excerpt never prove that their scope ended. So: with no qualifier or label anywhere in the text, every value is
-   whole-entry; otherwise the label or qualifier stays in force until the person resolves it for that value, which takes
-   **all** of: (a) the value's sentence (split at `.`, `;`, `!`, `?`, not at commas, colons or line breaks) carries the
-   person's own **summing phrase**: "in total", "altogether", "all together", "итого", "в сумме", "суммарно", "в общей
-   сложности". A word a label prints, or one that also reads as an adjective in front of a nutrient, is **not** one,
-   wherever it stands and for every nutrient: "total"/"totals" ("Total protein 4 g", "Fat 4 g total", "Total: fat 4 g"),
-   "overall", "всего" (also "only") and "целиком" (describes the food, not a figure); (b) that sentence carries no
-   qualifier or label itself and states **no amount of food** (a mass or volume that is not a macronutrient statement:
-   in "I ate 200 g in total, protein 8 g" the phrase may sum the food and the 8 g may still be per 100 g); (c) every
-   qualifier sentence in the text states values of its own (a value-less sentence such as "Values are per 100 g." may
-   refer to any sentence, so no total escapes it). Otherwise `per_portion`. So in "Yogurt 200 g. Per 100 g: 60 kcal,
-   protein 4 g. In total I ate 120 kcal, protein 8 g." 120 and 8 are proposed and 60 and 4 withheld. Nothing is
-   multiplied or inferred.
+   short excerpt never prove that their scope ended. The same holds for words that name a **container, a product or a
+   partial amount** (package, pack, packet, box, bag, jar, bottle, carton, tub, tin, container, product; half, quarter,
+   third, part, "some of", "most of", bite, sip; упаковка, пачка, банка, бутылка, пакет, коробка, контейнер, продукт;
+   половина, пол-пачки…, треть, четверть, часть), because a value next to them may be the whole package's while only
+   part was eaten. So: with none of these anywhere in the text, every value is whole-entry; otherwise the context stays
+   in force until the person resolves it for that value, which takes **all** of: (a) the value's sentence (split at
+   `.`, `;`, `!`, `?`, not at commas, colons or line breaks) carries the person's own **summing phrase**: "in total",
+   "altogether", "all together", "итого", "в сумме", "суммарно", "в общей сложности". A word a label prints, or one that
+   also reads as an adjective in front of a nutrient, is **not** one, wherever it stands and for every nutrient:
+   "total"/"totals" ("Total protein 4 g", "Fat 4 g total", "Total: fat 4 g"), "overall", "всего" (also "only") and
+   "целиком" (describes the food, not a figure); (b) the value is **bound to an assertion that it was eaten**, in that
+   same sentence: a consumption verb stands before it (ate, eaten, consumed, drank, drunk, and "had" only after "I"/"we"
+   ("I had", "I've had"); съел/съела/съели, съедено, скушал, выпил, употребил, поел) and between the verb and the value
+   there is nothing but other nutrient statements, separators (whitespace, `,`, `:`, dashes), "and", "plus", "и",
+   "плюс", the summing phrase, or the lower endpoint of a range directly before a nutrient statement ("In total I ate 120
+   kcal, protein 8 g", "I ate 330 kcal in total", "Итого съел 240 ккал, белки 32 г"). A summing phrase alone ("In total
+   the package has 4 g protein", "Итого 240 ккал"), a consumption verb in another sentence ("I ate half the yogurt."), a
+   verb whose object is something else ("I ate the yogurt, which has 4 g protein") or a value before the verb is not
+   enough; (c) that sentence carries no qualifier, label, container, product or partial amount itself and states **no
+   amount of food** (a mass or volume that is not a macronutrient statement: in "I ate 200 g in total, protein 8 g" the
+   phrase may sum the food and the 8 g may still be per 100 g); (d) every qualifier sentence in the text states values
+   of its own (a value-less sentence such as "Values are per 100 g." may refer to any sentence, so no total escapes it).
+   Otherwise `per_portion`. So in "Yogurt 200 g. Per 100 g: 60 kcal, protein 4 g. In total I ate 120 kcal, protein 8 g."
+   120 and 8 are proposed and 60 and 4 withheld, and in "I ate half the yogurt. Nutrition facts per 100 g: 60 kcal. In
+   total the package has 4 g protein." nothing is proposed. Nothing is multiplied or inferred: not that the whole
+   package was eaten, and never a fraction of a value.
 7. The text states no other value for that nutrient **under the same scope rule** (two whole-entry values are
    `conflicting`; a per-portion value never conflicts with a total; a mention with an ambiguous sign or notation counts as
    a value of its own).
@@ -300,6 +323,56 @@ proposed. Before the database runs, each connection reported host `127.0.0.1:543
 the first run (API 2,047). The four Chromium meal-draft scenarios with the fake provider: 4/4 at the first run, no
 scenario changed. The fake harness on the frozen sets is unchanged (0 incorrectly accepted; recall 15/16 and 15/15).
 
+## Amendment 3: a summing phrase is not consumption; mixed-unit ranges (2026-11-15)
+
+Two further defects of the same kind were confirmed after the second amendment: schema-valid claims that its rules still
+turned into proposed values. Rules 5 and 6 above state the corrected rules. Nothing else changed: endpoint, response
+shape (no new reason code: both cases are withheld with the existing `per_portion` and `ambiguous`), apply/save,
+idempotency, access checks, cancellation, admission lifetimes, privacy, off by default, the prompt
+(`meal-draft-prompt-1`), the frozen datasets and the historical evaluation artifacts.
+
+| Defect | Reproduction | Root cause | Correction |
+|---|---|---|---|
+| A package total escaped through a summing phrase | "I ate half the yogurt. Nutrition facts per 100 g: 60 kcal. In total the package has 4 g protein." with `4`/"4 g protein": proposed as 4 | Whole-entry scope required only that the value's sentence contain a summing phrase ("in total") and no qualifier; nothing tied the value to what was eaten, so the package's total passed, and package or partial-consumption words were not context at all | The value must be bound to a consumption verb in its own sentence with only nutrient statements and separators between them; container, product and partial-amount words anywhere in the text require that binding and refuse it in the value's own sentence (rule 6) |
+| Mixed units hid a range | "Soup, 500 kcal to\n2500 kJ" with `500`/"500 kcal", and "Soup, fat 5 g to\n6000 mg" with `5`/"fat 5 g": proposed | The range check treated any different unit kind of the other endpoint as proof of two separate statements, for every connector; kJ and mg were "other" units, not energy and mass | Word connectors ("to", "or", "до", "или") are ranges or alternatives whatever the units; a dash is a range when the other endpoint is the same measure (kcal/kJ, g/mg/kg/oz…) or has no unit, and is still read as a separator between different measures or nutrients; both are checked from the number and from the edges of its statement (rule 5) |
+
+**Changed expectations, on purpose.** These texts had a summing phrase but no assertion that the values were eaten, and
+expected proposals; they are now `per_portion`: "Творог 200 г. На 100 г: 120 ккал, белки 16 г. Итого 240 ккал, белки
+32 г." (240 and 32), "Soup. Per 100 g: 50 kcal. In total 300 kcal." (300), and the two-total conflict variants with "In
+total"/"Итого" (were `conflicting`). The conflict and positive cases are kept with "In total I ate"/"Итого съел". Three
+positive controls were reworded the same way so they keep testing what they tested: the mixed draft that must fit the
+public contract ("In total I ate 180 kcal…"), the HTTP case with "Итого съел 180 ккал…", and the second Chromium
+scenario ("Lunch: lentil soup, 300 kcal per serving; in total I ate 0 g fat", was "…; fat 0 g in total"). Other
+consequences, all in the safe direction: "Total"/"Итого" lines without a consumption verb beside a label or qualifier,
+any value in a sentence that names a package, product or partial amount, values in a text that names a container or
+partial amount without an explicit consumed total, "or"/"to" between two different measures ("300 kcal or 5 g
+protein"), and a dash between a food mass and a gram figure read from the statement's edge ("Rice 150 g – protein 30 g")
+are withheld. Texts without a label, qualifier, container or partial amount are unaffected ("Dinner: chicken and rice,
+total 650 kcal" still proposes 650; "I ate soup, 300 kcal" proposes 300).
+
+Verification of this correction (deterministic only, **no model call**): the new
+`meal-draft-grounding-consumption-and-units.spec.ts` (44 tests: both reproductions with the shortest and a longer
+excerpt; container totals beside partial consumption, with and without a label, EN and RU, all four fields; summing
+phrases without consumption; consumption in another sentence; a verb not bound to the value; container or partial words
+in the consumed sentence; mixed-unit ranges for "to", "or", "до", "или" from both endpoints across spaces, no-break
+spaces, line breaks and CRLF, with kJ/кДж, mg, oz and unsupported units; same-measure dash ranges for every supported
+dash; positive controls for consumed totals EN/RU with zero and exact decimals, a consumed total beside partial
+consumption, separate statements of different measures, earlier sign/precision/bounds fixes; a mixed draft that fits the
+public contract) failed 38 of 44 against the unchanged code (the 6 that passed are the positive-control tests) and
+passed 44 of 44 after it. The earlier specs pass with the expectations above changed on purpose; against the unchanged
+code the updated regression spec fails exactly those 2 tests. Two new HTTP integration cases with the injected provider
+(`meal-drafts-http`, 20/20; both fail against the unchanged code): the reproduction and a Russian package total withheld
+beside a consumed total and a zero that are proposed; mixed-unit ranges (`to`, `или`, en dash with kJ, mg, oz) withheld
+beside a decimal-comma value and dash-separated statements of different measures that are proposed. Before the database
+runs, each connection (API integration and browser suite) reported client `127.0.0.1:5433`, server `172.18.0.2:5432`,
+`current_database()` = `running_tracker_test`, and `current_user` = `session_user` = the expected role
+(`running_tracker_runtime`, `running_tracker_owner`, `running_tracker_maintenance`); then `meal-drafts-http`,
+`meals-http`, `meals-access`, `observability` and `tenant-isolation` ran sequentially: 5 files, 117 passed at the first
+run. `npm run verify`: the first run failed at lint (a literal no-break space in the new spec, `no-irregular-whitespace`);
+after replacing it, exit 0 (API 2,091). The four Chromium meal-draft scenarios with the fake provider: 4/4 at the first
+run, with the one scenario text changed as above. The fake harness on the frozen sets is unchanged (0 incorrectly
+accepted; recall 15/16 and 15/15).
+
 ## Consequences
 
 - One more AI feature, off by default and independent of the other two; the suite's API runs it with the fake provider,
@@ -323,14 +396,31 @@ scenario changed. The fake harness on the frozen sets is unchanged (0 incorrectl
   clause ("Pasta, up to\n600 kcal", "at least\n600 kcal", "более\n600 ккал" and "Salad, not\n400 kcal" still propose the
   number), and a Russian "до" alone ("Суп, до 600 ккал", "up to") is read as a bound only between two numbers. Each
   is a false acceptance that needs its own correction.
-- The summing-phrase rule is wording, not understanding: a summing phrase that refers to something other than the meal,
-  a label printed with such a phrase, or a "total" the person did mean as what they ate is not told apart. The range
-  check sees only two numbers joined across whitespace by a dash, "to", "or", "до" or "или"; range wording outside that
-  vocabulary is not recognised, before or after this correction ("Pasta, between 500 and 600 kcal" and "Паста, от 500 и
-  до 600 ккал" still propose 600). Two adjacent same-unit (or unit-less) numbers joined by a dash are always read as a
-  range, even when the person meant two lines.
-- The corrected rules (both amendments) have not been measured with a real model: the 40-call evaluation predates them (the deterministic
-  fake harness on the frozen sets is unchanged by them: 0 incorrect, development recall 15/16, held-out 15/15).
+- The summing-phrase and consumption rules are wording, not understanding (third amendment). The consumption
+  vocabulary is a fixed EN/RU list: other verbs ("finished", "доел", "had" without "I"/"we") withhold, and a listed verb
+  with another subject ("he ate", "он съел") is accepted as written. Between the verb and the value only nutrient
+  statements and separators are allowed, so a correct consumed total phrased differently ("I ate a total of 120 kcal",
+  "120 kcal is what I ate") is withheld. A consumed sentence that is nevertheless about something else, such as a label
+  printed as "In total you ate…", is not told apart. The container and partial-amount vocabulary is also a fixed list:
+  other containers ("pot", "cup", "тарелка" alone) are not context, and the list also withholds harmless uses ("Half-fat
+  yogurt, 120 kcal", "Protein product, 25 g protein"). Without a label, qualifier, container or partial word nothing is
+  required ("Dinner: chicken and rice, total 650 kcal" is proposed). Such texts still carry the screen's existing
+  `per_portion` sentence (per 100 g, per serving, per piece), which does not name packages or unconsumed totals; the
+  public reason codes were deliberately not changed.
+- The range check sees only two numbers joined across whitespace by a dash, "to", "or", "до" or "или" (with at most
+  three words between the other number and a word connector); range wording outside that vocabulary is not recognised
+  ("Pasta, between 500 and 600 kcal" and "Паста, от 500 и до 600 ккал" still propose 600). A word connector is always a
+  range or alternative, also between different measures ("300 kcal or 5 g protein" is withheld). A dash between two
+  numbers of the same measure (or one without a unit) is always read as a range, even when the person meant two lines
+  ("Rice 150 g – protein 30 g" is withheld). A dash between different measures stays a separator. Units are classified
+  by a fixed list (kJ/кДж as energy; mg, mcg, kg, oz, lb as mass; ml, l as volume; %). With a dash, an unlisted unit
+  after the value counts as "no unit" (a range: "500 kcal – 2 cups" is withheld), but before the value it is not
+  recognised ("2 cups – 500 kcal" proposes 500, as before this amendment).
+- The corrected rules (all three amendments) have not been measured with a real model: the 40-call evaluation predates
+  them (the deterministic fake harness on the frozen sets is unchanged by them: 0 incorrect, development recall 15/16,
+  held-out 15/15). The prompt (`meal-draft-prompt-1`) asks for "that nutrient's total for the whole meal" and says
+  nothing about consumption, containers or partial amounts, so a model may claim values the server now refuses;
+  revising it needs a new prompt version and a new evaluation.
 - A person can of course write a wrong number; the feature extracts what they wrote, it does not check it.
 - No real iPhone, Safari or WebKit run; Chromium only. Ollama behind a container network was not tried.
 - Provenance does not distinguish a confirmed draft from typed entry (Decision 5).

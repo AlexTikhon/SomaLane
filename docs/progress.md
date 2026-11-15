@@ -4571,3 +4571,53 @@ No real-model call was made for this change.
 correction): a bound or negation separated from its number by a line break ("up to\n600 kcal", "not\n400 kcal",
 "более\n600 ккал"), a Russian "до" alone ("до 600 ккал"), and range wording outside the supported vocabulary ("between
 500 and 600 kcal", "от 500 и до 600 ккал") are still proposed. The summing-phrase rule is wording, not understanding.
+
+## Draft from text: third grounding correction (ADR-0092 "Amendment 3") (2026-11-15)
+
+**What changed.** Two more confirmed defects, each letting a schema-valid model claim become a proposed value, are fixed
+in `meal-draft-grounding.ts`. The endpoint, response shape (no new reason code), apply/save, idempotency, access checks,
+cancellation, admission lifetimes, privacy, off-by-default configuration, prompt, frozen datasets and evaluation
+artifacts are unchanged.
+
+- **A summing phrase is not consumption.** "I ate half the yogurt. Nutrition facts per 100 g: 60 kcal. In total the
+  package has 4 g protein." proposed 4: whole-entry scope needed only a summing phrase in a qualifier-free sentence, and
+  nothing tied the value to what was eaten. Now the value must also be bound to a consumption verb in its own sentence
+  (ate, eaten, consumed, drank, "I had"; съел, съедено, скушал, выпил, употребил, поел), with only nutrient statements
+  and separators between them. Containers, products and partial amounts (package, box, jar, bottle, product, half, part
+  of; упаковка, пачка, банка, половина, часть…) are now context like a label: anywhere in the text they require that
+  binding, and in the value's own sentence they refuse it. Nothing is computed from a package total or a fraction.
+- **Mixed units hid a range.** "Soup, 500 kcal to\n2500 kJ" and "Soup, fat 5 g to\n6000 mg" proposed the first value: a
+  different unit kind of the other endpoint counted as proof of separate statements. Now "to", "or", "до", "или" make a
+  range or alternative whatever the units; a dash makes a range when the other endpoint is the same measure (kcal/kJ,
+  g/mg/kg/oz…) or has no unit, and stays a separator between different measures ("300 kcal –\n5 g protein", "200 ml –
+  120 kcal") or nutrients. Both checks read the original text from the number and from the edges of its statement.
+
+Expectations changed on purpose (the texts had a summing phrase but no assertion of what was eaten): "Творог 200 г. На
+100 г: 120 ккал, белки 16 г. Итого 240 ккал, белки 32 г." and "Soup. Per 100 g: 50 kcal. In total 300 kcal." are now
+`per_portion`, and their two-total conflict variants too; conflict detection and the positive cases are kept with "In
+total I ate"/"Итого съел". Three positive controls were reworded the same way (the mixed-draft contract case, one HTTP
+case, and the second Chromium scenario: "…; in total I ate 0 g fat", was "…; fat 0 g in total"). ADR-0092 (rules 5 and 6,
+"Amendment 3", limitations), the reference, the runbook and the grounding module's header were updated; the historical
+evaluation report was not modified.
+
+**Executed checks.**
+
+| Command | Result |
+|---|---|
+| `meal-draft-grounding-consumption-and-units.spec.ts` (new, 44) against the unchanged code | 38 failed, 6 passed (the positive-control tests). A first attempt from a lower-case `c:` working directory in Git Bash failed to load (`Cannot read properties of undefined (reading 'config')`, the known two-vitest-instances problem); run from `C:\` in PowerShell instead |
+| Updated `meal-draft-grounding-regressions.spec.ts` against the unchanged code | 2 failed (exactly the two tests with expectations changed on purpose), 33 passed |
+| Draft specs after the correction (`src/meals/drafts/`) | 6 files, 187 passed |
+| Fake harness on the frozen sets (no output files) | unchanged: development 0 incorrect, 15/16; held-out 0 incorrect, 15/15 |
+| Test database identity (API integration and browser suite connections) | each: client `127.0.0.1:5433`, server `172.18.0.2:5432`, `running_tracker_test`, `current_user` = `session_user` = `running_tracker_runtime` / `running_tracker_owner` / `running_tracker_maintenance` as expected |
+| Database suites, sequential | `meal-drafts-http` (20, 2 new), `meals-http` (33), `meals-access` (52), `observability` (1), `tenant-isolation` (11): 5 files, 117 passed at the first run; the 2 new HTTP cases fail against the unchanged code |
+| `npm run verify` | first run exit 1 at lint (`no-irregular-whitespace`: a literal no-break space in the new spec); after replacing it, exit 0: scripts 115, API 2,091, web 1,325, contracts 304, fixtures 14, simulator 3 |
+| `npx playwright test meal-draft.spec.ts --project=chromium` | 4 passed at the first run (fake provider), one scenario text changed as above |
+
+No real-model call was made for this change.
+
+**Not established.** The corrected rules are not measured with a real model. The consumption, container and
+partial-amount vocabularies are fixed EN/RU lists (wording, not understanding): some correct totals are withheld ("I ate
+a total of 120 kcal", "Half-fat yogurt, 120 kcal"), and a listed verb with another subject ("he ate") is accepted. A
+word connector is always a range, also between different measures; a dash between the same measure always is. The
+screen shows the existing `per_portion` sentence for package and unconsumed totals. The limitations found by the second
+correction (bounds and negations across a line break, a lone "до", range wording outside the vocabulary) still stand.

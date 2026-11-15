@@ -108,9 +108,15 @@ never quoted as model quality. The last measured results are in
   raise `MEAL_DRAFTS_TIMEOUT_MS` up to 55000; the browser waits 60 s. Nothing falls back to another provider.
 - **A value I wrote was not filled in:** read the reason under it. The rules are deliberately conservative (per serving,
   approximate, two values, no unit next to the number, a food weight): type the value yourself. When the text mentions
-  "per 100 g", "per serving", "на 100 г", a nutrition label or similar anywhere, only values in a sentence of their own
-  that sums up what was eaten ("In total I ate 120 kcal", "Итого 240 ккал") are filled in; a label-style "Total 120 kcal",
-  "Fat 4 g total", "overall" or "всего" is not enough, and neither is a summing sentence that also gives the food's weight
-  ("I ate 200 g in total, protein 8 g"). A hedge such as "about" or "примерно" anywhere withholds every value; a dash with
-  a space before a number ("- 500 kcal") is read as a possible minus sign and withheld; and two numbers joined by a dash,
-  "to", "or", "до" or "или", also across a line break ("500 -\n600 kcal"), are a range and withheld.
+  "per 100 g", "per serving", "на 100 г", a nutrition label, a package, box, jar or bottle, a product, or a partial amount
+  ("half", "part of", "половину", "часть") anywhere, only values in a sentence of their own that says they were eaten
+  and sums them up are filled in: a summing phrase AND a consumption verb directly before the values ("In total I ate
+  120 kcal, protein 8 g", "Итого съел 240 ккал"). "In total the package has 4 g protein", "Итого 240 ккал" without a verb,
+  a label-style "Total 120 kcal", "Fat 4 g total", "overall" or "всего" are not enough, and neither is a summing sentence
+  that also gives the food's weight ("I ate 200 g in total, protein 8 g") or names the package or a part. Nothing is
+  calculated from a package total. A hedge such as "about" or "примерно" anywhere withholds every value; a dash with a
+  space before a number ("- 500 kcal") is read as a possible minus sign and withheld; two numbers joined by "to", "or",
+  "до" or "или" are a range or alternative and withheld whatever their units ("500 kcal to 2500 kJ", "fat 5 g or 6000
+  mg"); and two numbers joined by a dash are a range and withheld when they measure the same thing ("500 -\n600 kcal",
+  "500 kcal – 2500 kJ", "5 g – 6000 mg"), also across a line break. The screen shows the `per_portion` reason for package
+  and unconsumed totals too.
