@@ -25,8 +25,9 @@ import type { MealDraftAbstention, MealDraftWireAnswer, NutrientClaim } from './
 // shown to the person as a proposal. The model only CLAIMS: "this excerpt of the text says protein 40 g". This module
 // finds the excerpt in the text, finds the number in it with its own tokenizer, reads the sign before it in the ORIGINAL
 // text, checks that the number is followed by the field's unit and attached to the field's nutrient, refuses a bound or
-// negation in its clause, a range or alternative around the number in the original text (across line breaks; "to", "or",
-// "до", "или" whatever the units, a dash between units of the same measure) and a hedge anywhere, establishes that it is a
+// negation in its clause or bound to its statement across any whitespace (before it, left dangling at a line end, or
+// after it; "до", "от", "between … and"), a range or alternative around the number in the original text (across line
+// breaks; "to", "or", "до", "или" whatever the units, a dash between units of the same measure) and a hedge anywhere, establishes that it is a
 // whole-entry total (a per-portion qualifier, a nutrition label, a container or a partial amount anywhere in the text
 // requires the person's own summing phrase, such as "in total" or "итого", never a label's "total", AND an assertion in
 // the same sentence that the value was eaten, such as "I ate", because commas, lists, sentences and line breaks do not end
@@ -204,6 +205,37 @@ const AMBIGUOUS = new RegExp(
 
 const NEGATED = new RegExp(
   `${NOT_LETTER_BEFORE}(?:no|not|without|never|none|не|без|нет|ни)${NOT_LETTER_AFTER}|n['’]t${NOT_LETTER_AFTER}`,
+  'iu',
+);
+
+// Qualifiers bound to ONE numeric statement, read in the original text across any whitespace (spaces, tabs, line breaks,
+// CRLF, no-break and narrow no-break spaces), whatever the model's excerpt or the clause shows (see `qualifierAround`).
+// The words of a phrase may themselves be split by any whitespace ("up\nto", "не\nболее"). A bound or an open endpoint
+// before a number: "до", "от", "from" and "between" alone bound or open a range only here, directly before a statement
+// ("Суп, до 600 ккал"), never anywhere in a clause ("Перекус до обеда, 200 ккал").
+const BOUND_WORD = `(?:${NOT_LETTER_BEFORE}(?:at\\s+least|at\\s+most|up\\s+to|(?:less|fewer|more|greater|higher|lower)\\s+than|over|under|below|above|(?:max|maximum|minimum)(?:\\s+of)?|from|between|менее|более|меньше|больше|свыше|выше|ниже|минимум|максимум|до|от|между)${NOT_LETTER_AFTER}|[~≈±<>≤≥])`;
+const NEGATION_WORD = `(?:${NOT_LETTER_BEFORE}(?:no|not|without|never|none|не|без|нет|ни)|n['’]t)${NOT_LETTER_AFTER}`;
+// Between a qualifier and its statement: whitespace and at most one colon, equals sign, en dash or em dash.
+const QUALIFIER_GAP = '\\s*[:=\\u2013\\u2014]?\\s*';
+const BOUND_BEFORE = new RegExp(`${BOUND_WORD}${QUALIFIER_GAP}$`, 'iu');
+const NEGATION_BEFORE = new RegExp(`${NEGATION_WORD}${QUALIFIER_GAP}$`, 'iu');
+// A qualifier left at the end of a line, before the statement on a following line with only words between them ("Pasta,
+// up to\ntotal 600 kcal", "Salad, not\neven 400 kcal"): which number it qualifies is unresolved, so it binds this one.
+const LINE_END = '[^\\S\\r\\n]*[\\r\\n]';
+const BOUND_DANGLING = new RegExp(`${BOUND_WORD}${LINE_END}`, 'iu');
+const NEGATION_DANGLING = new RegExp(`${NEGATION_WORD}${LINE_END}`, 'iu');
+// A bound written after the statement ("600 kcal at most", "600 ккал\nили больше"). The `prefix` group holds the bounds
+// that also open a statement ("at least 20 g protein", "не более 600 ккал"): when one of them directly introduces the
+// next nutrient statement it qualifies that statement instead (see `introducesStatement`). The others ("or more", "and
+// up", "tops", "или больше", "и более") only ever close one, so they stay on the value before them.
+const BOUND_AFTER = new RegExp(
+  `^${QUALIFIER_GAP}(?:(?<prefix>at\\s+most|at\\s+least|(?:max|maximum|minimum)(?:\\s+of)?|максимум|минимум|не\\s+(?:больше|меньше|более|менее|выше|ниже))|or\\s+(?:more|less|fewer|above|below|over|under|higher|lower)|and\\s+(?:more|less|above|below|over|under|up)|tops|(?:или|и)\\s+(?:больше|меньше|более|менее|выше|ниже))${NOT_LETTER_AFTER}`,
+  'iu',
+);
+// The upper endpoint of "between N … and" / "между N … и": the lower number, at most three words (its unit, "of fat"…)
+// and the conjunction, across any whitespace, directly before the statement. ("от N … и до" is bound by its "до".)
+const BETWEEN_UPPER = new RegExp(
+  `${NOT_LETTER_BEFORE}(?:between|между)\\s+\\d+(?:[.,]\\d+)?(?:\\s*(?:\\p{L}+|%)){0,3}?\\s+(?:and|и)${QUALIFIER_GAP}$`,
   'iu',
 );
 
@@ -536,14 +568,78 @@ function inRange(text: string, token: NumberToken, start: number, end: number, f
 }
 
 /**
+ * The text before `edge` back to the nearest , . ; ! ? | or digit, crossing line breaks: the words that lead into a
+ * statement on its own or on earlier lines, without reaching another clause or another number.
+ */
+function leadIn(text: string, edge: number): string {
+  let left = edge;
+  while (left > 0 && !/[,.;!?|\p{N}]/u.test(text[left - 1]!)) left -= 1;
+  return text.slice(left, edge);
+}
+
+/**
+ * A bound, an open endpoint, a range or a negation bound to the value's own statement (the number `token`, inside its
+ * statement at [start, end)) in the ORIGINAL text, which the clause check cannot see when a line break, a tab or a
+ * no-break space separates it from the number, or when the word ("до", "от", "between") bounds only a number directly
+ * after it. Read from the number and from the start of its statement, so "up to\nprotein 20 g" and "up to\n20 g protein"
+ * are read alike, whatever the excerpt includes:
+ *
+ * - directly before the statement, with only whitespace (and one `:` `=` `–` `—`) between: a bound or open endpoint
+ *   ("up to\n600 kcal", "более\n600 ккал", "до 600 ккал", "от 500 ккал", "between 500 kcal") or a negation ("not\n400
+ *   kcal");
+ * - the upper endpoint of "between N … and" / "между N … и" ("between 500 and\n600 kcal");
+ * - left dangling at the end of a line in the words leading into the statement ("up to\ntotal 600 kcal"): the
+ *   association is unresolved, so the value is withheld rather than taken as exact;
+ * - directly after the statement ("600 kcal at most", "600 ккал\nили больше"), unless that bound is one that also opens
+ *   a statement and it directly introduces the next nutrient statement ("500 kcal\nat least 20 g protein": the bound
+ *   qualifies the protein, read by the "directly before" rule above, and 500 stays exact).
+ *
+ * A qualifier that stands before other words on its own line ("No sauce\n500 kcal", "Перекус до обеда 200 ккал"), in
+ * another clause ("No sauce, 500 kcal") or in another sentence does not reach the value. Nothing is computed from a bound
+ * or a range: no endpoint is chosen, no midpoint formed.
+ */
+function qualifierAround(text: string, token: NumberToken, start: number, end: number): 'ambiguous' | 'negated' | null {
+  let negated = false;
+  for (const edge of new Set([token.start, start])) {
+    const before = text.slice(0, edge);
+    const lead = leadIn(text, edge);
+    if (BOUND_BEFORE.test(before) || BETWEEN_UPPER.test(before) || BOUND_DANGLING.test(lead)) return 'ambiguous';
+    if (NEGATION_BEFORE.test(before) || NEGATION_DANGLING.test(lead)) negated = true;
+  }
+  const after = BOUND_AFTER.exec(text.slice(end));
+  if (after !== null && !(after.groups?.prefix !== undefined && introducesStatement(text, end + after[0].length))) return 'ambiguous';
+  return negated ? 'negated' : null;
+}
+
+/**
+ * Whether a nutrient statement of any field (the existing mention recognition: a number with its unit and, for grams,
+ * its attached nutrient name, either side) starts at `position` on the SAME line, after only spaces, tabs, no-break
+ * spaces and at most one `:` `=` `–` `—`. Only the first number after that point is considered, and the statement must
+ * begin exactly there, so a later digit, a number without a supported unit or nutrient ("2 cups", "600", "20 g", "2500
+ * kJ"), a sign, punctuation or another word in between never counts as a separate statement. A bound alone on its line
+ * between two statements ("600 kcal\nat most\n20 g protein") introduces neither: its association is unresolved.
+ */
+function introducesStatement(text: string, position: number): boolean {
+  const gap = /^[^\S\r\n]*[:=–—]?[^\S\r\n]*/u.exec(text.slice(position));
+  const start = position + (gap?.[0].length ?? 0);
+  const next = numberTokens(text).find((token) => token.start >= start);
+  if (next === undefined) return false;
+  return MEAL_NUTRITION_FIELDS.some((field) => {
+    const mention = checkMention(text, next, field);
+    return mention.kind === 'mention' && mention.start === start;
+  });
+}
+
+/**
  * Why the value at [start, end) (the number `token` with its unit and nutrient) cannot be proposed as stated, or null:
- * its clause, a range around the number in the original text, a hedge anywhere, then its scope.
+ * its clause, a range or qualifier around its statement in the original text, a hedge anywhere, then its scope.
  */
 function scopeReason(text: string, start: number, end: number, token: NumberToken, field: MealNutritionField): MealDraftWithheldReason | null {
   const clause = clauseAround(text, start, end);
   if (hasPortionQualifier(clause.text)) return 'per_portion';
-  if (AMBIGUOUS.test(clause.text) || clause.closer === '?' || inRange(text, token, start, end, field)) return 'ambiguous';
-  if (NEGATED.test(clause.text)) return 'negated';
+  const qualifier = qualifierAround(text, token, start, end);
+  if (AMBIGUOUS.test(clause.text) || clause.closer === '?' || inRange(text, token, start, end, field) || qualifier === 'ambiguous') return 'ambiguous';
+  if (NEGATED.test(clause.text) || qualifier === 'negated') return 'negated';
   if (HEDGE.test(text)) return 'ambiguous';
   if (!wholeEntryScoped(text, start, end)) return 'per_portion';
   return null;

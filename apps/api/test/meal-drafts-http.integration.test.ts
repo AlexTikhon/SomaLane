@@ -138,6 +138,9 @@ describe('ADR-0092 meal draft proposals under the runtime role', () => {
       MEAL_DRAFTS_PROVIDER: 'fake',
       MEAL_DRAFTS_TIMEOUT_MS: '1000',
       MEAL_DRAFTS_USER_RATE_PER_MINUTE: '60',
+      // Every test signs in five people under a fixed clock, so live sessions accumulate in the in-memory store; the
+      // default of 100 is reached after 20 tests (test harness only; the product default is unchanged).
+      SESSION_STORE_MAX_ENTRIES: '1000',
     });
     // One connection only: a request that kept it while the model worked would block everything else.
     runtimePool = createDatabasePool({ ...config, DB_POOL_MAX: 1 });
@@ -485,6 +488,80 @@ describe('ADR-0092 meal draft proposals under the runtime role', () => {
         energyKcal: { excerpt: '300 kcal', status: 'proposed', value: 300 },
         proteinG: { excerpt: '0 g protein', status: 'proposed', value: 0 },
       });
+    });
+
+    // Fourth correction (2026-11-15): bounds and negations hidden by a line break, "до" alone, "between … and …".
+    it('withholds bounds and negations split from their number by a line break, and keeps the independent exact fields', async () => {
+      expect(
+        await draftFor(
+          'Pasta, up to\n600 kcal; not\r\n30 g protein; fat 0 g; carbs 12,50 g.',
+          answer('Pasta', {
+            carbohydrateG: claim('12,5', 'carbs 12,50 g'),
+            energyKcal: claim('600', '600 kcal'),
+            fatG: claim('0', 'fat 0 g'),
+            proteinG: claim('30', '30 g protein'),
+          }),
+        ),
+      ).toEqual({
+        carbohydrateG: { excerpt: 'carbs 12,50 g', status: 'proposed', value: 12.5 },
+        energyKcal: { reason: 'ambiguous', status: 'withheld' },
+        fatG: { excerpt: 'fat 0 g', status: 'proposed', value: 0 },
+        proteinG: { reason: 'negated', status: 'withheld' },
+      });
+      expect(
+        await draftFor('Суп, до 600 ккал, более\nбелка 20 г, без соли, жиры 3,5 г', answer('Суп', { energyKcal: claim('600', 'до 600 ккал'), fatG: claim('3,5', 'жиры 3,5 г'), proteinG: claim('20', 'белка 20 г') })),
+      ).toEqual({
+        carbohydrateG: { status: 'not_stated' },
+        energyKcal: { reason: 'ambiguous', status: 'withheld' },
+        fatG: { excerpt: 'жиры 3,5 г', status: 'proposed', value: 3.5 },
+        proteinG: { reason: 'ambiguous', status: 'withheld' },
+      });
+      expect(
+        await draftFor('No sauce, 500 kcal. I did not add sugar.', answer('sauce', { energyKcal: claim('500', '500 kcal') })),
+      ).toMatchObject({ energyKcal: { excerpt: '500 kcal', status: 'proposed', value: 500 } });
+    });
+
+    it('withholds "between … and …" and "от … и до …" ranges from either endpoint', async () => {
+      expect(
+        await draftFor(
+          'Pasta, between 500 kcal and\n600 kcal, between 20 and 25 g protein, fat 0 g',
+          answer('Pasta', { energyKcal: claim('500', '500 kcal'), fatG: claim('0', 'fat 0 g'), proteinG: claim('25', '25 g protein') }),
+        ),
+      ).toEqual({
+        carbohydrateG: { status: 'not_stated' },
+        energyKcal: { reason: 'ambiguous', status: 'withheld' },
+        fatG: { excerpt: 'fat 0 g', status: 'proposed', value: 0 },
+        proteinG: { reason: 'ambiguous', status: 'withheld' },
+      });
+      expect(
+        await draftFor('Паста, от 500 и до\n600 ккал; углеводы 70,5 г', answer('Паста', { carbohydrateG: claim('70,5', 'углеводы 70,5 г'), energyKcal: claim('600', '600 ккал') })),
+      ).toMatchObject({
+        carbohydrateG: { excerpt: 'углеводы 70,5 г', status: 'proposed', value: 70.5 },
+        energyKcal: { reason: 'ambiguous', status: 'withheld' },
+      });
+    });
+
+    // Correction (2026-11-15): a bound starting the next line qualifies the statement it introduces, not the previous one.
+    it('proposes exactly the independent field when a line-initial bound introduces the next statement', async () => {
+      expect(
+        await draftFor('Soup, 500 kcal\nat least 20 g protein', answer('Soup', { energyKcal: claim('500', '500 kcal'), proteinG: claim('20', '20 g protein') })),
+      ).toEqual({
+        carbohydrateG: { status: 'not_stated' },
+        energyKcal: { excerpt: '500 kcal', status: 'proposed', value: 500 },
+        fatG: { status: 'not_stated' },
+        proteinG: { reason: 'ambiguous', status: 'withheld' },
+      });
+      expect(
+        await draftFor('Soup, protein 20 g\r\nat most 600 kcal', answer('Soup', { energyKcal: claim('600', 'at most 600 kcal'), proteinG: claim('20', 'protein 20 g') })),
+      ).toEqual({
+        carbohydrateG: { status: 'not_stated' },
+        energyKcal: { reason: 'ambiguous', status: 'withheld' },
+        fatG: { status: 'not_stated' },
+        proteinG: { excerpt: 'protein 20 g', status: 'proposed', value: 20 },
+      });
+      expect(
+        await draftFor('Soup, 500 kcal\nat most', answer('Soup', { energyKcal: claim('500', '500 kcal') })),
+      ).toMatchObject({ energyKcal: { reason: 'ambiguous', status: 'withheld' } });
     });
 
     it('withholds forbidden precision and rounded claims, and accepts trailing zeros', async () => {
