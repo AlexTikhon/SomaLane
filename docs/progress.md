@@ -4621,3 +4621,105 @@ a total of 120 kcal", "Half-fat yogurt, 120 kcal"), and a listed verb with anoth
 word connector is always a range, also between different measures; a dash between the same measure always is. The
 screen shows the existing `per_portion` sentence for package and unconsumed totals. The limitations found by the second
 correction (bounds and negations across a line break, a lone "до", range wording outside the vocabulary) still stand.
+
+## Draft from text: fourth grounding correction (ADR-0092 "Amendment 4") (2026-11-15)
+
+**What changed.** The false acceptances the third correction left documented are fixed in `meal-draft-grounding.ts`: a
+schema-valid claim with the positive magnitude and a short excerpt ("600 kcal") no longer bypasses a bound, negation or
+range written around it. The endpoint, response shape (no new reason code: `ambiguous` and `negated`), apply/save,
+idempotency, access checks, cancellation, admission lifetimes, privacy, off-by-default configuration, prompt, frozen
+datasets and evaluation artifacts are unchanged. No dependency was added.
+
+- **Line-broken bounds and negations.** "Pasta, up to\n600 kcal", "at least\n600 kcal", "Паста, более\n600 ккал" and
+  "Salad, not\n400 kcal" proposed the number: bounds and negations were read only in the value's clause, which ends at a
+  line break. Now a qualifier bound to the value's statement is read in the original text across any whitespace (LF,
+  CRLF, tabs, no-break and narrow no-break spaces, also between the words of "up\nto" or "не\nболее"): directly before
+  the statement (from the number and from a nutrient name before it), left dangling at the end of a line before it
+  ("up to\ntotal 600 kcal"), or directly after it ("600 kcal at most", "600 ккал или больше").
+- **"до" alone.** "Суп, до 600 ккал" proposed 600. "до", "от", "from" and "between" now bound a statement directly after
+  them, and only there ("Перекус до обеда, 200 ккал" keeps 200).
+- **"between … and …", "от … (и) до …".** "Pasta, between 500 and 600 kcal" and "Паста, от 500 и до 600 ккал" proposed
+  600. Both endpoints are now withheld when each forms a nutrient statement, across line breaks, with decimal points or
+  commas and mixed units; nothing is chosen, averaged or converted.
+
+Scope is per statement: unrelated negation ("No sauce, 500 kcal", "I did not add sugar. Soup, 500 kcal.", "No
+sauce\n500 kcal") and independent exact fields ("Soup, up to\n600 kcal; protein 20 g." proposes 20) keep their result.
+Conflict detection is unchanged (a qualified mention still counts as a stated value). No earlier expectation changed.
+ADR-0092 (rule 5, rule 7 note, "Amendment 4", "Not established": the line-break and lone-"до" limitation removed, the
+range-vocabulary limitation narrowed, new adjacency limitations recorded), the reference, the runbook and the module
+header were updated; the historical evaluation report was not modified.
+
+**Executed checks.**
+
+| Command | Result |
+|---|---|
+| `meal-draft-grounding-qualifier-scope.spec.ts` (new) against the unchanged code | first version (29 tests): 25 failed, 4 passed (positive controls); final version (30 tests, one added for "a maximum of", comparatives, "выше"/"ниже"): 26 failed, 4 passed; the added test also failed against the intermediate fix before the vocabulary was extended. The six earlier draft specs pass against the unchanged code (187) |
+| First attempt to record the failure log | failed to load (`Cannot read properties of undefined (reading 'config')`) from a lower-case `c:` working directory in Git Bash, the known two-vitest-instances problem; run from `C:\` in PowerShell instead |
+| Draft specs after the correction (`src/meals/drafts/`) | 7 files, 217 passed |
+| `meal-drafts-http` with the two new cases against the unchanged code | 2 failed (600 and 30 proposed; 25 proposed, 500 `conflicting` instead of `ambiguous`), 20 passed |
+| Test database identity before each database run (API integration and browser suite connections) | each: client `127.0.0.1:5433`, server `172.18.0.2:5432`, `running_tracker_test`, `current_user` = `session_user` = `running_tracker_runtime` / `running_tracker_owner` / `running_tracker_maintenance` as expected |
+| Database suites, sequential | `meal-drafts-http` (22, 2 new), `meals-http` (33), `meals-access` (52), `observability` (1), `tenant-isolation` (11): 5 files, 119 passed at the first run, and again after the vocabulary extension |
+| Fake harness on the frozen sets (no output files) | unchanged: development 0 incorrect, 15/16; held-out 0 incorrect, 15/15 |
+| `npm run verify` | exit 0 at the first run (before the vocabulary extension: API 2,120); rerun on the final code: exit 0, scripts 115, API 2,121, web 1,325, contracts 304, fixtures 14, simulator 3 |
+| `npx playwright test meal-draft.spec.ts --project=chromium` | 4 passed at the first run (fake provider), and again on the final code; no scenario changed. The one `http.request.failed` log line is the off-by-default scenario's expected `503` |
+
+No real-model call was made for this change.
+
+**Not established.** The corrected rules are not measured with a real model. Qualifier scope is word adjacency, not
+syntax: a qualifier across a comma is not bound ("Pasta, 600 kcal,\nat most" and "Salad, not really, 400 kcal" propose
+the number), a qualifier dangling at a line end binds the next statement even when meant otherwise ("Pasta from\nItaly
+600 kcal" is withheld), and wording outside the fixed EN/RU lists is not recognised ("within 600 kcal", "в пределах 600
+ккал", "500 through 600 kcal" propose the number).
+
+## Draft from text: qualifier-association correction to "Amendment 4" (ADR-0092) (2026-11-15)
+
+**What changed.** A confirmed regression in the uncommitted fourth correction is fixed in `meal-draft-grounding.ts`. In
+"Soup, 500 kcal\nat least 20 g protein" and "Soup, protein 20 g\nat most 600 kcal" both fields were withheld
+`ambiguous`, while HEAD proposed the exact field (500, 20) and withheld only the bounded one (checked against HEAD's
+module directly). Root cause: the new postfix-bound check (`BOUND_AFTER` in `qualifierAround`) matched "at least"/"at
+most" after a statement without asking whether those words open the next statement, so the prefix of the following
+nutrient statement was read as a postfix bound on the previous one.
+
+Corrected rule: a postfix bound that can also open a statement (at least, at most, max, maximum, minimum, "… of";
+максимум, минимум, не больше/меньше/более/менее/выше/ниже) is moved to the next statement when, on the same line with
+only spaces, tabs, no-break spaces and at most one `:` `=` `–` `—` before it, the first following number forms a nutrient
+statement of any field (the existing `checkMention` recognition) that begins right there. That statement is then
+withheld by the existing "directly before" rule, and the previous value keeps its own result. Otherwise the bound stays
+on the previous value: genuine postfix bounds ("Soup, 500 kcal at most", "…\nat most", "Shake, protein 20 g\nat
+least"), following numbers that are not independent statements ("2 cups", "600", "20 g", "2500 kJ", "-20 g protein",
+"20 to 25 g protein"), a comma or word in between, a bound alone on its line between two statements, and postfix-only
+bounds ("or more", "and up", "tops", "или больше", "и более"). The same-line clause rule, same-field conflicts, ranges,
+negation, mixed units, consumption binding, signs and exact decimals are unchanged; no earlier expectation was altered.
+
+The first version of the fix let the gap before the next statement cross line breaks, which made 600 exact in "Soup,
+600 kcal\nat most\n20 g protein". A negative-control test written after reviewing the rule text caught it (it fails
+against that version, passes against the uncorrected code); the same-line requirement fixed it. One split-word test of
+this correction that had encoded the same assumption ("at\r\nleast\r\n20 g protein") was changed to keep the statement
+on the bound's line.
+
+The HTTP suite's in-memory session store (default capacity 100; five sign-ins per test under a fixed clock) overflowed
+with the new case, so the last test failed at sign-in with `503`; the suite's own configuration now sets
+`SESSION_STORE_MAX_ENTRIES` to 1000 (test harness only). ADR-0092 (rule 5 "directly after", a dated correction note in
+"Amendment 4", a new adjacency limitation), the reference and the runbook were updated. Prompt, frozen datasets and
+historical evaluation artifacts are unchanged.
+
+**Executed checks.**
+
+| Command | Result |
+|---|---|
+| HEAD's and the uncorrected module on both reproductions (temporary copy of HEAD's file, removed afterwards) | HEAD: 500 and 20 proposed, the bounded fields `ambiguous`; uncorrected: all four `ambiguous` |
+| New tests (`meal-draft-grounding-qualifier-scope.spec.ts`, 12) against the uncorrected code | first run of the first 11: 8 failed, 3 passed (negative controls); final 12: 8 failed, 4 passed (negative controls); the six earlier draft specs pass |
+| Line-alone negative control against the first version of the fix | failed (600 proposed); passes after the same-line requirement |
+| New HTTP case against the uncorrected code | first run: 2 failed (the new case with 500 withheld; and the last test at sign-in, `503`, session store full); after the harness capacity setting: 1 failed (the new case), 22 passed |
+| Draft specs after the correction (`src/meals/drafts/`) | first version: 7 files, 228 passed; final: 7 files, 229 passed |
+| Test database identity before each database run (API integration and browser suite connections) | each: client `127.0.0.1:5433`, server `172.18.0.2:5432`, `running_tracker_test`, `current_user` = `session_user` = `running_tracker_runtime` / `running_tracker_owner` / `running_tracker_maintenance` as expected |
+| Database suites, sequential | `meal-drafts-http` (23, 1 new), `meals-http` (33), `meals-access` (52), `observability` (1), `tenant-isolation` (11): 5 files, 120 passed at the first run with the first version, and again with the final one |
+| Fake harness on the frozen sets (no output files) | unchanged: development 0 incorrect, 15/16; held-out 0 incorrect, 15/15 |
+| `npm run verify` | exit 0 at the first run (first version: API 2,132); final code: exit 0, scripts 115, API 2,133, web 1,325, contracts 304, fixtures 14, simulator 3 |
+| `npx playwright test meal-draft.spec.ts --project=chromium` | 4 passed at the first run (first version) and on the final code; no scenario changed. One attempt on the final code did not start: a PowerShell loop variable overwrote the scratch-path variable, the identity probe could not be found and its guard stopped the run before any fixture write; rerun with a distinct name |
+
+No real-model call was made for this change.
+
+**Not established.** A bound that can open a statement and starts a line with a nutrient statement after it on that
+line is always read as that statement's bound ("500 kcal\nat most 20 g protein" proposes 500), never as the previous
+value's postfix across the break. The earlier adjacency limitations of "Amendment 4" still stand.

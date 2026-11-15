@@ -118,5 +118,12 @@ never quoted as model quality. The last measured results are in
   space before a number ("- 500 kcal") is read as a possible minus sign and withheld; two numbers joined by "to", "or",
   "до" or "или" are a range or alternative and withheld whatever their units ("500 kcal to 2500 kJ", "fat 5 g or 6000
   mg"); and two numbers joined by a dash are a range and withheld when they measure the same thing ("500 -\n600 kcal",
-  "500 kcal – 2500 kJ", "5 g – 6000 mg"), also across a line break. The screen shows the `per_portion` reason for package
+  "500 kcal – 2500 kJ", "5 g – 6000 mg"), also across a line break. "between 500 and 600 kcal", "от 500 и до 600 ккал"
+  and "между … и …" are ranges too. A bound or negation directly before a value, even on the previous line or with a
+  no-break space ("up to\n600 kcal", "более\n600 ккал", "до 600 ккал", "от 600 ккал", "not\n400 kcal"), left at the end
+  of the line before it ("up to\ntotal 600 kcal"), or directly after it ("600 kcal at most", "600 ккал или больше")
+  withholds that value; a bound that starts the next value on its line belongs to that value ("Soup, 500 kcal\nat least
+  20 g protein" fills 500 and leaves protein empty); other values keep their own result ("Soup, up to\n600 kcal;
+  protein 20 g." fills protein), and
+  a negation elsewhere ("No sauce, 500 kcal") changes nothing. The screen shows the `per_portion` reason for package
   and unconsumed totals too.

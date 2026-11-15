@@ -8,6 +8,8 @@
   "Amendment 2" below.
 - Amended a third time: 2026-11-15, third grounding correction (a summing phrase is not consumption; mixed-unit ranges);
   see "Amendment 3" below.
+- Amended a fourth time: 2026-11-15, fourth grounding correction (bounds and negations hidden by a line break, a lone
+  "до", "between … and …" and "от … и до …"); see "Amendment 4" below.
 - Date: 2026-11-14
 - Relates to: ADR-0083 (the meal log, its contract, idempotent creation per form session, `source: manual`, erasure),
   ADR-0057 and its addendum (proposals that change nothing until accepted; admission; request and operation lifetimes),
@@ -92,6 +94,41 @@ a nutrition value only if **all** of these hold:
      numbers are not a range when the other number states a different measure ("300 kcal –\n5 g protein", "200 ml –
      120 kcal") or is itself a statement of a different nutrient ("protein 30 g\n– 5 g fat").
    - Other punctuation between the numbers makes them separate statements ("Rice 150 g.\n— 600 kcal").
+
+   **Bounds and negations bound to the statement** are also read in the original text, from the number and from the
+   start of its statement, across any whitespace (spaces, tabs, line breaks, CRLF, no-break and narrow no-break spaces;
+   also between the words of a phrase: "up\nto", "не\nболее"), whatever the clause or excerpt shows:
+   - **directly before** the statement, with only whitespace and at most one `:` `=` `–` `—` between: a bound or open
+     endpoint (at least, at most, up to, less/fewer/more/greater/higher/lower than, over, under, below, above, max,
+     maximum, minimum, "a maximum of", from, between; менее, более, меньше, больше, свыше, выше, ниже, минимум, максимум,
+     **до**, **от**, между; `~ ≈ ± < > ≤ ≥`) makes it `ambiguous` ("Pasta, up to\n600 kcal", "Паста, более\n600 ккал",
+     "Суп, до 600 ккал", "up to\nprotein 20 g"); a negation (no, not, n't, without, never, none; не, без, нет, ни) makes
+     it `negated` ("Salad, not\n400 kcal"). "до", "от", "from" and "between" count only here, directly before a
+     statement, never anywhere in a clause ("Перекус до обеда, 200 ккал" keeps 200);
+   - **the upper endpoint** of "between N … and" / "между N … и" (at most three words, such as the lower endpoint's unit,
+     between the lower number and the conjunction) is `ambiguous` ("between 500 and\n600 kcal"); the lower endpoint is
+     caught by "between" before it, and "от N (и) до M" by its "от" and "до";
+   - **left dangling** at the end of a line in the words that lead into the statement (back to the previous `,` `.` `;`
+     `!` `?` `|` or number): the qualifier's association is unresolved, so the value is withheld ("Pasta, up to\ntotal 600
+     kcal", "Salad, not\neven 400 kcal");
+   - **directly after** the statement: at most, at least, or more/less/fewer, and more/up, max, maximum, minimum, tops;
+     максимум, минимум, или/и/не больше/меньше/более/менее/выше/ниже ("600 kcal\nat most", "600 ккал или больше").
+     A bound that can also open a statement (at least, at most, max, maximum, minimum, "… of"; максимум, минимум,
+     не больше/меньше/более/менее/выше/ниже) and that **directly introduces the next nutrient statement** of any field
+     qualifies that statement instead, by the "directly before" rule: in "Soup, 500 kcal\nat least 20 g protein" the
+     protein is `ambiguous` and 500 stays exact. "Directly introduces" means the first number after the bound, on the
+     **same line** with only spaces, tabs, no-break spaces and at most one `:` `=` `–` `—` before it, forms a nutrient
+     statement (the existing mention recognition: unit, and for grams an attached nutrient name, either side) that
+     begins right there; the bound's own words may be split by any whitespace ("at\nleast 20 g protein"). Otherwise the
+     bound stays on the value before it: "500 kcal\nat most", "500 kcal\nat least 2 cups", "…at most 600", "…at least
+     20 g", "…at most 2500 kJ", "…at least -20 g protein", "…at least 20 to 25 g protein", a comma or another word in
+     between, a bound alone on its line between two statements ("600 kcal\nat most\n20 g protein": both withheld), and
+     bounds that only ever close a statement ("or more", "and up", "tops", "или больше", "и более") all withhold it.
+
+   A qualifier before other words on its own line ("No sauce\n500 kcal", "Salad, not spicy\n400 kcal"), in another clause
+   ("No sauce, 500 kcal") or in another sentence ("I did not add sugar. Soup, 500 kcal.") does not reach the value, and an
+   independent statement beside a qualified one keeps its own result ("Soup, up to\n600 kcal; protein 20 g." proposes 20).
+   No endpoint is chosen and no midpoint formed.
 6. Its **whole-entry scope** is established. Per-portion qualifiers (per, each, serving, portion, piece, `/100 g`,
    `in/for/на/в/за/для 100`, `для 30 г`, `по` before a number, `x2`, twice, каждый, порция, штука…) and nutrition-label
    headings (nutrition facts, nutritional value, label, пищевая/энергетическая ценность, этикетка, на упаковке) can stand
@@ -124,7 +161,8 @@ a nutrition value only if **all** of these hold:
    package was eaten, and never a fraction of a value.
 7. The text states no other value for that nutrient **under the same scope rule** (two whole-entry values are
    `conflicting`; a per-portion value never conflicts with a total; a mention with an ambiguous sign or notation counts as
-   a value of its own).
+   a value of its own; a bounded, ranged or negated mention also still counts, so "Pasta, up to\n600 kcal, 500 kcal"
+   withholds 500 as `conflicting` rather than choosing it).
 8. The meal contract accepts the **exact digits**: at most one meaningful decimal and within 0..20,000 kcal or 0..2,000 g,
    checked in integer tenths (`BigInt`) before any conversion; only then is the public number formed (and passed through
    ADR-0083's field schema once more). Refused, never rounded or clamped: `20000.05`, `2000.0000000000001` and
@@ -373,6 +411,80 @@ after replacing it, exit 0 (API 2,091). The four Chromium meal-draft scenarios w
 run, with the one scenario text changed as above. The fake harness on the frozen sets is unchanged (0 incorrectly
 accepted; recall 15/16 and 15/15).
 
+## Amendment 4: bounds and negations bound to their statement; "до" alone; "between … and …" (2026-11-15)
+
+The third amendment's "Not established" section listed false acceptances that its rules left open: a bound or negation
+separated from its number by a line break, a lone Russian "до", and range wording outside "to/or/до/или". All are
+schema-valid claims (the positive magnitude, a short excerpt such as "600 kcal") that became proposed values. Rule 5
+above states the corrected rule ("Bounds and negations bound to the statement"). Nothing else changed: endpoint,
+response shape (no new reason code: `ambiguous` and `negated` as before), apply/save, idempotency, access checks,
+cancellation, admission lifetimes, privacy, off by default, the prompt (`meal-draft-prompt-1`), the frozen datasets and
+the historical evaluation artifacts.
+
+| Defect | Reproduction | Root cause | Correction |
+|---|---|---|---|
+| A line break hid a bound | "Pasta, up to\n600 kcal", "Pasta, at least\n600 kcal", "Паста, более\n600 ккал" with `600`/"600 kcal": proposed | Bounds were read only in the value's clause, which ends at a line break; multi-word bounds were matched only with an ordinary space between their words | Bounds directly before the statement (from the number and from the statement's start), dangling at the end of a line before it, or directly after it, across any whitespace, also inside the phrase (rule 5) |
+| A line break hid a negation | "Salad, not\n400 kcal" with `400`/"400 kcal": proposed | The same clause limit for negation | Negation directly before the statement or dangling at a line end before it (rule 5); unrelated negation is not bound ("No sauce, 500 kcal", "No sauce\n500 kcal") |
+| "до" alone was not a bound | "Суп, до 600 ккал" with `600`/"600 ккал": proposed | "до" counted only between two numbers, since it also means "before" ("до обеда") | "до", "от", "from", "between" are bounds or open endpoints directly before a statement only, never anywhere in a clause (rule 5) |
+| Range wording outside the vocabulary | "Pasta, between 500 and 600 kcal", "Паста, от 500 и до 600 ккал" with `600`/"600 kcal": proposed | Only a dash, "to", "or", "до", "или" between two numbers was read as a range | "between N … and" / "между N … и" before the upper endpoint, "between"/"между"/"от" before the lower one, "до" before the upper one of "от … (и) до"; either endpoint that forms a nutrient statement of its own is withheld (rule 5) |
+
+**No expectation changed.** Every earlier grounding, HTTP and browser case passes unchanged. Consequences, all in the
+safe direction: a qualifier word at the end of a line binds the statement that follows on the next line even when the
+person meant something else ("Pasta from\nItaly 600 kcal", "No\nsauce 500 kcal" are withheld); "between"/"from"/"от"
+directly before a statement withhold it ("from 600 kcal"); postfix bounds ("600 kcal max", "or more", "или больше") are
+now withheld also on the same line, where the clause check did not list them; conflict detection is unchanged (a
+qualified mention still counts as a stated value, rule 7).
+
+Verification of this correction (deterministic only, **no model call**): the new
+`meal-draft-grounding-qualifier-scope.spec.ts` (30 tests: the documented reproductions with the shortest and longer
+excerpts; bounds and negations across LF, CRLF, tab, double line breaks and no-break/narrow no-break spaces, for all four
+fields, EN and RU, before the number and before a nutrient name; phrases split by a line break or a no-break space;
+dangling and postfix bounds; "до" and "от" alone; "between … and …", "между … и …", "от … (и) до …" from both endpoints,
+across line breaks, with decimal points, decimal commas, zero and mixed units; positive controls for unrelated negation,
+independent exact fields beside qualified ones, the same words when they qualify nothing, zero, decimals, trailing zeros
+and the earlier sign, precision and bounds fixes; conflict detection unchanged; a mixed draft that fits the public
+contract) failed 26 of 30 against the unchanged code (the 4 that passed are the positive-control tests; the first
+version of the spec, before one test for "a maximum of", comparatives and "выше"/"ниже" was added, failed 25 of 29) and
+passed 30 of 30 after it; the six earlier draft specs pass unchanged before and after (217 in all after). Two new HTTP
+integration cases with the injected provider (`meal-drafts-http`, 22/22; both fail against the unchanged code): bounds
+and negations split by a line break and a lone "до" withheld beside a zero, a decimal-comma value and an unrelated
+negation that are proposed; "between … and …" and "от … и до …" withheld from either endpoint beside proposed values.
+Before each database run, each connection reported client `127.0.0.1:5433`, server `172.18.0.2:5432`,
+`current_database()` = `running_tracker_test` and `current_user` = `session_user` = the expected role
+(`running_tracker_runtime`, `running_tracker_owner`, `running_tracker_maintenance`); then `meal-drafts-http`,
+`meals-http`, `meals-access`, `observability` and `tenant-isolation` ran sequentially: 5 files, 119 passed at the first
+run. `npm run verify` exit 0 at the first run (API 2,121). The four Chromium meal-draft scenarios with the fake
+provider: 4/4 at the first run, no scenario changed. The fake harness on the frozen sets is unchanged (0 incorrectly
+accepted; recall 15/16 and 15/15).
+
+**Correction to this amendment (2026-11-15), before it was committed.** The postfix rule as first written withheld an
+exact value that HEAD proposed: in "Soup, 500 kcal\nat least 20 g protein" and "Soup, protein 20 g\nat most 600 kcal"
+both fields were `ambiguous`, while HEAD proposed 500 and 20 (and withheld the bounded field). Root cause: the postfix
+check matched the bound words after the statement without asking whether they open the next statement, so the prefix
+of the following nutrient statement was read as a postfix bound on the previous one. Correction (rule 5, "directly
+after"): a bound that can also open a statement is moved to the next statement when it directly introduces, on the
+same line, an independently recognised nutrient statement; otherwise it stays on the previous value. A first version
+of this correction also crossed line breaks between the bound and the next statement, which made 600 exact in
+"600 kcal\nat most\n20 g protein" (a bound alone on its line, whose association is unresolved); a negative-control test
+caught it before the version was kept, and the same-line requirement fixed it (both fields stay withheld, as in the
+uncorrected code). No other behaviour changed, and no earlier expectation was altered. Verification (deterministic
+only, **no model call**): 12 new tests in `meal-draft-grounding-qualifier-scope.spec.ts` (both reproductions with short
+and longer excerpts; both field orders; nutrient names before and after the number; EN and RU; zero and exact decimals;
+LF, CRLF, tab, double break and no-break/narrow no-break spaces before the bound; bound words split by whitespace;
+genuine postfix bounds; following numbers that are not independent statements; a bound alone on its line; postfix-only
+bounds; the same-line clause rule, same-field conflict and negation) failed 8 against the uncorrected code (the 4
+passing are the negative-control tests) and pass after it (draft specs: 7 files, 229). A new HTTP case
+(`meal-drafts-http`) failed against the uncorrected code with 500 withheld and passes after it.
+Adding it made the suite's last test fail at sign-in with `503`: the suite's in-memory session store keeps the default
+capacity of 100 and every test signs in five people under a fixed clock, so a 21st test in that block exceeds it; the
+suite's own configuration now sets `SESSION_STORE_MAX_ENTRIES` to 1000 (test harness only; the product default is
+unchanged). After the identity check of every connection (`running_tracker_test`, expected roles), the database suites
+ran sequentially: `meal-drafts-http` 23, `meals-http` 33, `meals-access` 52, `observability` 1, `tenant-isolation` 11
+(5 files, 120 passed, at the first run with the first version and again with the final one). `npm run verify` exit 0
+at the first run (API 2,132) and on the final code (API 2,133). The four Chromium meal-draft scenarios: 4/4 at the
+first run and on the final code. The fake harness on the frozen sets is unchanged (0 incorrectly accepted; recall 15/16
+and 15/15).
+
 ## Consequences
 
 - One more AI feature, off by default and independent of the other two; the suite's API runs it with the fake provider,
@@ -388,14 +500,21 @@ accepted; recall 15/16 and 15/15).
 - The grounding vocabulary is English and Russian only; other languages get abstentions (not wrong values), and a text
   in another language with English units may still pass the rules.
 - The rules are conservative heuristics, not a parser of natural language: they withhold some correct values (see the
-  amendment's consequences) and they cannot detect every negation or reference. Negation is still read only in the
-  value's own clause ("No sauce, 500 kcal" keeps 500, by design), so a negation in a neighbouring clause that does apply to
-  the number is not seen; a value the person means for a different meal in one clause is not detected either.
-- Found while making the second correction and **not** fixed by it (it was limited to ranges and label totals): a bound
-  or negation word separated from its number by a line break is not seen, because those checks read only the value's
-  clause ("Pasta, up to\n600 kcal", "at least\n600 kcal", "более\n600 ккал" and "Salad, not\n400 kcal" still propose the
-  number), and a Russian "до" alone ("Суп, до 600 ккал", "up to") is read as a bound only between two numbers. Each
-  is a false acceptance that needs its own correction.
+  amendment's consequences) and they cannot detect every negation or reference. Negation is read in the value's own
+  clause and, since the fourth amendment, directly before its statement or dangling at a line end before it ("No sauce,
+  500 kcal" keeps 500, by design), so a negation in a neighbouring clause that does apply to the number ("Salad — no,
+  400 kcal", "Salad, not really, 400 kcal") is not seen; a value the person means for a different meal in one clause is
+  not detected either.
+- Qualifier scope (fourth amendment) is word adjacency, not syntax. Across a comma or other clause punctuation a
+  qualifier is not bound to the statement, before it (above) or after it ("Pasta, 600 kcal,\nat most" proposes 600); a
+  qualifier dangling at a line end binds the next statement even when the person meant something else ("Pasta from\nItaly
+  600 kcal" and "No\nsauce 500 kcal" are withheld). A bound that can open a statement and starts a line with a nutrient
+  statement after it on that line is always read as that statement's bound, never as the previous value's postfix
+  ("500 kcal\nat most 20 g protein" proposes 500; a person who meant "500 kcal at most" across the break is not told
+  apart). Bound wording outside the fixed EN/RU list is not recognised
+  ("within 600 kcal", "в пределах 600 ккал", "600 kcal or thereabouts" propose 600), and neither is range wording other
+  than a dash, "to", "or", "до", "или", "between … and", "между … и" and "от … (и) до" ("500 through 600 kcal" proposes
+  600).
 - The summing-phrase and consumption rules are wording, not understanding (third amendment). The consumption
   vocabulary is a fixed EN/RU list: other verbs ("finished", "доел", "had" without "I"/"we") withhold, and a listed verb
   with another subject ("he ate", "он съел") is accepted as written. Between the verb and the value only nutrient
@@ -408,15 +527,15 @@ accepted; recall 15/16 and 15/15).
   `per_portion` sentence (per 100 g, per serving, per piece), which does not name packages or unconsumed totals; the
   public reason codes were deliberately not changed.
 - The range check sees only two numbers joined across whitespace by a dash, "to", "or", "до" or "или" (with at most
-  three words between the other number and a word connector); range wording outside that vocabulary is not recognised
-  ("Pasta, between 500 and 600 kcal" and "Паста, от 500 и до 600 ккал" still propose 600). A word connector is always a
+  three words between the other number and a word connector), plus, since the fourth amendment, "between … and", "между
+  … и" and "от … (и) до" (see the qualifier-scope limitation above for other wording). A word connector is always a
   range or alternative, also between different measures ("300 kcal or 5 g protein" is withheld). A dash between two
   numbers of the same measure (or one without a unit) is always read as a range, even when the person meant two lines
   ("Rice 150 g – protein 30 g" is withheld). A dash between different measures stays a separator. Units are classified
   by a fixed list (kJ/кДж as energy; mg, mcg, kg, oz, lb as mass; ml, l as volume; %). With a dash, an unlisted unit
   after the value counts as "no unit" (a range: "500 kcal – 2 cups" is withheld), but before the value it is not
   recognised ("2 cups – 500 kcal" proposes 500, as before this amendment).
-- The corrected rules (all three amendments) have not been measured with a real model: the 40-call evaluation predates
+- The corrected rules (all four amendments) have not been measured with a real model: the 40-call evaluation predates
   them (the deterministic fake harness on the frozen sets is unchanged by them: 0 incorrect, development recall 15/16,
   held-out 15/15). The prompt (`meal-draft-prompt-1`) asks for "that nutrient's total for the whole meal" and says
   nothing about consumption, containers or partial amounts, so a model may claim values the server now refuses;
