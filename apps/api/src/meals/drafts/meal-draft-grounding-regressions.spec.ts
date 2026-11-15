@@ -60,10 +60,16 @@ describe('defect 1: a per-portion qualifier keeps its scope across commas, lists
     expect(ground(en, 'fatG', '3', 'fat 3 g')).toMatchObject({ status: 'proposed', value: 3 });
     // The per-100 g values stay withheld, and are not a conflict with the totals.
     expect(ground(en, 'energyKcal', '60', '60 kcal')).toEqual(withheld('per_portion'));
+    // Changed on purpose (third correction, 2026-11-15): this text had no consumption verb ("Итого 240 ккал") and
+    // expected 240 and 32 proposed. A summing phrase alone does not say the values were eaten (it may be the package's),
+    // so they are now withheld; the same totals stated as eaten ("Итого съел …") are proposed.
     const ru = 'Творог 200 г. На 100 г: 120 ккал, белки 16 г. Итого 240 ккал, белки 32 г.';
-    expect(ground(ru, 'energyKcal', '240', '240 ккал')).toMatchObject({ status: 'proposed', value: 240 });
-    expect(ground(ru, 'proteinG', '32', 'белки 32 г')).toMatchObject({ status: 'proposed', value: 32 });
-    expect(ground(ru, 'proteinG', '16', 'белки 16 г')).toEqual(withheld('per_portion'));
+    expect(ground(ru, 'energyKcal', '240', '240 ккал')).toEqual(withheld('per_portion'));
+    expect(ground(ru, 'proteinG', '32', 'белки 32 г')).toEqual(withheld('per_portion'));
+    const ruEaten = 'Творог 200 г. На 100 г: 120 ккал, белки 16 г. Итого съел 240 ккал, белки 32 г.';
+    expect(ground(ruEaten, 'energyKcal', '240', '240 ккал')).toMatchObject({ status: 'proposed', value: 240 });
+    expect(ground(ruEaten, 'proteinG', '32', 'белки 32 г')).toMatchObject({ status: 'proposed', value: 32 });
+    expect(ground(ruEaten, 'proteinG', '16', 'белки 16 г')).toEqual(withheld('per_portion'));
   });
 
   it('does not let a total share a sentence with a qualifier, a nutrition-label "Total fat", or a value-less qualifier', () => {
@@ -79,9 +85,15 @@ describe('defect 1: a per-portion qualifier keeps its scope across commas, lists
 
   it('keeps conflict detection on the same scope', () => {
     // Two whole-entry totals that differ conflict; a per-portion value never conflicts with a total.
-    expect(ground('Soup. Per 100 g: 50 kcal. In total 300 kcal. In total 350 kcal.', 'energyKcal', '300', '300 kcal')).toEqual(withheld('conflicting'));
-    expect(ground('Soup. Per 100 g: 50 kcal. In total 300 kcal.', 'energyKcal', '300', '300 kcal')).toMatchObject({ status: 'proposed', value: 300 });
-    expect(ground('Суп. На 100 г: 50 ккал. Итого 300 ккал. Итого 350 ккал.', 'energyKcal', '350', '350 ккал')).toEqual(withheld('conflicting'));
+    expect(ground('Soup. Per 100 g: 50 kcal. In total I ate 300 kcal. In total I ate 350 kcal.', 'energyKcal', '300', '300 kcal')).toEqual(withheld('conflicting'));
+    expect(ground('Soup. Per 100 g: 50 kcal. In total I ate 300 kcal.', 'energyKcal', '300', '300 kcal')).toMatchObject({ status: 'proposed', value: 300 });
+    expect(ground('Суп. На 100 г: 50 ккал. Итого съел 300 ккал. Итого съел 350 ккал.', 'energyKcal', '350', '350 ккал')).toEqual(withheld('conflicting'));
+    // Changed on purpose (third correction, 2026-11-15): the three lines above read "In total 300 kcal" and "Итого 300
+    // ккал" without a consumption verb and expected `conflicting` and a proposed 300. A summing phrase alone no longer
+    // establishes what was eaten, so those texts are `per_portion` now; the lines above keep proving conflict detection.
+    expect(ground('Soup. Per 100 g: 50 kcal. In total 300 kcal. In total 350 kcal.', 'energyKcal', '300', '300 kcal')).toEqual(withheld('per_portion'));
+    expect(ground('Soup. Per 100 g: 50 kcal. In total 300 kcal.', 'energyKcal', '300', '300 kcal')).toEqual(withheld('per_portion'));
+    expect(ground('Суп. На 100 г: 50 ккал. Итого 300 ккал. Итого 350 ккал.', 'energyKcal', '350', '350 ккал')).toEqual(withheld('per_portion'));
     // Changed on purpose (second correction, 2026-11-14): these two cases expected `conflicting` and a proposed 300.
     // Beside "Per 100 g", a bare "Total" is what a label prints (a pack's total, not necessarily what was eaten), so it no
     // longer establishes whole-entry scope; the person's own summing phrase above does.
@@ -183,7 +195,8 @@ describe('defect 3: decimal text is compared and validated exactly before any Nu
 
 describe('a grounded answer still fits the public response contract', () => {
   it('builds a valid mixed draft: totals proposed, per-portion values withheld', () => {
-    const text = 'Lunch: yogurt bowl. Per 100 g: 60 kcal, protein 4 g. In total 180 kcal, protein 12.0 g, fat 0 g.';
+    // "In total I ate" since the third correction (2026-11-15); without the consumption verb these totals are withheld.
+    const text = 'Lunch: yogurt bowl. Per 100 g: 60 kcal, protein 4 g. In total I ate 180 kcal, protein 12.0 g, fat 0 g.';
     const answer: MealDraftWireDraft = {
       carbohydrateG: { abstain: 'not_stated', evidence: null, value: null },
       energyKcal: claim('180', '180 kcal'),

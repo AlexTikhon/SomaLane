@@ -350,7 +350,8 @@ describe('ADR-0092 meal draft proposals under the runtime role', () => {
       });
       expect(
         await draftFor(
-          'Yogurt bowl. На 100 г: 60 ккал, белки 4 г. Итого 180 ккал, белки 12 г, жиры 0 г, углеводы 15,5 г.',
+          // "Итого съел" since the third correction (2026-11-15): without the consumption verb the totals are withheld.
+          'Yogurt bowl. На 100 г: 60 ккал, белки 4 г. Итого съел 180 ккал, белки 12 г, жиры 0 г, углеводы 15,5 г.',
           answer('Yogurt bowl', {
             carbohydrateG: claim('15,5', 'углеводы 15,5 г'),
             energyKcal: claim('180', '180 ккал'),
@@ -424,6 +425,66 @@ describe('ADR-0092 meal draft proposals under the runtime role', () => {
       expect(
         await draftFor('Суп, от 500 до\n600 ккал', answer('Суп', { energyKcal: claim('600', '600 ккал') })),
       ).toMatchObject({ energyKcal: { reason: 'ambiguous', status: 'withheld' } });
+    });
+
+    // Third correction (2026-11-15): a summing phrase alone is not consumption, and mixed units do not end a range.
+    it('withholds a package total beside partial consumption and keeps the totals the person states as eaten', async () => {
+      expect(
+        await draftFor(
+          'I ate half the yogurt. Nutrition facts per 100 g: 60 kcal. In total the package has 4 g protein.',
+          answer('yogurt', { energyKcal: claim('60', '60 kcal'), proteinG: claim('4', '4 g protein') }),
+        ),
+      ).toEqual({
+        carbohydrateG: { status: 'not_stated' },
+        energyKcal: { reason: 'per_portion', status: 'withheld' },
+        fatG: { status: 'not_stated' },
+        proteinG: { reason: 'per_portion', status: 'withheld' },
+      });
+      expect(
+        await draftFor(
+          'Съел половину творога. На 100 г: 120 ккал. Итого 240 ккал, в упаковке 32 г белка.',
+          answer('творога', { energyKcal: claim('240', '240 ккал'), proteinG: claim('32', '32 г белка') }),
+        ),
+      ).toMatchObject({ energyKcal: { reason: 'per_portion', status: 'withheld' }, proteinG: { reason: 'per_portion', status: 'withheld' } });
+      expect(
+        await draftFor(
+          'Yogurt 200 g. Per 100 g: 60 kcal, protein 4 g. In total I ate 120 kcal, protein 8 g, fat 0 g.',
+          answer('Yogurt', { energyKcal: claim('120', '120 kcal'), fatG: claim('0', 'fat 0 g'), proteinG: claim('4', 'protein 4 g') }),
+        ),
+      ).toEqual({
+        carbohydrateG: { status: 'not_stated' },
+        energyKcal: { excerpt: '120 kcal', status: 'proposed', value: 120 },
+        fatG: { excerpt: 'fat 0 g', status: 'proposed', value: 0 },
+        proteinG: { reason: 'per_portion', status: 'withheld' },
+      });
+    });
+
+    it('withholds ranges whose endpoints carry different units, and keeps separate statements joined by a dash', async () => {
+      expect(
+        await draftFor(
+          'Soup, 500 kcal to\n2500 kJ, fat 5 g to\n6000 mg, protein 6 g или\n0.2 oz, carbs 12,5 g',
+          answer('Soup', {
+            carbohydrateG: claim('12,5', 'carbs 12,5 g'),
+            energyKcal: claim('500', '500 kcal'),
+            fatG: claim('5', 'fat 5 g'),
+            proteinG: claim('6', 'protein 6 g'),
+          }),
+        ),
+      ).toEqual({
+        carbohydrateG: { excerpt: 'carbs 12,5 g', status: 'proposed', value: 12.5 },
+        energyKcal: { reason: 'ambiguous', status: 'withheld' },
+        fatG: { reason: 'ambiguous', status: 'withheld' },
+        proteinG: { reason: 'ambiguous', status: 'withheld' },
+      });
+      expect(
+        await draftFor('Soup, 2500 kJ –\n500 kcal, 6000 mg –\n5 g fat', answer('Soup', { energyKcal: claim('500', '500 kcal'), fatG: claim('5', '5 g fat') })),
+      ).toMatchObject({ energyKcal: { reason: 'ambiguous', status: 'withheld' }, fatG: { reason: 'ambiguous', status: 'withheld' } });
+      expect(
+        await draftFor('Soup 300 kcal –\n0 g protein', answer('Soup', { energyKcal: claim('300', '300 kcal'), proteinG: claim('0', '0 g protein') })),
+      ).toMatchObject({
+        energyKcal: { excerpt: '300 kcal', status: 'proposed', value: 300 },
+        proteinG: { excerpt: '0 g protein', status: 'proposed', value: 0 },
+      });
     });
 
     it('withholds forbidden precision and rounded claims, and accepts trailing zeros', async () => {

@@ -25,11 +25,13 @@ import type { MealDraftAbstention, MealDraftWireAnswer, NutrientClaim } from './
 // shown to the person as a proposal. The model only CLAIMS: "this excerpt of the text says protein 40 g". This module
 // finds the excerpt in the text, finds the number in it with its own tokenizer, reads the sign before it in the ORIGINAL
 // text, checks that the number is followed by the field's unit and attached to the field's nutrient, refuses a bound or
-// negation in its clause, a range around the number in the original text (across line breaks) and a hedge anywhere,
-// establishes that it is a whole-entry total (a per-portion qualifier or a nutrition label anywhere in the text requires
-// the person's own summing phrase, such as "in total" or "итого", never a label's "total", because commas, lists, sentences
-// and line breaks do not end a qualifier's scope), scans the text for a different value of the same nutrient under the
-// same scope rule, and finally
+// negation in its clause, a range or alternative around the number in the original text (across line breaks; "to", "or",
+// "до", "или" whatever the units, a dash between units of the same measure) and a hedge anywhere, establishes that it is a
+// whole-entry total (a per-portion qualifier, a nutrition label, a container or a partial amount anywhere in the text
+// requires the person's own summing phrase, such as "in total" or "итого", never a label's "total", AND an assertion in
+// the same sentence that the value was eaten, such as "I ate", because commas, lists, sentences and line breaks do not end
+// a qualifier's scope and a summing phrase alone may sum a package), scans the text for a different value of the same
+// nutrient under the same scope rule, and finally
 // applies the meal contract (ADR-0083) to the exact decimal digits before any conversion to a number. It never computes a
 // number: a proposed value is the number the person wrote, parsed exactly, or nothing.
 //
@@ -135,24 +137,54 @@ const ENTRY_SUM = new RegExp(
   'iu',
 );
 
+// A container, a product, or a partial amount eaten. Values next to such words may be the whole package's or the
+// product's ("I ate half the yogurt. The package has 4 g protein"), so their presence anywhere in the text means a value's
+// whole-entry scope must be established explicitly, as for a label or a per-portion qualifier (see `wholeEntryScoped`).
+// Nothing is inferred from them: not that the whole package was eaten, and never a fraction of a value.
+const CONTAINER_OR_PARTIAL = new RegExp(
+  [
+    `${NOT_LETTER_BEFORE}(?:packages|package|packets|packet|packs|pack|containers|container|cartons|carton|boxes|box|bags|bag|jars|jar|bottles|bottle|tubs|tub|tins|tin|products|product)${NOT_LETTER_AFTER}`,
+    `${NOT_LETTER_BEFORE}(?:half|halves|quarters|quarter|thirds|third|parts|part|partly|partially|some${SPACE}+of|most${SPACE}+of|bites|bite|sips|sip)${NOT_LETTER_AFTER}`,
+    `${NOT_LETTER_BEFORE}(?:упаковк\\p{L}*|пачк\\p{L}*|банк(?:а|и|у|е|ой)|бутылк\\p{L}*|пакет\\p{L}*|коробк\\p{L}*|контейнер\\p{L}*|продукт\\p{L}*)${NOT_LETTER_AFTER}`,
+    `${NOT_LETTER_BEFORE}(?:половин\\p{L}*|пол-?(?:упаковк|пачк|банк|бутылк|пакет|коробк|тарелк|порци|стакан)\\p{L}*|трет(?:ь|и|ью)|четверт\\p{L}*|част(?:ь|и|ью|ично))${NOT_LETTER_AFTER}`,
+  ].join('|'),
+  'iu',
+);
+
+// An assertion that something was eaten or drunk, by the person: a past or perfect consumption verb. In English "had"
+// counts only with a first-person subject ("I had", "we've had"), because "the package had" is not consumption. Third
+// persons in Russian are accepted as written ("съел", "съедено"); the rule is wording, not understanding.
+const CONSUMPTION = new RegExp(
+  `${NOT_LETTER_BEFORE}(?:ate|eaten|consumed|drank|drunk|(?:i|we)(?:['’]ve|${SPACE}+have)?${SPACE}+had|съел\\p{L}*|съеден\\p{L}*|скушал\\p{L}*|выпил\\p{L}*|употребил\\p{L}*|поел\\p{L}*)${NOT_LETTER_AFTER}`,
+  'giu',
+);
+
 // A food quantity's unit: mass or volume. A number with one of these that is not a macronutrient statement is an amount
 // of food ("I ate 200 g"), so a summing phrase beside it may sum the food rather than the nutrients.
 const QUANTITY_UNIT = new RegExp(`^${SPACE}?(?:${GRAM_UNIT}|kg|кг|oz|lbs|lb|ml|мл|l|л)${NOT_LETTER_AFTER}`, 'iu');
 
-// The unit right after a number, by kind, for telling a range ("500 - 600 kcal") from two statements of different units
-// ("300 kcal - 5 g protein").
-const UNIT_KIND = `(?:(?<energy>${ENERGY_UNIT})|(?<gram>${GRAM_UNIT})|(?<other>${OTHER_UNIT}))${NOT_LETTER_AFTER}`;
-// What joins the two endpoints of a range: any minus or dash, "to", "or", "до", "или". Only whitespace (ordinary, no-break,
-// narrow no-break, line breaks) may stand around it; any punctuation between the numbers makes them separate statements.
-const RANGE_SEPARATOR = `(?:${MINUS_OR_DASH}|${NOT_LETTER_BEFORE}(?:to|or|до|или)${NOT_LETTER_AFTER})`;
-// The lower endpoint (its last digit) and the separator, directly before a number (matched against the text BEFORE it).
-const RANGE_BEFORE = new RegExp(`\\d(?:\\s*${UNIT_KIND})?\\s*${RANGE_SEPARATOR}\\s*$`, 'iu');
-// The separator and the upper endpoint, directly after a number and its own optional unit (matched against the text
-// AFTER it). `lead` is everything before the upper endpoint's digits, so its position in the text is known.
-const RANGE_AFTER = new RegExp(
-  `^(?<lead>(?:\\s*(?:${ENERGY_UNIT}|${GRAM_UNIT}|${OTHER_UNIT})${NOT_LETTER_AFTER})?\\s*${RANGE_SEPARATOR}\\s*)\\d+(?:[.,]\\d+)?(?:\\s*${UNIT_KIND})?`,
+// The unit right after a number, by the MEASURE it states, for telling a dash range ("500 - 600 kcal", "500 kcal -
+// 2500 kJ", "5 g - 6000 mg") from two statements of different measures joined by a dash ("300 kcal - 5 g protein",
+// "200 ml - 120 kcal"). kJ is energy like kcal; mg, mcg, kg, oz and lb are mass like g. Nothing is converted.
+const UNIT_KIND = `(?:(?<energy>${ENERGY_UNIT}|kj|кдж)|(?<mass>${GRAM_UNIT}|mcg|мкг|mg|мг|kg|кг|oz|lbs|lb)|(?<volume>ml|мл|l|л)|(?<percent>%))${NOT_LETTER_AFTER}`;
+// A dash between two numbers, with only whitespace (ordinary, no-break, narrow no-break, line breaks) around it; any
+// punctuation between the numbers makes them separate statements.
+const DASH_SEPARATOR = MINUS_OR_DASH;
+// The lower endpoint (its last digit, its own optional unit) and the dash, directly before a number or its statement.
+const DASH_RANGE_BEFORE = new RegExp(`\\d(?:\\s*${UNIT_KIND})?\\s*${DASH_SEPARATOR}\\s*$`, 'iu');
+// The dash and the upper endpoint, directly after a number (and its own optional unit) or its statement. `lead` is
+// everything before the upper endpoint's digits, so its position in the text is known.
+const DASH_RANGE_AFTER = new RegExp(
+  `^(?<lead>(?:\\s*(?:${ENERGY_UNIT}|${GRAM_UNIT}|${OTHER_UNIT})${NOT_LETTER_AFTER})?\\s*${DASH_SEPARATOR}\\s*)\\d+(?:[.,]\\d+)?(?:\\s*${UNIT_KIND})?`,
   'iu',
 );
+// A range or alternative written with a word: "to", "or", "до", "или". Unlike a dash, these words never separate two
+// statements, so the units of the endpoints do not matter: "500 kcal to 2500 kJ", "fat 5 g or 6000 mg", "2 cups or 500
+// kcal" are ranges or alternatives whatever the units, also when a unit is unsupported or names another measure. Another
+// number, at most three words (its unit, "of fat"…) and only whitespace may stand between the connector and the value.
+const RANGE_WORD = `${NOT_LETTER_BEFORE}(?:to|or|до|или)${NOT_LETTER_AFTER}`;
+const WORD_RANGE_BEFORE = new RegExp(`\\d(?:\\s*(?:\\p{L}+|%)){0,3}\\s*${RANGE_WORD}\\s*$`, 'iu');
+const WORD_RANGE_AFTER = new RegExp(`^(?:\\s*(?:\\p{L}+|%)){0,3}?\\s*${RANGE_WORD}\\s*\\d`, 'iu');
 
 // A hedge makes every number the person wrote an estimate, wherever it stands ("These are estimates, 500 kcal").
 const HEDGE = new RegExp(
@@ -370,58 +402,137 @@ function statesFoodQuantity(text: string, start: number, end: number): boolean {
 }
 
 /**
- * Whether the value at [start, end) is a total for the whole entry. With no per-portion qualifier or nutrition label
- * anywhere in the text, it is. Otherwise the label or qualifier stays in force across commas, lists, sentences, line
- * breaks and the model's excerpt until the person resolves it for this value, which takes ALL of:
+ * Whether the value at [start, end) is a total for the whole entry. With no per-portion qualifier, nutrition label,
+ * container, product or partial amount (`CONTAINER_OR_PARTIAL`) anywhere in the text, it is. Otherwise that context stays
+ * in force across commas, lists, sentences, line breaks and the model's excerpt until the person resolves it for this
+ * value, which takes ALL of:
  *
  * - the value's sentence carries the person's own summing phrase (`ENTRY_SUM`: "in total", "altogether", "итого", "в
  *   сумме"…). A label's "total" ("Total protein 4 g", "Fat 4 g total", "Total: fat 4 g"), "overall" or "всего" is not
  *   one, so it never establishes the amount eaten;
- * - that sentence carries no qualifier or label itself, and states no amount of food ("I ate 200 g in total, protein
- *   8 g": the phrase may sum the food, and the 8 g may still be per 100 g);
+ * - the value is bound to the person's assertion that they ate it, in that same sentence (`boundToConsumption`: "In
+ *   total I ate 120 kcal, protein 8 g"). A summing phrase alone ("In total the package has 4 g protein", "Итого 240
+ *   ккал") does not say the value was eaten, and a consumption verb in another sentence ("I ate half the yogurt.")
+ *   authorizes nothing;
+ * - that sentence carries no qualifier, label, container, product or partial amount itself, and states no amount of food
+ *   ("I ate 200 g in total, protein 8 g": the phrase may sum the food, and the 8 g may still be per 100 g);
  * - no qualifier in the text floats free of values (a value-less sentence such as "Values are per 100 g." may refer to
  *   any sentence).
  *
  * Sentences end only at . ; ! ? (not at commas, colons or line breaks), so a heading and the lines below it stay one
- * sentence and keep their qualifier. Nothing is multiplied or inferred either way.
+ * sentence and keep their qualifier. Nothing is multiplied or inferred either way: not that a whole package was eaten,
+ * and never a fraction of a value.
  */
 function wholeEntryScoped(text: string, start: number, end: number): boolean {
-  if (!hasPortionQualifier(text)) return true;
+  if (!hasPortionQualifier(text) && !CONTAINER_OR_PARTIAL.test(text)) return true;
   const all = sentences(text);
   const own = all.find((sentence) => start >= sentence.start && end <= sentence.end);
-  if (own === undefined || hasPortionQualifier(own.text) || !ENTRY_SUM.test(own.text) || statesFoodQuantity(text, own.start, own.end)) return false;
+  if (own === undefined || hasPortionQualifier(own.text) || CONTAINER_OR_PARTIAL.test(own.text) || !ENTRY_SUM.test(own.text)) return false;
+  if (statesFoodQuantity(text, own.start, own.end) || !boundToConsumption(text, own, start)) return false;
   return all.every((sentence) => !hasPortionQualifier(sentence.text) || statesAnyNutrient(text, sentence.start, sentence.end));
 }
 
-type UnitKind = 'energy' | 'gram' | 'none' | 'other';
+/**
+ * Whether the value at [start, end) is bound to the person's assertion that they ate it: a consumption verb
+ * (`CONSUMPTION`) stands before it in the same sentence, and between the verb and the value there is nothing but other
+ * nutrient statements, separators (whitespace, `,` `:` dashes), "and"/"plus"/"и"/"плюс", the summing phrase, and the
+ * lower endpoint of a range directly before a nutrient statement ("In total I ate 120 kcal, protein 8 g"; "Итого съел
+ * 240 ккал, белки 32 г"; "I ate 330 kcal in total"). Anything else between them ("I ate the yogurt, which has 4 g
+ * protein", "съел половину, в упаковке 4 г") means the value describes something other than the amount eaten.
+ */
+function boundToConsumption(text: string, sentence: { end: number; start: number }, start: number): boolean {
+  let verbEnd = -1;
+  for (const match of text.slice(sentence.start, start).matchAll(CONSUMPTION)) verbEnd = sentence.start + match.index + match[0].length;
+  if (verbEnd === -1) return false;
 
-const unitKind = (groups: Record<string, string | undefined> | undefined): UnitKind =>
-  groups?.energy !== undefined ? 'energy' : groups?.gram !== undefined ? 'gram' : groups?.other !== undefined ? 'other' : 'none';
+  // The nutrient statements between the verb and the value, masked as one placeholder each.
+  const spans: Array<{ end: number; start: number }> = [];
+  for (const token of numberTokens(text, verbEnd, start)) {
+    for (const field of MEAL_NUTRITION_FIELDS) {
+      const mention = checkMention(text, token, field);
+      if (mention.kind === 'mention' && mention.start >= verbEnd && mention.end <= start) spans.push({ end: mention.end, start: mention.start });
+    }
+  }
+  spans.sort((left, right) => left.start - right.start || right.end - left.end);
+  let gap = '';
+  let cursor = verbEnd;
+  for (const span of spans) {
+    if (span.start < cursor) continue;
+    gap += `${text.slice(cursor, span.start)}\u0000`;
+    cursor = span.end;
+  }
+  gap += text.slice(cursor, start);
+
+  const allowed = new RegExp(
+    [
+      '\\s+',
+      '[,:\\u2010-\\u2014-]',
+      '\\u0000',
+      `${NOT_LETTER_BEFORE}(?:and|plus|и|плюс)${NOT_LETTER_AFTER}`,
+      ENTRY_SUM.source,
+      `\\d+(?:[.,]\\d+)?(?:\\s*${UNIT_KIND})?\\s*(?:${DASH_SEPARATOR}|${RANGE_WORD})\\s*(?=\\u0000|$)`,
+    ].join('|'),
+    'iuy',
+  );
+  let position = 0;
+  while (position < gap.length) {
+    allowed.lastIndex = position;
+    const match = allowed.exec(gap);
+    if (match === null || match[0].length === 0) return false;
+    position += match[0].length;
+  }
+  return true;
+}
+
+type Measure = 'energy' | 'mass' | 'none' | 'percent' | 'volume';
+
+const measureOf = (groups: Record<string, string | undefined> | undefined): Measure =>
+  groups?.energy !== undefined
+    ? 'energy'
+    : groups?.mass !== undefined
+      ? 'mass'
+      : groups?.volume !== undefined
+        ? 'volume'
+        : groups?.percent !== undefined
+          ? 'percent'
+          : 'none';
 
 /**
- * Whether the number token is one endpoint of a range in the ORIGINAL text, whatever the excerpt or the clause shows:
- * another number directly before it or directly after it (and its own unit), joined only by whitespace (line breaks
- * included) and a minus, a dash, "to", "or", "до" or "или". Both directions are checked, so a range is seen from either
- * endpoint. Two numbers are NOT a range when anything else stands between them (a full stop, a semicolon, a comma: they
- * are separate statements), when the other number carries a different kind of unit ("300 kcal – 5 g protein", "200 ml –
- * 120 kcal"), or when the other number is itself a statement of a different nutrient ("protein 30 g – 5 g fat").
+ * Whether the value (the number token, inside its statement at [start, end)) is one endpoint of a range or alternative in
+ * the ORIGINAL text, whatever the excerpt or the clause shows. Both directions are checked, from the number and from the
+ * edges of its statement, across whitespace and line breaks, so a range is seen from either endpoint and whatever the
+ * model's excerpt includes.
+ *
+ * - Joined by "to", "or", "до" or "или" to another number: always a range or alternative, whatever the endpoints' units
+ *   ("500 kcal to\n2500 kJ", "fat 5 g or 6000 mg", "2 cups or 500 kcal"). The units are never converted or compared.
+ * - Joined by a dash (any minus or dash) to another number: a range when the other number states the SAME MEASURE (energy:
+ *   kcal, kJ…; mass: g, mg, kg, oz…) or no unit ("500 -\n600 kcal", "500 kcal –\n2500 kJ", "fat 5 g –\n6000 mg"). A
+ *   dash also separates statements, so it is NOT a range when the other number states another measure ("300 kcal –\n5 g
+ *   protein", "200 ml –\n120 kcal"), or is itself a statement of a different nutrient ("protein 30 g –\n5 g fat").
+ * - Anything else between the numbers (a full stop, a semicolon, a comma) makes them separate statements.
  */
-function inRange(text: string, token: NumberToken, field: MealNutritionField): boolean {
-  const own: UnitKind = field === 'energyKcal' ? 'energy' : 'gram';
+function inRange(text: string, token: NumberToken, start: number, end: number, field: MealNutritionField): boolean {
+  const own: Measure = field === 'energyKcal' ? 'energy' : 'mass';
   const tokens = numberTokens(text);
-  const joins = (other: NumberToken | undefined, kind: UnitKind): boolean => {
-    if (kind !== own && kind !== 'none') return false;
+  const joins = (other: NumberToken | undefined, measure: Measure): boolean => {
+    if (measure !== own && measure !== 'none') return false;
     return other === undefined || !MEAL_NUTRITION_FIELDS.some((candidate) => candidate !== field && checkMention(text, other, candidate).kind === 'mention');
   };
-  const before = RANGE_BEFORE.exec(text.slice(0, token.start));
-  if (before !== null && joins(tokens.find((other) => other.end === before.index + 1), unitKind(before.groups))) return true;
-  const after = RANGE_AFTER.exec(text.slice(token.end));
-  if (after === null) return false;
-  const upperStart = token.end + (after.groups?.lead ?? '').length;
-  return joins(
-    tokens.find((other) => other.start === upperStart),
-    unitKind(after.groups),
-  );
+  for (const edge of new Set([token.start, start])) {
+    const before = text.slice(0, edge);
+    if (WORD_RANGE_BEFORE.test(before)) return true;
+    const dash = DASH_RANGE_BEFORE.exec(before);
+    if (dash !== null && joins(tokens.find((other) => other.end === dash.index + 1), measureOf(dash.groups))) return true;
+  }
+  for (const edge of new Set([token.end, end])) {
+    const after = text.slice(edge);
+    if (WORD_RANGE_AFTER.test(after)) return true;
+    const dash = DASH_RANGE_AFTER.exec(after);
+    if (dash === null) continue;
+    const upperStart = edge + (dash.groups?.lead ?? '').length;
+    if (joins(tokens.find((other) => other.start === upperStart), measureOf(dash.groups))) return true;
+  }
+  return false;
 }
 
 /**
@@ -431,7 +542,7 @@ function inRange(text: string, token: NumberToken, field: MealNutritionField): b
 function scopeReason(text: string, start: number, end: number, token: NumberToken, field: MealNutritionField): MealDraftWithheldReason | null {
   const clause = clauseAround(text, start, end);
   if (hasPortionQualifier(clause.text)) return 'per_portion';
-  if (AMBIGUOUS.test(clause.text) || clause.closer === '?' || inRange(text, token, field)) return 'ambiguous';
+  if (AMBIGUOUS.test(clause.text) || clause.closer === '?' || inRange(text, token, start, end, field)) return 'ambiguous';
   if (NEGATED.test(clause.text)) return 'negated';
   if (HEDGE.test(text)) return 'ambiguous';
   if (!wholeEntryScoped(text, start, end)) return 'per_portion';
