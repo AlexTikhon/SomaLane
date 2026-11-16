@@ -15,6 +15,8 @@ import { LlmProviderError, type LlmProvider } from '../insights/llm-provider.js'
 import { groundMealDraft, UngroundedOutputError, type GroundedProposal, type GroundingAudit } from '../meals/drafts/meal-draft-grounding.js';
 import { buildMealDraftMessages, MEAL_DRAFT_PROMPT_VERSION, mealDraftPromptDigest } from '../meals/drafts/meal-draft-prompt.js';
 import { mealDraftWireJsonSchema, mealDraftWireSchema } from '../meals/drafts/meal-draft-wire.js';
+import type { ReproducibilityMetadata } from './meal-draft-metadata.js';
+import type { MealDraftExecutionProfile, ProfileCheck } from './meal-draft-profile.js';
 
 // The evaluation of "Draft from text" (ADR-0092; docs/runbooks/meal-drafts.md). Two FROZEN synthetic sets, development
 // and held-out, English and Russian. A run makes at most one provider call per case, never retries, and goes through the
@@ -222,6 +224,24 @@ export interface FieldCounts {
   stoppedByServer: number;
 }
 
+/**
+ * What happened to every field that must NOT be proposed (a null expectation), split by WHO kept it out. Only
+ * `verifierWithheld` involved the verifier at all: when the model did not claim a value, nothing was asked of the
+ * grounding, so `modelDidNotClaim` and `nonDraft` are never evidence that the verifier rejects a wrong claim (the
+ * deterministic safety corpus is that evidence).
+ */
+export interface NullExpectationCounts {
+  /** A value was shown although none was expected (also counted in `fields.incorrectAccepted`). */
+  accepted: number;
+  /** The model abstained or said "not stated": no claim reached the verifier. */
+  modelDidNotClaim: number;
+  /** The outcome was not a draft (a clarification, a refusal or a failure). */
+  nonDraft: number;
+  total: number;
+  /** The model claimed a value and the grounding withheld it. */
+  verifierWithheld: number;
+}
+
 export interface MealDraftScore {
   extraction: { precision: number | null; recall: number | null };
   failures: { byReason: Record<string, number>; total: number };
@@ -230,6 +250,7 @@ export interface MealDraftScore {
   latencyMs: { max: number; mean: number; p50: number; p95: number } | null;
   mealType: Tally;
   multipleMealsOverrides: number;
+  nullExpectations: NullExpectationCounts;
   outcome: Tally;
   reason: Tally;
   title: Tally;
@@ -261,6 +282,7 @@ export function scoreMealDraftResults(results: readonly MealDraftCaseResult[]): 
   const title: Tally = { correct: 0, total: 0 };
   const mealType: Tally = { correct: 0, total: 0 };
   const failures: Record<string, number> = {};
+  const nullExpectations: NullExpectationCounts = { accepted: 0, modelDidNotClaim: 0, nonDraft: 0, total: 0, verifierWithheld: 0 };
   let multipleMealsOverrides = 0;
 
   for (const result of results) {
@@ -283,6 +305,13 @@ export function scoreMealDraftResults(results: readonly MealDraftCaseResult[]): 
       const value = shown?.status === 'proposed' ? shown.value : null;
       const disposition = proposal?.outcome === 'draft' ? result.audit?.fields?.[field] : undefined;
       if (wanted !== null) fields.expectedValues += 1;
+      else {
+        nullExpectations.total += 1;
+        if (value !== null) nullExpectations.accepted += 1;
+        else if (proposal?.outcome !== 'draft') nullExpectations.nonDraft += 1;
+        else if (disposition === 'server_withheld') nullExpectations.verifierWithheld += 1;
+        else nullExpectations.modelDidNotClaim += 1;
+      }
       if (value !== null) {
         if (value === wanted) fields.correctAccepted += 1;
         else {
@@ -329,17 +358,57 @@ export function scoreMealDraftResults(results: readonly MealDraftCaseResult[]): 
           },
     mealType,
     multipleMealsOverrides,
+    nullExpectations,
     outcome,
     reason,
     title,
   };
 }
 
+/** A compact score per dataset category (the "failure category" of a case is its category plus its failure reason). */
+export interface CategoryScore {
+  cases: number;
+  correctAccepted: number;
+  expectedValues: number;
+  failures: Record<string, number>;
+  incorrectAccepted: number;
+  outcomeCorrect: number;
+}
+
+export function scoreMealDraftByCategory(results: readonly MealDraftCaseResult[]): Record<string, CategoryScore> {
+  const groups = new Map<string, MealDraftCaseResult[]>();
+  for (const result of results) groups.set(result.case.category, [...(groups.get(result.case.category) ?? []), result]);
+  const byCategory: Record<string, CategoryScore> = {};
+  for (const [category, group] of [...groups].sort(([left], [right]) => left.localeCompare(right))) {
+    const score = scoreMealDraftResults(group);
+    byCategory[category] = {
+      cases: group.length,
+      correctAccepted: score.fields.correctAccepted,
+      expectedValues: score.fields.expectedValues,
+      failures: score.failures.byReason,
+      incorrectAccepted: score.fields.incorrectAccepted,
+      outcomeCorrect: score.outcome.correct,
+    };
+  }
+  return byCategory;
+}
+
+/**
+ * The report format. 2 added `metadata`, `byCategory`, per-case `audit` and `score.nullExpectations` to version 1; 3
+ * replaces the two file digests with the verifier fingerprint (import closure, built contracts, adapter) and adds the
+ * execution profile captured before the first call and the per-request profile check. Older reports are kept as they
+ * were written; the model gate refuses them as evidence because they cannot establish either.
+ */
+export const MEAL_DRAFT_REPORT_VERSION = 3;
+
 export interface MealDraftEvaluationReport {
+  byCategory: Record<string, CategoryScore>;
   byLanguage: Record<'en' | 'ru', MealDraftScore>;
   calls: number;
   caseCount: number;
   cases: Array<{
+    /** Bounded dispositions only (proposed, not stated, abstained, withheld): enough to re-score, never content. */
+    audit: GroundingAudit | null;
     category: string;
     durationMs: number;
     expectedOutcome: string;
@@ -351,26 +420,51 @@ export interface MealDraftEvaluationReport {
   datasetDigest: string;
   datasetVersion: string;
   executedCount: number;
+  /** The profile captured before the first call (null for the fake provider). */
+  executionProfile: MealDraftExecutionProfile | null;
   generation: Record<string, unknown>;
   /** "fake" runs verify the harness only; they are never model-quality evidence. */
   kind: 'fake-harness-verification' | 'real-model';
+  maxCalls: number;
+  metadata: ReproducibilityMetadata | null;
   model: string;
   partial: boolean;
+  /** Requests checked against the profile on their way out (null for the fake provider). */
+  profileCheck: ProfileCheck | null;
   promptDigest: string;
   promptVersion: string;
   provider: string;
+  reportVersion: typeof MEAL_DRAFT_REPORT_VERSION;
   runtimeVersion: string | null;
   score: MealDraftScore;
   set: MealDraftEvaluationSet;
+  status: 'EXECUTED';
   stopped: MealDraftEvaluationRun['stopped'];
   timeoutMs: number;
+}
+
+/** Written instead of a report when no inference could be made (the runtime or the model was not available). */
+export interface MealDraftNotRunReport {
+  executionProfile: MealDraftExecutionProfile | null;
+  kind: 'real-model';
+  metadata: ReproducibilityMetadata | null;
+  model: string;
+  provider: 'ollama';
+  reason: string;
+  reportVersion: typeof MEAL_DRAFT_REPORT_VERSION;
+  set: MealDraftEvaluationSet;
+  status: 'NOT_RUN';
 }
 
 export function buildMealDraftReport(input: {
   dataset: MealDraftEvaluationDataset;
   digest: string;
+  executionProfile?: MealDraftExecutionProfile | null;
   generation: Record<string, unknown>;
+  maxCalls?: number;
+  metadata?: ReproducibilityMetadata | null;
   model: string;
+  profileCheck?: ProfileCheck | null;
   provider: 'fake' | 'ollama';
   run: MealDraftEvaluationRun;
   runtimeVersion: string | null;
@@ -378,6 +472,7 @@ export function buildMealDraftReport(input: {
 }): MealDraftEvaluationReport {
   const { dataset, run } = input;
   return {
+    byCategory: scoreMealDraftByCategory(run.results),
     byLanguage: {
       en: scoreMealDraftResults(run.results.filter((result) => result.case.language === 'en')),
       ru: scoreMealDraftResults(run.results.filter((result) => result.case.language === 'ru')),
@@ -385,6 +480,7 @@ export function buildMealDraftReport(input: {
     calls: run.calls,
     caseCount: dataset.cases.length,
     cases: run.results.map((result) => ({
+      audit: result.audit,
       category: result.case.category,
       durationMs: result.durationMs,
       expectedOutcome: result.case.expected.outcome,
@@ -396,16 +492,22 @@ export function buildMealDraftReport(input: {
     datasetDigest: input.digest,
     datasetVersion: dataset.datasetVersion,
     executedCount: run.results.length,
+    executionProfile: input.executionProfile ?? null,
     generation: input.generation,
     kind: input.provider === 'fake' ? 'fake-harness-verification' : 'real-model',
+    maxCalls: input.maxCalls ?? Math.min(dataset.cases.length, MEAL_DRAFT_EVALUATION_MAX_CALLS),
+    metadata: input.metadata ?? null,
     model: input.model,
     partial: run.results.length < dataset.cases.length || run.stopped !== null,
+    profileCheck: input.profileCheck ?? null,
     promptDigest: mealDraftPromptDigest(),
     promptVersion: MEAL_DRAFT_PROMPT_VERSION,
     provider: input.provider,
+    reportVersion: MEAL_DRAFT_REPORT_VERSION,
     runtimeVersion: input.runtimeVersion,
     score: scoreMealDraftResults(run.results),
     set: dataset.set,
+    status: 'EXECUTED',
     stopped: run.stopped,
     timeoutMs: input.timeoutMs,
   };
@@ -427,6 +529,7 @@ export function formatMealDraftReport(report: MealDraftEvaluationReport): string
     `Fields: ${score.fields.correctAccepted} correct, ${score.fields.incorrectAccepted} INCORRECTLY ACCEPTED, of ${score.fields.expectedValues} expected values`,
     `Extraction: precision ${pct(score.extraction.precision)}, recall ${pct(score.extraction.recall)}`,
     `Abstentions: ${score.fields.missedByModel} by the model, ${score.fields.missedByServer} withheld by grounding, ${score.fields.missedByOutcome} by a non-draft outcome; ${score.fields.stoppedByServer} wrong claims stopped by grounding`,
+    `Fields that must not be shown (${score.nullExpectations.total}): ${score.nullExpectations.accepted} shown, ${score.nullExpectations.verifierWithheld} claimed and withheld by the verifier, ${score.nullExpectations.modelDidNotClaim} never claimed by the model, ${score.nullExpectations.nonDraft} no draft (model restraint is NOT verifier evidence)`,
     `Failures: ${score.failures.total} ${JSON.stringify(score.failures.byReason)}`,
     score.latencyMs === null
       ? 'Latency: n/a'
