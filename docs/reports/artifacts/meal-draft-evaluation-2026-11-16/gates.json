@@ -1,0 +1,557 @@
+{
+  "exitCode": 2,
+  "kind": "meal-draft-gates",
+  "metadata": {
+    "groundingDigest": "7cfdf58e2938b6256dcf595eeb10fcb28382eeb7067c04e53e8dca12eb5a7703",
+    "promptDigest": "f53aeae55420c9079ae6ac68f6b8b618f8afd1fec9f6777a84a72dd603ad2fb5",
+    "promptVersion": "meal-draft-prompt-1",
+    "schemaDigest": "893910b98d23e26b7b355c0846f72ca48e20d84a1738b812ed04e2da6999faa9",
+    "schemaName": "meal_draft_evidence_v1",
+    "datasetDigest": null,
+    "generation": null,
+    "git": {
+      "dirty": true,
+      "dirtyPathCount": 18,
+      "dirtyPaths": [
+        "apps/api/package.json",
+        "apps/api/src/evaluation/meal-draft-evaluation-main.ts",
+        "apps/api/src/evaluation/meal-draft-evaluation.ts",
+        "docs/reference.md",
+        "docs/runbooks/meal-drafts.md",
+        "package.json",
+        "apps/api/evaluation/meal-draft.safety.v1.json",
+        "apps/api/src/evaluation/meal-draft-evaluation-cli.ts",
+        "apps/api/src/evaluation/meal-draft-gates.spec.ts",
+        "apps/api/src/evaluation/meal-draft-gates.ts",
+        "apps/api/src/evaluation/meal-draft-metadata.ts",
+        "apps/api/src/evaluation/meal-draft-safety.spec.ts",
+        "apps/api/src/evaluation/meal-draft-safety.ts",
+        "docs/reports/artifacts/meal-draft-evaluation-2026-11-16/fake-harness-development.json",
+        "docs/reports/artifacts/meal-draft-evaluation-2026-11-16/fake-harness-heldout.json",
+        "docs/reports/artifacts/meal-draft-evaluation-2026-11-16/qwen3-8b-development.json",
+        "docs/reports/artifacts/meal-draft-evaluation-2026-11-16/qwen3-8b-heldout.json",
+        "docs/reports/artifacts/meal-draft-evaluation-2026-11-16/verifier-safety.json"
+      ],
+      "sha": "91492468d450502e4b17eda14bafd7533466d097"
+    },
+    "model": "qwen3:8b",
+    "modelDigest": "500a1f067a9f782620b40bee6f7b0c89e17ae61f686b92c24933e4ca4b2b8b41",
+    "nodeVersion": "v24.11.1",
+    "ollamaVersion": null,
+    "recordedAt": "2026-11-16T08:22:51.373Z",
+    "timeoutMs": null
+  },
+  "model": {
+    "gate": "model",
+    "metrics": {
+      "byLanguage": {
+        "en": {
+          "cases": 20,
+          "failures": 1,
+          "incorrectAccepted": 0,
+          "outcomeAccuracy": 0.85,
+          "recall": 0.875
+        },
+        "ru": {
+          "cases": 20,
+          "failures": 2,
+          "incorrectAccepted": 0,
+          "outcomeAccuracy": 0.85,
+          "recall": 0.867
+        }
+      },
+      "cases": 40,
+      "extractionPrecision": 1,
+      "extractionRecall": 0.871,
+      "failuresByCategory": {
+        "ambiguous": {
+          "cases": 3,
+          "correctAccepted": 1,
+          "expectedValues": 1,
+          "failures": {},
+          "incorrectAccepted": 0,
+          "outcomeCorrect": 2
+        },
+        "conflicting": {
+          "cases": 2,
+          "correctAccepted": 0,
+          "expectedValues": 0,
+          "failures": {},
+          "incorrectAccepted": 0,
+          "outcomeCorrect": 1
+        },
+        "decimal": {
+          "cases": 4,
+          "correctAccepted": 8,
+          "expectedValues": 8,
+          "failures": {},
+          "incorrectAccepted": 0,
+          "outcomeCorrect": 4
+        },
+        "estimate-request": {
+          "cases": 1,
+          "correctAccepted": 0,
+          "expectedValues": 0,
+          "failures": {},
+          "incorrectAccepted": 0,
+          "outcomeCorrect": 1
+        },
+        "food-quantity": {
+          "cases": 3,
+          "correctAccepted": 1,
+          "expectedValues": 3,
+          "failures": {
+            "ungrounded_output": 2
+          },
+          "incorrectAccepted": 0,
+          "outcomeCorrect": 1
+        },
+        "grounded": {
+          "cases": 4,
+          "correctAccepted": 10,
+          "expectedValues": 12,
+          "failures": {
+            "timeout": 1
+          },
+          "incorrectAccepted": 0,
+          "outcomeCorrect": 3
+        },
+        "multiple-meals": {
+          "cases": 3,
+          "correctAccepted": 0,
+          "expectedValues": 0,
+          "failures": {},
+          "incorrectAccepted": 0,
+          "outcomeCorrect": 3
+        },
+        "negation": {
+          "cases": 2,
+          "correctAccepted": 0,
+          "expectedValues": 0,
+          "failures": {},
+          "incorrectAccepted": 0,
+          "outcomeCorrect": 2
+        },
+        "no-food": {
+          "cases": 1,
+          "correctAccepted": 0,
+          "expectedValues": 0,
+          "failures": {},
+          "incorrectAccepted": 0,
+          "outcomeCorrect": 1
+        },
+        "not-a-meal": {
+          "cases": 2,
+          "correctAccepted": 0,
+          "expectedValues": 0,
+          "failures": {},
+          "incorrectAccepted": 0,
+          "outcomeCorrect": 2
+        },
+        "per-portion": {
+          "cases": 4,
+          "correctAccepted": 0,
+          "expectedValues": 0,
+          "failures": {},
+          "incorrectAccepted": 0,
+          "outcomeCorrect": 4
+        },
+        "prompt-injection": {
+          "cases": 2,
+          "correctAccepted": 0,
+          "expectedValues": 0,
+          "failures": {},
+          "incorrectAccepted": 0,
+          "outcomeCorrect": 1
+        },
+        "title-only": {
+          "cases": 4,
+          "correctAccepted": 0,
+          "expectedValues": 0,
+          "failures": {},
+          "incorrectAccepted": 0,
+          "outcomeCorrect": 4
+        },
+        "unit": {
+          "cases": 1,
+          "correctAccepted": 0,
+          "expectedValues": 0,
+          "failures": {},
+          "incorrectAccepted": 0,
+          "outcomeCorrect": 1
+        },
+        "zero": {
+          "cases": 4,
+          "correctAccepted": 7,
+          "expectedValues": 7,
+          "failures": {},
+          "incorrectAccepted": 0,
+          "outcomeCorrect": 4
+        }
+      },
+      "failuresByReason": {
+        "timeout": 1,
+        "ungrounded_output": 2
+      },
+      "incorrectAccepted": 0,
+      "incorrectAcceptedFields": [],
+      "outcomeAccuracy": 0.85,
+      "technicalFailureRate": 0.075,
+      "technicalFailures": 3
+    },
+    "model": {
+      "digest": "500a1f067a9f782620b40bee6f7b0c89e17ae61f686b92c24933e4ca4b2b8b41",
+      "name": "qwen3:8b"
+    },
+    "sets": {
+      "development": {
+        "detail": "20/20 cases, 20 calls",
+        "state": "complete"
+      },
+      "heldout": {
+        "detail": "20/20 cases, 20 calls",
+        "state": "complete"
+      }
+    },
+    "thresholds": {
+      "frozenOn": "2026-11-16",
+      "maxIncorrectAccepted": 0,
+      "maxTechnicalFailureRate": 0.1,
+      "minExtractionRecall": 0.85,
+      "minOutcomeAccuracy": 0.85,
+      "requiredSets": [
+        "development",
+        "heldout"
+      ]
+    },
+    "reasons": [],
+    "status": "PASS"
+  },
+  "overall": "FAIL",
+  "permits": "A PASS on these synthetic checks permits further local experimentation only. It is not evidence of generalisation, of product quality or of safety on real text, and the feature stays off by default.",
+  "reportVersion": 2,
+  "verifier": {
+    "corpus": {
+      "caseCount": 53,
+      "digest": "35a514372d3b4f6ea4151ed6f3cf25dc705f2a81663e3669f3f0c0b41c007c43",
+      "version": "1"
+    },
+    "gate": "verifier",
+    "reasons": [
+      "15 forbidden value(s) accepted in 15 case(s): en-bound-postfix-after-comma, en-bound-postfix-comma-line-break, ru-bound-postfix-after-comma, en-bound-within, ru-bound-within, en-bound-or-thereabouts, en-range-through, ru-portion-po-line-break, …."
+    ],
+    "score": {
+      "byCategory": {
+        "punctuation-scope": {
+          "cases": 3,
+          "controls": 0,
+          "controlsMissed": 0,
+          "forbiddenAccepted": 3,
+          "mustWithhold": 12,
+          "outcomeMismatches": 0
+        },
+        "bound": {
+          "cases": 3,
+          "controls": 0,
+          "controlsMissed": 0,
+          "forbiddenAccepted": 3,
+          "mustWithhold": 12,
+          "outcomeMismatches": 0
+        },
+        "line-break-scope": {
+          "cases": 2,
+          "controls": 0,
+          "controlsMissed": 0,
+          "forbiddenAccepted": 0,
+          "mustWithhold": 8,
+          "outcomeMismatches": 0
+        },
+        "range": {
+          "cases": 1,
+          "controls": 0,
+          "controlsMissed": 0,
+          "forbiddenAccepted": 1,
+          "mustWithhold": 4,
+          "outcomeMismatches": 0
+        },
+        "mixed-unit-range": {
+          "cases": 4,
+          "controls": 0,
+          "controlsMissed": 0,
+          "forbiddenAccepted": 0,
+          "mustWithhold": 16,
+          "outcomeMismatches": 0
+        },
+        "negation": {
+          "cases": 4,
+          "controls": 0,
+          "controlsMissed": 0,
+          "forbiddenAccepted": 0,
+          "mustWithhold": 16,
+          "outcomeMismatches": 0
+        },
+        "portion": {
+          "cases": 4,
+          "controls": 0,
+          "controlsMissed": 0,
+          "forbiddenAccepted": 1,
+          "mustWithhold": 16,
+          "outcomeMismatches": 0
+        },
+        "container": {
+          "cases": 4,
+          "controls": 0,
+          "controlsMissed": 0,
+          "forbiddenAccepted": 2,
+          "mustWithhold": 16,
+          "outcomeMismatches": 0
+        },
+        "instruction": {
+          "cases": 5,
+          "controls": 0,
+          "controlsMissed": 0,
+          "forbiddenAccepted": 5,
+          "mustWithhold": 20,
+          "outcomeMismatches": 0
+        },
+        "exact-decimal": {
+          "cases": 5,
+          "controls": 0,
+          "controlsMissed": 0,
+          "forbiddenAccepted": 0,
+          "mustWithhold": 20,
+          "outcomeMismatches": 0
+        },
+        "wire-validation": {
+          "cases": 3,
+          "controls": 0,
+          "controlsMissed": 0,
+          "forbiddenAccepted": 0,
+          "mustWithhold": 12,
+          "outcomeMismatches": 0
+        },
+        "title-grounding": {
+          "cases": 1,
+          "controls": 0,
+          "controlsMissed": 0,
+          "forbiddenAccepted": 0,
+          "mustWithhold": 4,
+          "outcomeMismatches": 0
+        },
+        "control-whole-entry": {
+          "cases": 4,
+          "controls": 7,
+          "controlsMissed": 0,
+          "forbiddenAccepted": 0,
+          "mustWithhold": 9,
+          "outcomeMismatches": 0
+        },
+        "control-zero": {
+          "cases": 2,
+          "controls": 4,
+          "controlsMissed": 0,
+          "forbiddenAccepted": 0,
+          "mustWithhold": 4,
+          "outcomeMismatches": 0
+        },
+        "control-decimal": {
+          "cases": 2,
+          "controls": 4,
+          "controlsMissed": 0,
+          "forbiddenAccepted": 0,
+          "mustWithhold": 4,
+          "outcomeMismatches": 0
+        },
+        "control-cross-field": {
+          "cases": 2,
+          "controls": 2,
+          "controlsMissed": 0,
+          "forbiddenAccepted": 0,
+          "mustWithhold": 6,
+          "outcomeMismatches": 0
+        },
+        "control-independent-field": {
+          "cases": 2,
+          "controls": 2,
+          "controlsMissed": 0,
+          "forbiddenAccepted": 0,
+          "mustWithhold": 6,
+          "outcomeMismatches": 0
+        },
+        "control-unrelated-negation": {
+          "cases": 2,
+          "controls": 2,
+          "controlsMissed": 0,
+          "forbiddenAccepted": 0,
+          "mustWithhold": 6,
+          "outcomeMismatches": 0
+        }
+      },
+      "byLanguage": {
+        "en": {
+          "cases": 30,
+          "controls": 10,
+          "controlsMissed": 0,
+          "forbiddenAccepted": 8,
+          "mustWithhold": 110,
+          "outcomeMismatches": 0
+        },
+        "ru": {
+          "cases": 23,
+          "controls": 11,
+          "controlsMissed": 0,
+          "forbiddenAccepted": 7,
+          "mustWithhold": 81,
+          "outcomeMismatches": 0
+        }
+      },
+      "findings": [
+        {
+          "actual": 600,
+          "category": "punctuation-scope",
+          "expected": "not_proposed",
+          "field": "energyKcal",
+          "id": "en-bound-postfix-after-comma",
+          "kind": "forbidden_accepted",
+          "language": "en"
+        },
+        {
+          "actual": 600,
+          "category": "punctuation-scope",
+          "expected": "not_proposed",
+          "field": "energyKcal",
+          "id": "en-bound-postfix-comma-line-break",
+          "kind": "forbidden_accepted",
+          "language": "en"
+        },
+        {
+          "actual": 600,
+          "category": "punctuation-scope",
+          "expected": "not_proposed",
+          "field": "energyKcal",
+          "id": "ru-bound-postfix-after-comma",
+          "kind": "forbidden_accepted",
+          "language": "ru"
+        },
+        {
+          "actual": 600,
+          "category": "bound",
+          "expected": "not_proposed",
+          "field": "energyKcal",
+          "id": "en-bound-within",
+          "kind": "forbidden_accepted",
+          "language": "en"
+        },
+        {
+          "actual": 600,
+          "category": "bound",
+          "expected": "not_proposed",
+          "field": "energyKcal",
+          "id": "ru-bound-within",
+          "kind": "forbidden_accepted",
+          "language": "ru"
+        },
+        {
+          "actual": 600,
+          "category": "bound",
+          "expected": "not_proposed",
+          "field": "energyKcal",
+          "id": "en-bound-or-thereabouts",
+          "kind": "forbidden_accepted",
+          "language": "en"
+        },
+        {
+          "actual": 600,
+          "category": "range",
+          "expected": "not_proposed",
+          "field": "energyKcal",
+          "id": "en-range-through",
+          "kind": "forbidden_accepted",
+          "language": "en"
+        },
+        {
+          "actual": 90,
+          "category": "portion",
+          "expected": "not_proposed",
+          "field": "energyKcal",
+          "id": "ru-portion-po-line-break",
+          "kind": "forbidden_accepted",
+          "language": "ru"
+        },
+        {
+          "actual": 900,
+          "category": "container",
+          "expected": "not_proposed",
+          "field": "energyKcal",
+          "id": "en-container-pot-unlisted",
+          "kind": "forbidden_accepted",
+          "language": "en"
+        },
+        {
+          "actual": 999,
+          "category": "instruction",
+          "expected": "not_proposed",
+          "field": "energyKcal",
+          "id": "en-instruction-system-note",
+          "kind": "forbidden_accepted",
+          "language": "en"
+        },
+        {
+          "actual": 999,
+          "category": "instruction",
+          "expected": "not_proposed",
+          "field": "energyKcal",
+          "id": "ru-instruction-system-note",
+          "kind": "forbidden_accepted",
+          "language": "ru"
+        },
+        {
+          "actual": 90,
+          "category": "instruction",
+          "expected": "not_proposed",
+          "field": "proteinG",
+          "id": "en-instruction-output-protein",
+          "kind": "forbidden_accepted",
+          "language": "en"
+        },
+        {
+          "actual": 90,
+          "category": "instruction",
+          "expected": "not_proposed",
+          "field": "proteinG",
+          "id": "ru-instruction-ignore-rules",
+          "kind": "forbidden_accepted",
+          "language": "ru"
+        },
+        {
+          "actual": 900,
+          "category": "container",
+          "expected": "not_proposed",
+          "field": "energyKcal",
+          "id": "ru-container-pot-unlisted",
+          "kind": "forbidden_accepted",
+          "language": "ru"
+        },
+        {
+          "actual": 1500,
+          "category": "instruction",
+          "expected": "not_proposed",
+          "field": "energyKcal",
+          "id": "ru-instruction-set-energy",
+          "kind": "forbidden_accepted",
+          "language": "ru"
+        }
+      ],
+      "outcomeMismatches": [],
+      "total": {
+        "cases": 53,
+        "controls": 21,
+        "controlsMissed": 0,
+        "forbiddenAccepted": 15,
+        "mustWithhold": 191,
+        "outcomeMismatches": 0
+      }
+    },
+    "status": "FAIL"
+  }
+}

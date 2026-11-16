@@ -76,29 +76,73 @@ production configuration may use `ollama` (never `fake`); review the privacy not
 until Ollama ends it (ADR-0057 addendum). With `MEAL_DRAFTS_MAX_CONCURRENT=1`, everyone gets `MEAL_DRAFT_BUSY` meanwhile.
 That is intended; restart the API if a call never settles.
 
-## Measuring a model
+## Measuring the verifier and a model (two gates)
 
-The evaluation is opt-in and never part of `verify` or CI. It uses two frozen synthetic sets in `apps/api/evaluation/`
-(`meal-draft.development.v1.json`, `meal-draft.heldout.v1.json`, pinned by digest in `meal-draft-evaluation.ts`), one
-call per case, sequentially, no retries, at most 40 calls per run, and stops after three identical systemic failures in a
-row. It checks that the model is already installed (`/api/tags`) and never pulls one.
+The evaluation is opt-in and never part of `verify` or CI. It has two parts that are reported and judged separately,
+each `PASS`, `FAIL` or `NOT_RUN`:
+
+| Gate | Evidence | PASS needs |
+|---|---|---|
+| **Verifier** (deterministic) | `apps/api/evaluation/meal-draft.safety.v1.json`: frozen synthetic EN/RU cases, each with an explicit model answer (supplied claims), run through the production wire schema, `groundMealDraft` and the public response contract. No model. | Every case judged; **no forbidden value accepted**; every positive control (zero, valid decimals, whole-entry totals, an exact field beside a bounded one, cross-field association) proposed exactly; every refused answer refused |
+| **Model** (real model) | Complete real-model runs of the frozen v1 development and held-out sets (`meal-draft.development.v1.json`, `meal-draft.heldout.v1.json`), re-scored from their per-case results against the pinned sets | Both sets complete (no partial or stopped run, one call per case); report version 3 with the **current** verifier fingerprint and prompt digest; **one execution profile** for both sets, consistent with every duplicated report field and checked on every request; 0 incorrectly accepted values; outcome accuracy ≥ 85 %; extraction recall ≥ 85 %; precision defined; failures (any reason) ≤ 10 % |
+
+The model thresholds were frozen on 2026-11-16 before the first call of the baseline (`MEAL_DRAFT_MODEL_GATE` in
+`meal-draft-gates.ts`). A fake provider, a missing or partial run, an unreachable runtime, a model that is not installed
+legacy, stale or inconsistent provenance and an undefined precision never produce a model PASS. Reasons are typed
+`evidence` (the report cannot be judged), `completeness` (a set is missing or partial) or `quality` (a measured
+threshold failed), so an unjudgeable report is never read as a bad model, nor the reverse. **A model that does not claim a wrong value proves nothing about
+the verifier**: the model report counts such fields as "never claimed by the model", apart from "claimed and withheld
+by the verifier", and only the safety corpus feeds the verifier gate. **A PASS on both permits further local
+experimentation only**; it is not a product, safety or generalisation claim, and the feature stays off by default.
 
 ```text
-npm run eval:meal-drafts -- --set development --provider fake          # harness self-check, NOT model evidence
+npm run eval:meal-drafts -- --set safety --out .local/eval/safety.json                 # verifier corpus, no model
+npm run eval:meal-drafts -- --set development --provider fake                           # harness self-check, NOT model evidence
 npm run eval:meal-drafts -- --set development --provider ollama --dry-run
 npm run eval:meal-drafts -- --set development --provider ollama --max-calls 20 --out .local/eval/dev.json
 npm run eval:meal-drafts -- --set heldout --provider ollama --max-calls 20 --out .local/eval/heldout.json
+npm run eval:meal-drafts:check -- --model .local/eval/dev.json --model .local/eval/heldout.json --out .local/eval/gates.json
 ```
 
-The model and settings come from the `MEAL_DRAFTS_*` variables (set `MEAL_DRAFTS_TIMEOUT_MS=55000` to measure at the
-product's longest deadline). The report separates: outcome/reason/title/meal-type accuracy; extraction precision and
-recall; **incorrectly accepted fields** (the safety number: any value shown that is not the expected one); abstentions by
-the model, by grounding and by a non-draft outcome; wrong claims the grounding stopped; failures by reason; latency.
+Exit codes: `0` PASS (or a model measurement that finished; its verdict comes from `--check`), `2` FAIL, `3` NOT_RUN
+(the runtime is unreachable or the model is not installed, in which case a `NOT_RUN` report with the reason is written,
+or a gate has no evidence), `1` an error that prevented a run or a verdict (bad arguments, an unreadable report).
+`--check` is offline (it never contacts Ollama): it recomputes the verifier gate live on the current code and judges
+the model reports it is given; its JSON holds both verdicts, their typed reasons, the judged execution profile, the
+fingerprints, the metrics by language and failure category, and the permit sentence.
 
-Rules for an honest run: the held-out set is run once with the frozen prompt and rules; nothing may be changed after
-looking at its results (a change means new sets and a new version). A fake run is labelled as harness verification and is
-never quoted as model quality. The last measured results are in
-[docs/reports/meal-draft-model-evaluation-2026-11-14.md](../reports/meal-draft-model-evaluation-2026-11-14.md).
+Model runs make one call per case, sequentially, no retries, at most 40 calls per run, and stop after three identical
+systemic failures in a row. They check that the model is already installed (`/api/tags`) and never pull one. The model
+and settings come from the `MEAL_DRAFTS_*` variables; the deadline defaults to the product's 45 s
+(`MEAL_DRAFTS_TIMEOUT_MS`). Before the first call a run fixes its **execution profile** (model and digest as
+`/api/tags` reports them, Ollama version, temperature, think, num_ctx, num_predict, stream, deadline, response-size
+limit, retries 0, one sequential call per case); a run whose profile cannot be established makes no call (`NOT_RUN`),
+and every request is compared with the profile on its way out (a mismatch is refused before it is sent). Every report
+(version 3) records reproducibility metadata: Git SHA and dirty state with the uncommitted paths, dataset and prompt
+digests, and the **verifier fingerprint** (version 2): SHA-256 over the import closure the evaluation loads (grounding,
+wire, prompt and Ollama adapter sources), the resolution of `@running-tracker/contracts` as Node.js performs it (the
+`exports` entry under the runtime's conditions, which must match `import.meta.resolve`), and, for each name those
+sources import from it, the BUILT module in `packages/contracts/dist/` that defines it after the barrel's re-exports,
+with its imports; repository-relative, sorted, line endings normalised, plus the installed zod version. Any change to
+those files, to the entry, or to which module supplies a name makes earlier model reports stale, and the check names
+it. A package shape the fingerprint cannot bind (no `exports`, fallback arrays, patterns, ambiguous `export *`, a barrel
+that also runs code, a namespace or subpath import, an `export` that does not start its line, …) stops the run or check
+with the reason instead of being guessed. Reports of versions 1 and 2 are kept as written
+and refused as evidence (`LEGACY_REPORT`). The model report separates: outcome/reason/title/meal-type
+accuracy; extraction precision and recall; **incorrectly accepted fields**; abstentions by the model, by grounding and
+by a non-draft outcome; fields that must not be shown, by who kept them out; failures by reason, language and category;
+latency.
+
+Rules for an honest run: the frozen sets and the safety corpus are never edited to change a verdict (a change is a new
+version in a new file); expectations are never weakened and a wrong proposal is never recorded as correct. A grounding
+change that fixes only some findings is judged by what it was meant to fix (the targeted forbidden acceptances gone,
+every positive control still correct); the verifier gate stays FAIL until every forbidden acceptance in the corpus is
+gone. The v1
+held-out set was first run on 2026-11-14 and has been examined, so later runs of it are **regression measurements**, not
+fresh held-out evidence. A fake run is labelled as harness verification and is never quoted as model quality. Results:
+[meal-draft-evaluation-2026-11-16.md](../reports/meal-draft-evaluation-2026-11-16.md) (current baseline, after the four
+grounding amendments) and [meal-draft-model-evaluation-2026-11-14.md](../reports/meal-draft-model-evaluation-2026-11-14.md)
+(historical, before them).
 
 ## Troubleshooting
 

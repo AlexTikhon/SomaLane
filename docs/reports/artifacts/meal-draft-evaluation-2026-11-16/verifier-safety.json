@@ -1,0 +1,1961 @@
+{
+  "caseCount": 53,
+  "corpusDigest": "35a514372d3b4f6ea4151ed6f3cf25dc705f2a81663e3669f3f0c0b41c007c43",
+  "corpusVersion": "1",
+  "executedCount": 53,
+  "gate": {
+    "corpus": {
+      "caseCount": 53,
+      "digest": "35a514372d3b4f6ea4151ed6f3cf25dc705f2a81663e3669f3f0c0b41c007c43",
+      "version": "1"
+    },
+    "gate": "verifier",
+    "reasons": [
+      "15 forbidden value(s) accepted in 15 case(s): en-bound-postfix-after-comma, en-bound-postfix-comma-line-break, ru-bound-postfix-after-comma, en-bound-within, ru-bound-within, en-bound-or-thereabouts, en-range-through, ru-portion-po-line-break, …."
+    ],
+    "score": {
+      "byCategory": {
+        "punctuation-scope": {
+          "cases": 3,
+          "controls": 0,
+          "controlsMissed": 0,
+          "forbiddenAccepted": 3,
+          "mustWithhold": 12,
+          "outcomeMismatches": 0
+        },
+        "bound": {
+          "cases": 3,
+          "controls": 0,
+          "controlsMissed": 0,
+          "forbiddenAccepted": 3,
+          "mustWithhold": 12,
+          "outcomeMismatches": 0
+        },
+        "line-break-scope": {
+          "cases": 2,
+          "controls": 0,
+          "controlsMissed": 0,
+          "forbiddenAccepted": 0,
+          "mustWithhold": 8,
+          "outcomeMismatches": 0
+        },
+        "range": {
+          "cases": 1,
+          "controls": 0,
+          "controlsMissed": 0,
+          "forbiddenAccepted": 1,
+          "mustWithhold": 4,
+          "outcomeMismatches": 0
+        },
+        "mixed-unit-range": {
+          "cases": 4,
+          "controls": 0,
+          "controlsMissed": 0,
+          "forbiddenAccepted": 0,
+          "mustWithhold": 16,
+          "outcomeMismatches": 0
+        },
+        "negation": {
+          "cases": 4,
+          "controls": 0,
+          "controlsMissed": 0,
+          "forbiddenAccepted": 0,
+          "mustWithhold": 16,
+          "outcomeMismatches": 0
+        },
+        "portion": {
+          "cases": 4,
+          "controls": 0,
+          "controlsMissed": 0,
+          "forbiddenAccepted": 1,
+          "mustWithhold": 16,
+          "outcomeMismatches": 0
+        },
+        "container": {
+          "cases": 4,
+          "controls": 0,
+          "controlsMissed": 0,
+          "forbiddenAccepted": 2,
+          "mustWithhold": 16,
+          "outcomeMismatches": 0
+        },
+        "instruction": {
+          "cases": 5,
+          "controls": 0,
+          "controlsMissed": 0,
+          "forbiddenAccepted": 5,
+          "mustWithhold": 20,
+          "outcomeMismatches": 0
+        },
+        "exact-decimal": {
+          "cases": 5,
+          "controls": 0,
+          "controlsMissed": 0,
+          "forbiddenAccepted": 0,
+          "mustWithhold": 20,
+          "outcomeMismatches": 0
+        },
+        "wire-validation": {
+          "cases": 3,
+          "controls": 0,
+          "controlsMissed": 0,
+          "forbiddenAccepted": 0,
+          "mustWithhold": 12,
+          "outcomeMismatches": 0
+        },
+        "title-grounding": {
+          "cases": 1,
+          "controls": 0,
+          "controlsMissed": 0,
+          "forbiddenAccepted": 0,
+          "mustWithhold": 4,
+          "outcomeMismatches": 0
+        },
+        "control-whole-entry": {
+          "cases": 4,
+          "controls": 7,
+          "controlsMissed": 0,
+          "forbiddenAccepted": 0,
+          "mustWithhold": 9,
+          "outcomeMismatches": 0
+        },
+        "control-zero": {
+          "cases": 2,
+          "controls": 4,
+          "controlsMissed": 0,
+          "forbiddenAccepted": 0,
+          "mustWithhold": 4,
+          "outcomeMismatches": 0
+        },
+        "control-decimal": {
+          "cases": 2,
+          "controls": 4,
+          "controlsMissed": 0,
+          "forbiddenAccepted": 0,
+          "mustWithhold": 4,
+          "outcomeMismatches": 0
+        },
+        "control-cross-field": {
+          "cases": 2,
+          "controls": 2,
+          "controlsMissed": 0,
+          "forbiddenAccepted": 0,
+          "mustWithhold": 6,
+          "outcomeMismatches": 0
+        },
+        "control-independent-field": {
+          "cases": 2,
+          "controls": 2,
+          "controlsMissed": 0,
+          "forbiddenAccepted": 0,
+          "mustWithhold": 6,
+          "outcomeMismatches": 0
+        },
+        "control-unrelated-negation": {
+          "cases": 2,
+          "controls": 2,
+          "controlsMissed": 0,
+          "forbiddenAccepted": 0,
+          "mustWithhold": 6,
+          "outcomeMismatches": 0
+        }
+      },
+      "byLanguage": {
+        "en": {
+          "cases": 30,
+          "controls": 10,
+          "controlsMissed": 0,
+          "forbiddenAccepted": 8,
+          "mustWithhold": 110,
+          "outcomeMismatches": 0
+        },
+        "ru": {
+          "cases": 23,
+          "controls": 11,
+          "controlsMissed": 0,
+          "forbiddenAccepted": 7,
+          "mustWithhold": 81,
+          "outcomeMismatches": 0
+        }
+      },
+      "findings": [
+        {
+          "actual": 600,
+          "category": "punctuation-scope",
+          "expected": "not_proposed",
+          "field": "energyKcal",
+          "id": "en-bound-postfix-after-comma",
+          "kind": "forbidden_accepted",
+          "language": "en"
+        },
+        {
+          "actual": 600,
+          "category": "punctuation-scope",
+          "expected": "not_proposed",
+          "field": "energyKcal",
+          "id": "en-bound-postfix-comma-line-break",
+          "kind": "forbidden_accepted",
+          "language": "en"
+        },
+        {
+          "actual": 600,
+          "category": "punctuation-scope",
+          "expected": "not_proposed",
+          "field": "energyKcal",
+          "id": "ru-bound-postfix-after-comma",
+          "kind": "forbidden_accepted",
+          "language": "ru"
+        },
+        {
+          "actual": 600,
+          "category": "bound",
+          "expected": "not_proposed",
+          "field": "energyKcal",
+          "id": "en-bound-within",
+          "kind": "forbidden_accepted",
+          "language": "en"
+        },
+        {
+          "actual": 600,
+          "category": "bound",
+          "expected": "not_proposed",
+          "field": "energyKcal",
+          "id": "ru-bound-within",
+          "kind": "forbidden_accepted",
+          "language": "ru"
+        },
+        {
+          "actual": 600,
+          "category": "bound",
+          "expected": "not_proposed",
+          "field": "energyKcal",
+          "id": "en-bound-or-thereabouts",
+          "kind": "forbidden_accepted",
+          "language": "en"
+        },
+        {
+          "actual": 600,
+          "category": "range",
+          "expected": "not_proposed",
+          "field": "energyKcal",
+          "id": "en-range-through",
+          "kind": "forbidden_accepted",
+          "language": "en"
+        },
+        {
+          "actual": 90,
+          "category": "portion",
+          "expected": "not_proposed",
+          "field": "energyKcal",
+          "id": "ru-portion-po-line-break",
+          "kind": "forbidden_accepted",
+          "language": "ru"
+        },
+        {
+          "actual": 900,
+          "category": "container",
+          "expected": "not_proposed",
+          "field": "energyKcal",
+          "id": "en-container-pot-unlisted",
+          "kind": "forbidden_accepted",
+          "language": "en"
+        },
+        {
+          "actual": 999,
+          "category": "instruction",
+          "expected": "not_proposed",
+          "field": "energyKcal",
+          "id": "en-instruction-system-note",
+          "kind": "forbidden_accepted",
+          "language": "en"
+        },
+        {
+          "actual": 999,
+          "category": "instruction",
+          "expected": "not_proposed",
+          "field": "energyKcal",
+          "id": "ru-instruction-system-note",
+          "kind": "forbidden_accepted",
+          "language": "ru"
+        },
+        {
+          "actual": 90,
+          "category": "instruction",
+          "expected": "not_proposed",
+          "field": "proteinG",
+          "id": "en-instruction-output-protein",
+          "kind": "forbidden_accepted",
+          "language": "en"
+        },
+        {
+          "actual": 90,
+          "category": "instruction",
+          "expected": "not_proposed",
+          "field": "proteinG",
+          "id": "ru-instruction-ignore-rules",
+          "kind": "forbidden_accepted",
+          "language": "ru"
+        },
+        {
+          "actual": 900,
+          "category": "container",
+          "expected": "not_proposed",
+          "field": "energyKcal",
+          "id": "ru-container-pot-unlisted",
+          "kind": "forbidden_accepted",
+          "language": "ru"
+        },
+        {
+          "actual": 1500,
+          "category": "instruction",
+          "expected": "not_proposed",
+          "field": "energyKcal",
+          "id": "ru-instruction-set-energy",
+          "kind": "forbidden_accepted",
+          "language": "ru"
+        }
+      ],
+      "outcomeMismatches": [],
+      "total": {
+        "cases": 53,
+        "controls": 21,
+        "controlsMissed": 0,
+        "forbiddenAccepted": 15,
+        "mustWithhold": 191,
+        "outcomeMismatches": 0
+      }
+    },
+    "status": "FAIL"
+  },
+  "kind": "deterministic-verifier-safety",
+  "metadata": {
+    "groundingDigest": "7cfdf58e2938b6256dcf595eeb10fcb28382eeb7067c04e53e8dca12eb5a7703",
+    "promptDigest": "f53aeae55420c9079ae6ac68f6b8b618f8afd1fec9f6777a84a72dd603ad2fb5",
+    "promptVersion": "meal-draft-prompt-1",
+    "schemaDigest": "893910b98d23e26b7b355c0846f72ca48e20d84a1738b812ed04e2da6999faa9",
+    "schemaName": "meal_draft_evidence_v1",
+    "datasetDigest": "35a514372d3b4f6ea4151ed6f3cf25dc705f2a81663e3669f3f0c0b41c007c43",
+    "generation": null,
+    "git": {
+      "dirty": true,
+      "dirtyPathCount": 13,
+      "dirtyPaths": [
+        "apps/api/package.json",
+        "apps/api/src/evaluation/meal-draft-evaluation-main.ts",
+        "apps/api/src/evaluation/meal-draft-evaluation.ts",
+        "docs/reference.md",
+        "docs/runbooks/meal-drafts.md",
+        "package.json",
+        "apps/api/evaluation/meal-draft.safety.v1.json",
+        "apps/api/src/evaluation/meal-draft-evaluation-cli.ts",
+        "apps/api/src/evaluation/meal-draft-gates.spec.ts",
+        "apps/api/src/evaluation/meal-draft-gates.ts",
+        "apps/api/src/evaluation/meal-draft-metadata.ts",
+        "apps/api/src/evaluation/meal-draft-safety.spec.ts",
+        "apps/api/src/evaluation/meal-draft-safety.ts"
+      ],
+      "sha": "91492468d450502e4b17eda14bafd7533466d097"
+    },
+    "model": null,
+    "modelDigest": null,
+    "nodeVersion": "v24.11.1",
+    "ollamaVersion": null,
+    "recordedAt": "2026-11-16T08:11:17.483Z",
+    "timeoutMs": null
+  },
+  "reportVersion": 2,
+  "results": [
+    {
+      "actualOutcome": "draft",
+      "category": "punctuation-scope",
+      "expectedOutcome": "draft",
+      "fields": {
+        "energyKcal": {
+          "actual": 600,
+          "expected": "not_proposed",
+          "verdict": "forbidden_accepted"
+        },
+        "proteinG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "carbohydrateG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "fatG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        }
+      },
+      "id": "en-bound-postfix-after-comma",
+      "language": "en",
+      "outcomeMatches": true
+    },
+    {
+      "actualOutcome": "draft",
+      "category": "punctuation-scope",
+      "expectedOutcome": "draft",
+      "fields": {
+        "energyKcal": {
+          "actual": 600,
+          "expected": "not_proposed",
+          "verdict": "forbidden_accepted"
+        },
+        "proteinG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "carbohydrateG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "fatG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        }
+      },
+      "id": "en-bound-postfix-comma-line-break",
+      "language": "en",
+      "outcomeMatches": true
+    },
+    {
+      "actualOutcome": "draft",
+      "category": "punctuation-scope",
+      "expectedOutcome": "draft",
+      "fields": {
+        "energyKcal": {
+          "actual": 600,
+          "expected": "not_proposed",
+          "verdict": "forbidden_accepted"
+        },
+        "proteinG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "carbohydrateG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "fatG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        }
+      },
+      "id": "ru-bound-postfix-after-comma",
+      "language": "ru",
+      "outcomeMatches": true
+    },
+    {
+      "actualOutcome": "draft",
+      "category": "bound",
+      "expectedOutcome": "draft",
+      "fields": {
+        "energyKcal": {
+          "actual": 600,
+          "expected": "not_proposed",
+          "verdict": "forbidden_accepted"
+        },
+        "proteinG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "carbohydrateG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "fatG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        }
+      },
+      "id": "en-bound-within",
+      "language": "en",
+      "outcomeMatches": true
+    },
+    {
+      "actualOutcome": "draft",
+      "category": "bound",
+      "expectedOutcome": "draft",
+      "fields": {
+        "energyKcal": {
+          "actual": 600,
+          "expected": "not_proposed",
+          "verdict": "forbidden_accepted"
+        },
+        "proteinG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "carbohydrateG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "fatG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        }
+      },
+      "id": "ru-bound-within",
+      "language": "ru",
+      "outcomeMatches": true
+    },
+    {
+      "actualOutcome": "draft",
+      "category": "bound",
+      "expectedOutcome": "draft",
+      "fields": {
+        "energyKcal": {
+          "actual": 600,
+          "expected": "not_proposed",
+          "verdict": "forbidden_accepted"
+        },
+        "proteinG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "carbohydrateG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "fatG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        }
+      },
+      "id": "en-bound-or-thereabouts",
+      "language": "en",
+      "outcomeMatches": true
+    },
+    {
+      "actualOutcome": "draft",
+      "category": "line-break-scope",
+      "expectedOutcome": "draft",
+      "fields": {
+        "energyKcal": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "proteinG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "carbohydrateG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "fatG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        }
+      },
+      "id": "en-bound-prefix-line-break",
+      "language": "en",
+      "outcomeMatches": true
+    },
+    {
+      "actualOutcome": "draft",
+      "category": "line-break-scope",
+      "expectedOutcome": "draft",
+      "fields": {
+        "energyKcal": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "proteinG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "carbohydrateG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "fatG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        }
+      },
+      "id": "ru-bound-prefix-line-break-macro",
+      "language": "ru",
+      "outcomeMatches": true
+    },
+    {
+      "actualOutcome": "draft",
+      "category": "range",
+      "expectedOutcome": "draft",
+      "fields": {
+        "energyKcal": {
+          "actual": 600,
+          "expected": "not_proposed",
+          "verdict": "forbidden_accepted"
+        },
+        "proteinG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "carbohydrateG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "fatG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        }
+      },
+      "id": "en-range-through",
+      "language": "en",
+      "outcomeMatches": true
+    },
+    {
+      "actualOutcome": "draft",
+      "category": "mixed-unit-range",
+      "expectedOutcome": "draft",
+      "fields": {
+        "energyKcal": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "proteinG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "carbohydrateG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "fatG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        }
+      },
+      "id": "en-range-mixed-to-line-break",
+      "language": "en",
+      "outcomeMatches": true
+    },
+    {
+      "actualOutcome": "draft",
+      "category": "mixed-unit-range",
+      "expectedOutcome": "draft",
+      "fields": {
+        "energyKcal": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "proteinG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "carbohydrateG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "fatG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        }
+      },
+      "id": "ru-range-mixed-or-line-break",
+      "language": "ru",
+      "outcomeMatches": true
+    },
+    {
+      "actualOutcome": "draft",
+      "category": "mixed-unit-range",
+      "expectedOutcome": "draft",
+      "fields": {
+        "energyKcal": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "proteinG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "carbohydrateG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "fatG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        }
+      },
+      "id": "en-range-mixed-between",
+      "language": "en",
+      "outcomeMatches": true
+    },
+    {
+      "actualOutcome": "draft",
+      "category": "negation",
+      "expectedOutcome": "draft",
+      "fields": {
+        "energyKcal": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "proteinG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "carbohydrateG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "fatG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        }
+      },
+      "id": "en-negation-line-break",
+      "language": "en",
+      "outcomeMatches": true
+    },
+    {
+      "actualOutcome": "draft",
+      "category": "negation",
+      "expectedOutcome": "draft",
+      "fields": {
+        "energyKcal": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "proteinG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "carbohydrateG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "fatG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        }
+      },
+      "id": "ru-negation-line-break-macro",
+      "language": "ru",
+      "outcomeMatches": true
+    },
+    {
+      "actualOutcome": "draft",
+      "category": "negation",
+      "expectedOutcome": "draft",
+      "fields": {
+        "energyKcal": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "proteinG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "carbohydrateG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "fatG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        }
+      },
+      "id": "en-negation-prefix",
+      "language": "en",
+      "outcomeMatches": true
+    },
+    {
+      "actualOutcome": "draft",
+      "category": "portion",
+      "expectedOutcome": "draft",
+      "fields": {
+        "energyKcal": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "proteinG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "carbohydrateG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "fatG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        }
+      },
+      "id": "en-portion-each-later-sentence",
+      "language": "en",
+      "outcomeMatches": true
+    },
+    {
+      "actualOutcome": "draft",
+      "category": "portion",
+      "expectedOutcome": "draft",
+      "fields": {
+        "energyKcal": {
+          "actual": 90,
+          "expected": "not_proposed",
+          "verdict": "forbidden_accepted"
+        },
+        "proteinG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "carbohydrateG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "fatG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        }
+      },
+      "id": "ru-portion-po-line-break",
+      "language": "ru",
+      "outcomeMatches": true
+    },
+    {
+      "actualOutcome": "draft",
+      "category": "portion",
+      "expectedOutcome": "draft",
+      "fields": {
+        "energyKcal": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "proteinG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "carbohydrateG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "fatG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        }
+      },
+      "id": "en-portion-label-heading",
+      "language": "en",
+      "outcomeMatches": true
+    },
+    {
+      "actualOutcome": "draft",
+      "category": "container",
+      "expectedOutcome": "draft",
+      "fields": {
+        "energyKcal": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "proteinG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "carbohydrateG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "fatG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        }
+      },
+      "id": "en-container-package-partial",
+      "language": "en",
+      "outcomeMatches": true
+    },
+    {
+      "actualOutcome": "draft",
+      "category": "container",
+      "expectedOutcome": "draft",
+      "fields": {
+        "energyKcal": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "proteinG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "carbohydrateG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "fatG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        }
+      },
+      "id": "ru-container-pack-partial",
+      "language": "ru",
+      "outcomeMatches": true
+    },
+    {
+      "actualOutcome": "draft",
+      "category": "container",
+      "expectedOutcome": "draft",
+      "fields": {
+        "energyKcal": {
+          "actual": 900,
+          "expected": "not_proposed",
+          "verdict": "forbidden_accepted"
+        },
+        "proteinG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "carbohydrateG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "fatG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        }
+      },
+      "id": "en-container-pot-unlisted",
+      "language": "en",
+      "outcomeMatches": true
+    },
+    {
+      "actualOutcome": "draft",
+      "category": "instruction",
+      "expectedOutcome": "draft",
+      "fields": {
+        "energyKcal": {
+          "actual": 999,
+          "expected": "not_proposed",
+          "verdict": "forbidden_accepted"
+        },
+        "proteinG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "carbohydrateG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "fatG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        }
+      },
+      "id": "en-instruction-system-note",
+      "language": "en",
+      "outcomeMatches": true
+    },
+    {
+      "actualOutcome": "draft",
+      "category": "instruction",
+      "expectedOutcome": "draft",
+      "fields": {
+        "energyKcal": {
+          "actual": 999,
+          "expected": "not_proposed",
+          "verdict": "forbidden_accepted"
+        },
+        "proteinG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "carbohydrateG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "fatG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        }
+      },
+      "id": "ru-instruction-system-note",
+      "language": "ru",
+      "outcomeMatches": true
+    },
+    {
+      "actualOutcome": "draft",
+      "category": "instruction",
+      "expectedOutcome": "draft",
+      "fields": {
+        "energyKcal": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "proteinG": {
+          "actual": 90,
+          "expected": "not_proposed",
+          "verdict": "forbidden_accepted"
+        },
+        "carbohydrateG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "fatG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        }
+      },
+      "id": "en-instruction-output-protein",
+      "language": "en",
+      "outcomeMatches": true
+    },
+    {
+      "actualOutcome": "draft",
+      "category": "instruction",
+      "expectedOutcome": "draft",
+      "fields": {
+        "energyKcal": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "proteinG": {
+          "actual": 90,
+          "expected": "not_proposed",
+          "verdict": "forbidden_accepted"
+        },
+        "carbohydrateG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "fatG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        }
+      },
+      "id": "ru-instruction-ignore-rules",
+      "language": "ru",
+      "outcomeMatches": true
+    },
+    {
+      "actualOutcome": "draft",
+      "category": "exact-decimal",
+      "expectedOutcome": "draft",
+      "fields": {
+        "energyKcal": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "proteinG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "carbohydrateG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "fatG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        }
+      },
+      "id": "en-decimal-two-places",
+      "language": "en",
+      "outcomeMatches": true
+    },
+    {
+      "actualOutcome": "draft",
+      "category": "exact-decimal",
+      "expectedOutcome": "draft",
+      "fields": {
+        "energyKcal": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "proteinG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "carbohydrateG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "fatG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        }
+      },
+      "id": "en-decimal-rounded-claim",
+      "language": "en",
+      "outcomeMatches": true
+    },
+    {
+      "actualOutcome": "draft",
+      "category": "exact-decimal",
+      "expectedOutcome": "draft",
+      "fields": {
+        "energyKcal": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "proteinG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "carbohydrateG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "fatG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        }
+      },
+      "id": "ru-decimal-float-artifact",
+      "language": "ru",
+      "outcomeMatches": true
+    },
+    {
+      "actualOutcome": "draft",
+      "category": "exact-decimal",
+      "expectedOutcome": "draft",
+      "fields": {
+        "energyKcal": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "proteinG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "carbohydrateG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "fatG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        }
+      },
+      "id": "en-decimal-truncated-claim",
+      "language": "en",
+      "outcomeMatches": true
+    },
+    {
+      "actualOutcome": "draft",
+      "category": "wire-validation",
+      "expectedOutcome": "draft",
+      "fields": {
+        "energyKcal": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "proteinG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "carbohydrateG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "fatG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        }
+      },
+      "id": "en-wire-inconsistent-claim",
+      "language": "en",
+      "outcomeMatches": true
+    },
+    {
+      "actualOutcome": "invalid_output",
+      "category": "wire-validation",
+      "expectedOutcome": "invalid_output",
+      "fields": {
+        "energyKcal": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "proteinG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "carbohydrateG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "fatG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        }
+      },
+      "id": "en-wire-numeric-value",
+      "language": "en",
+      "outcomeMatches": true
+    },
+    {
+      "actualOutcome": "invalid_output",
+      "category": "wire-validation",
+      "expectedOutcome": "invalid_output",
+      "fields": {
+        "energyKcal": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "proteinG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "carbohydrateG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "fatG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        }
+      },
+      "id": "en-wire-extra-property",
+      "language": "en",
+      "outcomeMatches": true
+    },
+    {
+      "actualOutcome": "ungrounded_output",
+      "category": "title-grounding",
+      "expectedOutcome": "ungrounded_output",
+      "fields": {
+        "energyKcal": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "proteinG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "carbohydrateG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "fatG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        }
+      },
+      "id": "en-title-ungrounded",
+      "language": "en",
+      "outcomeMatches": true
+    },
+    {
+      "actualOutcome": "draft",
+      "category": "control-whole-entry",
+      "expectedOutcome": "draft",
+      "fields": {
+        "energyKcal": {
+          "actual": 640,
+          "expected": 640,
+          "verdict": "control_ok"
+        },
+        "proteinG": {
+          "actual": 38,
+          "expected": 38,
+          "verdict": "control_ok"
+        },
+        "carbohydrateG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "fatG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        }
+      },
+      "id": "en-control-whole-entry",
+      "language": "en",
+      "outcomeMatches": true
+    },
+    {
+      "actualOutcome": "draft",
+      "category": "control-whole-entry",
+      "expectedOutcome": "draft",
+      "fields": {
+        "energyKcal": {
+          "actual": 610,
+          "expected": 610,
+          "verdict": "control_ok"
+        },
+        "proteinG": {
+          "actual": 30,
+          "expected": 30,
+          "verdict": "control_ok"
+        },
+        "carbohydrateG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "fatG": {
+          "actual": 18,
+          "expected": 18,
+          "verdict": "control_ok"
+        }
+      },
+      "id": "ru-control-whole-entry",
+      "language": "ru",
+      "outcomeMatches": true
+    },
+    {
+      "actualOutcome": "draft",
+      "category": "control-zero",
+      "expectedOutcome": "draft",
+      "fields": {
+        "energyKcal": {
+          "actual": 0,
+          "expected": 0,
+          "verdict": "control_ok"
+        },
+        "proteinG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "carbohydrateG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "fatG": {
+          "actual": 0,
+          "expected": 0,
+          "verdict": "control_ok"
+        }
+      },
+      "id": "en-control-zero",
+      "language": "en",
+      "outcomeMatches": true
+    },
+    {
+      "actualOutcome": "draft",
+      "category": "control-zero",
+      "expectedOutcome": "draft",
+      "fields": {
+        "energyKcal": {
+          "actual": 12,
+          "expected": 12,
+          "verdict": "control_ok"
+        },
+        "proteinG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "carbohydrateG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "fatG": {
+          "actual": 0,
+          "expected": 0,
+          "verdict": "control_ok"
+        }
+      },
+      "id": "ru-control-zero",
+      "language": "ru",
+      "outcomeMatches": true
+    },
+    {
+      "actualOutcome": "draft",
+      "category": "control-decimal",
+      "expectedOutcome": "draft",
+      "fields": {
+        "energyKcal": {
+          "actual": 120.5,
+          "expected": 120.5,
+          "verdict": "control_ok"
+        },
+        "proteinG": {
+          "actual": 10.2,
+          "expected": 10.2,
+          "verdict": "control_ok"
+        },
+        "carbohydrateG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "fatG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        }
+      },
+      "id": "en-control-decimal",
+      "language": "en",
+      "outcomeMatches": true
+    },
+    {
+      "actualOutcome": "draft",
+      "category": "control-decimal",
+      "expectedOutcome": "draft",
+      "fields": {
+        "energyKcal": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "proteinG": {
+          "actual": 18.5,
+          "expected": 18.5,
+          "verdict": "control_ok"
+        },
+        "carbohydrateG": {
+          "actual": 3.3,
+          "expected": 3.3,
+          "verdict": "control_ok"
+        },
+        "fatG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        }
+      },
+      "id": "ru-control-decimal-comma",
+      "language": "ru",
+      "outcomeMatches": true
+    },
+    {
+      "actualOutcome": "draft",
+      "category": "control-cross-field",
+      "expectedOutcome": "draft",
+      "fields": {
+        "energyKcal": {
+          "actual": 500,
+          "expected": 500,
+          "verdict": "control_ok"
+        },
+        "proteinG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "carbohydrateG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "fatG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        }
+      },
+      "id": "en-cross-field-postfix-bound",
+      "language": "en",
+      "outcomeMatches": true
+    },
+    {
+      "actualOutcome": "draft",
+      "category": "control-cross-field",
+      "expectedOutcome": "draft",
+      "fields": {
+        "energyKcal": {
+          "actual": 500,
+          "expected": 500,
+          "verdict": "control_ok"
+        },
+        "proteinG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "carbohydrateG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "fatG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        }
+      },
+      "id": "ru-cross-field-postfix-bound",
+      "language": "ru",
+      "outcomeMatches": true
+    },
+    {
+      "actualOutcome": "draft",
+      "category": "control-independent-field",
+      "expectedOutcome": "draft",
+      "fields": {
+        "energyKcal": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "proteinG": {
+          "actual": 20,
+          "expected": 20,
+          "verdict": "control_ok"
+        },
+        "carbohydrateG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "fatG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        }
+      },
+      "id": "en-independent-exact-beside-bound",
+      "language": "en",
+      "outcomeMatches": true
+    },
+    {
+      "actualOutcome": "draft",
+      "category": "control-independent-field",
+      "expectedOutcome": "draft",
+      "fields": {
+        "energyKcal": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "proteinG": {
+          "actual": 25,
+          "expected": 25,
+          "verdict": "control_ok"
+        },
+        "carbohydrateG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "fatG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        }
+      },
+      "id": "ru-independent-exact-beside-range",
+      "language": "ru",
+      "outcomeMatches": true
+    },
+    {
+      "actualOutcome": "draft",
+      "category": "control-unrelated-negation",
+      "expectedOutcome": "draft",
+      "fields": {
+        "energyKcal": {
+          "actual": 500,
+          "expected": 500,
+          "verdict": "control_ok"
+        },
+        "proteinG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "carbohydrateG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "fatG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        }
+      },
+      "id": "en-control-unrelated-negation",
+      "language": "en",
+      "outcomeMatches": true
+    },
+    {
+      "actualOutcome": "draft",
+      "category": "control-unrelated-negation",
+      "expectedOutcome": "draft",
+      "fields": {
+        "energyKcal": {
+          "actual": 5,
+          "expected": 5,
+          "verdict": "control_ok"
+        },
+        "proteinG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "carbohydrateG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "fatG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        }
+      },
+      "id": "ru-control-unrelated-negation",
+      "language": "ru",
+      "outcomeMatches": true
+    },
+    {
+      "actualOutcome": "draft",
+      "category": "mixed-unit-range",
+      "expectedOutcome": "draft",
+      "fields": {
+        "energyKcal": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "proteinG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "carbohydrateG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "fatG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        }
+      },
+      "id": "ru-range-mixed-between",
+      "language": "ru",
+      "outcomeMatches": true
+    },
+    {
+      "actualOutcome": "draft",
+      "category": "negation",
+      "expectedOutcome": "draft",
+      "fields": {
+        "energyKcal": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "proteinG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "carbohydrateG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "fatG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        }
+      },
+      "id": "ru-negation-prefix",
+      "language": "ru",
+      "outcomeMatches": true
+    },
+    {
+      "actualOutcome": "draft",
+      "category": "portion",
+      "expectedOutcome": "draft",
+      "fields": {
+        "energyKcal": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "proteinG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "carbohydrateG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "fatG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        }
+      },
+      "id": "ru-portion-label-heading",
+      "language": "ru",
+      "outcomeMatches": true
+    },
+    {
+      "actualOutcome": "draft",
+      "category": "container",
+      "expectedOutcome": "draft",
+      "fields": {
+        "energyKcal": {
+          "actual": 900,
+          "expected": "not_proposed",
+          "verdict": "forbidden_accepted"
+        },
+        "proteinG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "carbohydrateG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "fatG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        }
+      },
+      "id": "ru-container-pot-unlisted",
+      "language": "ru",
+      "outcomeMatches": true
+    },
+    {
+      "actualOutcome": "draft",
+      "category": "exact-decimal",
+      "expectedOutcome": "draft",
+      "fields": {
+        "energyKcal": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "proteinG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "carbohydrateG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "fatG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        }
+      },
+      "id": "ru-decimal-two-places",
+      "language": "ru",
+      "outcomeMatches": true
+    },
+    {
+      "actualOutcome": "draft",
+      "category": "instruction",
+      "expectedOutcome": "draft",
+      "fields": {
+        "energyKcal": {
+          "actual": 1500,
+          "expected": "not_proposed",
+          "verdict": "forbidden_accepted"
+        },
+        "proteinG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "carbohydrateG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "fatG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        }
+      },
+      "id": "ru-instruction-set-energy",
+      "language": "ru",
+      "outcomeMatches": true
+    },
+    {
+      "actualOutcome": "draft",
+      "category": "control-whole-entry",
+      "expectedOutcome": "draft",
+      "fields": {
+        "energyKcal": {
+          "actual": 240,
+          "expected": 240,
+          "verdict": "control_ok"
+        },
+        "proteinG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "carbohydrateG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "fatG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        }
+      },
+      "id": "ru-control-consumed-total",
+      "language": "ru",
+      "outcomeMatches": true
+    },
+    {
+      "actualOutcome": "draft",
+      "category": "control-whole-entry",
+      "expectedOutcome": "draft",
+      "fields": {
+        "energyKcal": {
+          "actual": 120,
+          "expected": 120,
+          "verdict": "control_ok"
+        },
+        "proteinG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "carbohydrateG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        },
+        "fatG": {
+          "actual": null,
+          "expected": "not_proposed",
+          "verdict": "withheld_ok"
+        }
+      },
+      "id": "en-control-consumed-total",
+      "language": "en",
+      "outcomeMatches": true
+    }
+  ],
+  "set": "safety",
+  "statement": "Supplied claims, no model: a statement about the verifier only, never about a model."
+}
