@@ -65,10 +65,10 @@ describe('unrelated whole-vessel context is not container context', () => {
     for (const [text, field, value, evidence, expected] of [
       ['Soup, 300 kcal. Then I washed the whole pot.', 'energyKcal', '300', '300 kcal', 300],
       ['Soup, 300 kcal, then I washed the whole pot', 'energyKcal', '300', '300 kcal', 300],
-      ['Soup, 300 kcal\nThen the whole pot was washed', 'energyKcal', '300', '300 kcal', 300],
+      ['Soup, 300 kcal\nWhole pot washed afterwards', 'energyKcal', '300', '300 kcal', 300],
       ['Soup, protein 20 g.\n\nThe entire pan went into the dishwasher.', 'proteinG', '20', 'protein 20 g', 20],
       ['Суп, 300 ккал. Потом помыла всю кастрюлю.', 'energyKcal', '300', '300 ккал', 300],
-      ['Суп, 300 ккал\nПотом помыла всю кастрюлю', 'energyKcal', '300', '300 ккал', 300],
+      ['Суп, 300 ккал\nВсю кастрюлю помыла потом', 'energyKcal', '300', '300 ккал', 300],
     ] as const) {
       expect(ground(text, field, value, evidence), JSON.stringify(text)).toEqual(proposed(expected, evidence));
     }
@@ -80,10 +80,10 @@ describe('unrelated whole-vessel context is not container context', () => {
       ['I washed the whole pan. Soup, 400 kcal. In total I ate 300 kcal.', 'energyKcal', '400', '400 kcal'],
       ['Soup, 400 kcal. In total I ate 300 kcal. Then I washed the whole pan.', 'energyKcal', '300', '300 kcal'],
       ['Cooked in a full pot.\nSoup, 400 kcal.\nIn total I ate 300 kcal.', 'energyKcal', '300', '300 kcal'],
-      ['Washed the whole pan. Soup, protein 25 g. In total I ate protein 20 g.', 'proteinG', '20', 'protein 20 g'],
+      ['Washed the whole pan. Protein 25 g. In total I ate protein 20 g.', 'proteinG', '20', 'protein 20 g'],
       ['Washed the whole pan; soup, fat 4 g, later fat 5 g', 'fatG', '4', 'fat 4 g'],
       ['Помыла всю сковороду. Суп, 400 ккал. Итого съела 300 ккал.', 'energyKcal', '400', '400 ккал'],
-      ['Сварила в полной кастрюле. Суп, белки 25 г. Итого съела белки 20 г.', 'proteinG', '20', 'белки 20 г'],
+      ['Сварила в полной кастрюле. Белки 25 г. Итого съела белки 20 г.', 'proteinG', '20', 'белки 20 г'],
     ] as const) {
       expect(ground(text, field, value, evidence), JSON.stringify(text)).toEqual(withheld('conflicting'));
     }
@@ -244,14 +244,292 @@ describe('a whole vessel and a figure separated only by punctuation or whitespac
     expect(ground('Soup, 300 kcal.\r\nThen I washed the whole pot.', 'energyKcal', '300', '300 kcal')).toEqual(proposed(300, '300 kcal'));
   });
 
-  it('reads a figure right after the whole vessel as the vessel\'s, also after a verb before the vessel (documented consequence)', () => {
-    // Only punctuation separates "whole pan" from "Protein 25 g", so 25 is a container figure and does not conflict with
-    // the consumed total, exactly as in "Whole pot\n900 kcal. In total I ate 300 kcal.".
-    const text = 'Washed the whole pan. Protein 25 g. In total I ate protein 20 g.';
-    expect(ground(text, 'proteinG', '25', 'Protein 25 g')).toEqual(withheld('per_portion'));
-    expect(ground(text, 'proteinG', '20', 'protein 20 g')).toEqual(proposed(20, 'protein 20 g'));
-    const russian = 'Сварила в полной кастрюле. Белки 25 г. Итого съела белки 20 г.';
-    expect(ground(russian, 'proteinG', '25', 'Белки 25 г')).toEqual(withheld('per_portion'));
-    expect(ground(russian, 'proteinG', '20', 'белки 20 г')).toEqual(proposed(20, 'белки 20 г'));
+});
+
+// Clause classification (2026-11-17, second follow-up): across a sentence end, a line break or a parenthesis, a whole
+// vessel is related to an adjacent figure only when its own clause is nothing but the vessel reference (an optional
+// preposition and article, the quantified vessel, an English "of …"): a label such as "Whole pot", "(whole pot)" or "(for
+// the whole pot)". A clause that also says what was done with the vessel ("Washed the whole pan.", "Whole pot washed
+// afterwards") attributes no nutrition to it, so the values beside it keep their scope and their conflicts.
+describe('a vessel clause that only names the vessel is related; one that describes an action is not', () => {
+  const BREAKS = ['\n', '\r\n', '. ', '.\n', '.\r\n'];
+
+  it('keeps a same-field conflict beside an unrelated cooking or cleaning sentence (EN and RU, every field)', () => {
+    for (const [text, field, value, evidence] of [
+      ['Protein 25 g. In total I ate protein 20 g.', 'proteinG', '20', 'protein 20 g'],
+      ['Washed the whole pan. Protein 25 g. In total I ate protein 20 g.', 'proteinG', '20', 'protein 20 g'],
+      ['Washed the whole pan.\r\nProtein 25 g.\r\nIn total I ate protein 20 g.', 'proteinG', '20', 'protein 20 g'],
+      ['Scrubbed the entire skillet.\nFat 9 g. In total I ate fat 4 g.', 'fatG', '4', 'fat 4 g'],
+      ['Cooked rice in a full pot. Carbs 60 g. In total I ate carbs 45 g.', 'carbohydrateG', '45', 'carbs 45 g'],
+      ['Washed the whole pot. 400 kcal. In total I ate 300 kcal.', 'energyKcal', '300', '300 kcal'],
+      ['Белки 25 г. Итого съела белки 20 г.', 'proteinG', '20', 'белки 20 г'],
+      ['Помыла всю сковороду. Белки 25 г. Итого съела белки 20 г.', 'proteinG', '20', 'белки 20 г'],
+      ['Сварила в полной кастрюле. Белки 25 г. Итого съела белки 20 г.', 'proteinG', '20', 'белки 20 г'],
+      ['Отмыла казан целиком.\r\nЖиры 9 г.\r\nИтого съела жиры 4 г.', 'fatG', '4', 'жиры 4 г'],
+      ['Помыла всю кастрюлю. 400 ккал. Итого съела 300 ккал.', 'energyKcal', '300', '300 ккал'],
+    ] as const) {
+      expect(ground(text, field, value, evidence), JSON.stringify(text)).toEqual(withheld('conflicting'));
+    }
+  });
+
+  it('withholds a figure with a parenthesized whole-vessel attribution after it (EN and RU, every field)', () => {
+    for (const [text, field, value, evidence] of [
+      ['Soup, 900 kcal (whole pot).', 'energyKcal', '900', '900 kcal'],
+      ['Soup, 900 kcal (for the whole pot).', 'energyKcal', '900', '900 kcal'],
+      ['Soup, 900 kcal (the entire pot)', 'energyKcal', '900', '900 kcal'],
+      ['Protein 80 g (whole pot).', 'proteinG', '80', 'Protein 80 g'],
+      ['Chili: fat 45.5 g (full pot)', 'fatG', '45.5', 'fat 45.5 g'],
+      ['Chili: carbs 120 g\n(whole pot)', 'carbohydrateG', '120', 'carbs 120 g'],
+      ['Суп, 900 ккал (вся кастрюля).', 'energyKcal', '900', '900 ккал'],
+      ['Суп, 900 ккал (на всю кастрюлю).', 'energyKcal', '900', '900 ккал'],
+      ['Белки 80 г (вся кастрюля).', 'proteinG', '80', 'Белки 80 г'],
+      ['Плов: жиры 120 г (казан целиком)', 'fatG', '120', 'жиры 120 г'],
+    ] as const) {
+      expect(ground(text, field, value, evidence), JSON.stringify(text)).toEqual(withheld('per_portion'));
+    }
+  });
+
+  it('withholds a figure under a parenthesized whole-vessel label across LF and CRLF', () => {
+    for (const br of ['\n', '\r\n', ' ', '\n\n']) {
+      for (const [text, field, value, evidence] of [
+        [`(Whole pot)${br}900 kcal`, 'energyKcal', '900', '900 kcal'],
+        [`(For the whole pot)${br}protein 80 g`, 'proteinG', '80', 'protein 80 g'],
+        [`(Вся кастрюля)${br}900 ккал`, 'energyKcal', '900', '900 ккал'],
+        [`(На всю кастрюлю)${br}углеводы 120 г`, 'carbohydrateG', '120', 'углеводы 120 г'],
+      ] as const) {
+        expect(ground(text, field, value, evidence), JSON.stringify(text)).toEqual(withheld('per_portion'));
+      }
+    }
+  });
+
+  it('keeps the consumed total beside a parenthesized container figure', () => {
+    const english = 'Soup, 900 kcal (whole pot). In total I ate 300 kcal.';
+    expect(ground(english, 'energyKcal', '900', '900 kcal')).toEqual(withheld('per_portion'));
+    expect(ground(english, 'energyKcal', '300', '300 kcal')).toEqual(proposed(300, '300 kcal'));
+    const russian = 'Суп, 900 ккал (вся кастрюля). Итого съела 300 ккал.';
+    expect(ground(russian, 'energyKcal', '900', '900 ккал')).toEqual(withheld('per_portion'));
+    expect(ground(russian, 'energyKcal', '300', '300 ккал')).toEqual(proposed(300, '300 ккал'));
+  });
+
+  it('pairs an attributing vessel label with an unrelated vessel action that differs only in the verb', () => {
+    for (const br of BREAKS) {
+      for (const [label, action, field, value, evidence] of [
+        [`Whole pan${br}Protein 25 g. In total I ate protein 20 g.`, `Washed the whole pan${br}Protein 25 g. In total I ate protein 20 g.`, 'proteinG', '20', 'protein 20 g'],
+        [`Full pot${br}400 kcal. In total I ate 300 kcal.`, `Cooked in a full pot${br}400 kcal. In total I ate 300 kcal.`, 'energyKcal', '300', '300 kcal'],
+        [`Вся сковорода${br}Белки 25 г. Итого съела белки 20 г.`, `Помыла всю сковороду${br}Белки 25 г. Итого съела белки 20 г.`, 'proteinG', '20', 'белки 20 г'],
+      ] as const) {
+        // The label attributes the first figure to the vessel: the consumed total is the only whole-entry value.
+        expect(ground(label, field, value, evidence), JSON.stringify(label)).toEqual(proposed(Number(value), evidence));
+        // The action attributes nothing: both values are whole-entry values, and they conflict.
+        expect(ground(action, field, value, evidence), JSON.stringify(action)).toEqual(withheld('conflicting'));
+      }
+    }
+    for (const [attributed, unrelated, field, value, evidence] of [
+      ['Soup, 300 kcal (whole pot).', 'Soup, 300 kcal (washed the whole pot after).', 'energyKcal', '300', '300 kcal'],
+      ['Soup, 300 kcal\nWhole pot', 'Soup, 300 kcal\nWhole pot washed afterwards', 'energyKcal', '300', '300 kcal'],
+      ['Белки 30 г (вся кастрюля).', 'Белки 30 г (потом помыла всю кастрюлю).', 'proteinG', '30', 'Белки 30 г'],
+      ['Суп, 300 ккал\r\nВся кастрюля', 'Суп, 300 ккал\r\nВсю кастрюлю помыла потом', 'energyKcal', '300', '300 ккал'],
+    ] as const) {
+      expect(ground(attributed, field, value, evidence), JSON.stringify(attributed)).toEqual(withheld('per_portion'));
+      expect(ground(unrelated, field, value, evidence), JSON.stringify(unrelated)).toEqual(proposed(Number(value), evidence));
+    }
+  });
+
+  it('keeps the earlier controls', () => {
+    expect(ground('Whole pot\n900 kcal', 'energyKcal', '900', '900 kcal')).toEqual(withheld('per_portion'));
+    const consumed = 'Whole pot\n900 kcal. In total I ate 300 kcal.';
+    expect(ground(consumed, 'energyKcal', '900', '900 kcal')).toEqual(withheld('per_portion'));
+    expect(ground(consumed, 'energyKcal', '300', '300 kcal')).toEqual(proposed(300, '300 kcal'));
+    expect(ground('Cooked soup in a full pot. Lunch, 300 kcal.', 'energyKcal', '300', '300 kcal')).toEqual(proposed(300, '300 kcal'));
+    expect(ground('I washed the whole pan. Soup, 400 kcal. In total I ate 300 kcal.', 'energyKcal', '300', '300 kcal')).toEqual(withheld('conflicting'));
+    expect(ground('Soup, 300 kcal\nWhole pot washed afterwards', 'energyKcal', '300', '300 kcal')).toEqual(proposed(300, '300 kcal'));
+  });
+});
+
+// Russian food qualifier (2026-11-17, third follow-up): the clause classification above accepted the English "of soup"
+// after a whole vessel but rejected the Russian genitive food qualifier ("Полная кастрюля супа"), so "Полная кастрюля
+// супа\n900 ккал" proposed 900 where HEAD withheld it. A supported dish or food noun in the genitive may follow the
+// vessel in a label; any other trailing word ("Полная кастрюля помыта") makes the clause an action, which attributes
+// nothing.
+describe('a Russian whole-vessel label may carry a supported food qualifier; an action word is not one', () => {
+  const BREAKS = ['\n', '\r\n', '. ', '.\n', '.\r\n'];
+
+  it('withholds the reproduction and keeps the explicit-colon control', () => {
+    expect(ground('Полная кастрюля супа\n900 ккал', 'energyKcal', '900', '900 ккал')).toEqual(withheld('per_portion'));
+    expect(ground('Полная кастрюля супа:\n900 ккал', 'energyKcal', '900', '900 ккал')).toEqual(withheld('per_portion'));
+    expect(ground('Полная кастрюля помыта\n900 ккал', 'energyKcal', '900', '900 ккал')).toEqual(proposed(900, '900 ккал'));
+  });
+
+  it('pairs a food-qualified label with an action word, label before the figure (energy and macronutrients)', () => {
+    for (const br of BREAKS) {
+      for (const [label, action, field, value, evidence] of [
+        [`Полная кастрюля супа${br}400 ккал. Итого съела 300 ккал.`, `Полная кастрюля помыта${br}400 ккал. Итого съела 300 ккал.`, 'energyKcal', '300', '300 ккал'],
+        [`Вся сковорода плова${br}Жиры 25 г. Итого съела жиры 20 г.`, `Вся сковорода вымыта${br}Жиры 25 г. Итого съела жиры 20 г.`, 'fatG', '20', 'жиры 20 г'],
+        [`Целый казан борща${br}Белки 80 г. Итого съела белки 20 г.`, `Целый казан отмыт${br}Белки 80 г. Итого съела белки 20 г.`, 'proteinG', '20', 'белки 20 г'],
+      ] as const) {
+        expect(ground(label, field, value, evidence), JSON.stringify(label)).toEqual(proposed(Number(value), evidence));
+        expect(ground(action, field, value, evidence), JSON.stringify(action)).toEqual(withheld('conflicting'));
+      }
+    }
+  });
+
+  it('pairs a food-qualified label with an action word, label after the figure (energy and macronutrients)', () => {
+    for (const br of BREAKS) {
+      for (const [label, action, field, value, evidence] of [
+        [`400 ккал${br}Полная кастрюля супа. Итого съела 300 ккал.`, `400 ккал${br}Полная кастрюля помыта. Итого съела 300 ккал.`, 'energyKcal', '300', '300 ккал'],
+        [`Углеводы 120 г${br}Вся кастрюля каши. Итого съела углеводы 40 г.`, `Углеводы 120 г${br}Вся кастрюля помыта. Итого съела углеводы 40 г.`, 'carbohydrateG', '40', 'углеводы 40 г'],
+      ] as const) {
+        expect(ground(label, field, value, evidence), JSON.stringify(label)).toEqual(proposed(Number(value), evidence));
+        expect(ground(action, field, value, evidence), JSON.stringify(action)).toEqual(withheld('conflicting'));
+      }
+      for (const [label, action, field, value, evidence] of [
+        [`900 ккал${br}Полная кастрюля супа`, `900 ккал${br}Полная кастрюля помыта`, 'energyKcal', '900', '900 ккал'],
+        [`Белки 80 г${br}Вся сковорода плова.`, `Белки 80 г${br}Вся сковорода вымыта.`, 'proteinG', '80', 'Белки 80 г'],
+      ] as const) {
+        expect(ground(label, field, value, evidence), JSON.stringify(label)).toEqual(withheld('per_portion'));
+        expect(ground(action, field, value, evidence), JSON.stringify(action)).toEqual(proposed(Number(value), evidence));
+      }
+    }
+  });
+
+  it('withholds a figure beside a parenthesized food-qualified label, in either order', () => {
+    for (const br of ['\n', '\r\n', ' ']) {
+      for (const [text, field, value, evidence] of [
+        [`(Полная кастрюля супа)${br}900 ккал`, 'energyKcal', '900', '900 ккал'],
+        [`(На всю кастрюлю борща)${br}белки 80 г`, 'proteinG', '80', 'белки 80 г'],
+        [`Суп, 900 ккал${br}(полная кастрюля супа).`, 'energyKcal', '900', '900 ккал'],
+        [`Плов: жиры 120 г${br}(весь казан плова)`, 'fatG', '120', 'жиры 120 г'],
+      ] as const) {
+        expect(ground(text, field, value, evidence), JSON.stringify(text)).toEqual(withheld('per_portion'));
+      }
+    }
+    for (const [text, field, value, evidence] of [
+      ['Суп, 900 ккал (полная кастрюля помыта).', 'energyKcal', '900', '900 ккал'],
+      ['(Вся кастрюля помыта)\nбелки 80 г', 'proteinG', '80', 'белки 80 г'],
+    ] as const) {
+      expect(ground(text, field, value, evidence), JSON.stringify(text)).toEqual(proposed(Number(value), evidence));
+    }
+  });
+
+  it('keeps the consumed total beside a food-qualified container figure', () => {
+    for (const br of BREAKS) {
+      const text = `Полная кастрюля супа${br}900 ккал. Итого съела 300 ккал.`;
+      expect(ground(text, 'energyKcal', '900', '900 ккал'), JSON.stringify(text)).toEqual(withheld('per_portion'));
+      expect(ground(text, 'energyKcal', '300', '300 ккал'), JSON.stringify(text)).toEqual(proposed(300, '300 ккал'));
+    }
+  });
+
+  it('does not accept an arbitrary trailing word or a second word as a food qualifier', () => {
+    // An explicit action word makes the clause an action, whatever else it says: the figure keeps its scope.
+    for (const text of ['Полная кастрюля помыта\n900 ккал', 'Полная кастрюля супа помыта\n900 ккал']) {
+      expect(ground(text, 'energyKcal', '900', '900 ккал'), JSON.stringify(text)).toEqual(proposed(900, '900 ккал'));
+    }
+    // An unknown word is not a label, but it is not an action either: the attribution is unresolved, so the figure is
+    // withheld (Unknown-qualifier correction, below).
+    for (const text of [
+      'Вся кастрюля стояла\n900 ккал',
+      'Полная кастрюля потом\n900 ккал',
+      'Полная кастрюля супа стояла. 900 ккал',
+    ]) {
+      expect(ground(text, 'energyKcal', '900', '900 ккал'), JSON.stringify(text)).toEqual(withheld('per_portion'));
+    }
+  });
+});
+
+// Unknown-qualifier correction (2026-11-17, fourth follow-up): the clause classification above treated every word missing
+// from FOOD_QUALIFIER_RU as an action, so "Полная кастрюля окрошки\n900 ккал" proposed 900 where HEAD withheld it. A word
+// the classifier does not know establishes nothing. A vessel clause beside a figure is now one of three things: a LABEL
+// (confirmed attribution: the figure is the vessel's), an explicit ACTION (a cleaning, handling or cooking word: the
+// clause attributes nothing), or UNRESOLVED (anything else). An unresolved clause withholds the figure beside it
+// ('per_portion', as a container figure), but it never removes that figure from conflict detection, so it cannot clear the
+// way for another value to be proposed.
+describe('an unresolved vessel clause withholds the figure beside it without hiding a conflict', () => {
+  const BREAKS = ['\n', '\r\n', '\n\n', '\r\n\r\n', '. ', '.\n', '.\r\n'];
+
+  it('withholds the confirmed regressions', () => {
+    expect(ground('Полная кастрюля окрошки\n900 ккал', 'energyKcal', '900', '900 ккал')).toEqual(withheld('per_portion'));
+    expect(ground('900 ккал\r\nПолная кастрюля окрошки', 'energyKcal', '900', '900 ккал')).toEqual(withheld('per_portion'));
+    expect(ground('Полная кастрюля салата.\nБелки 80 г.', 'proteinG', '80', 'Белки 80 г')).toEqual(withheld('per_portion'));
+  });
+
+  it('withholds a figure beside an unlisted food name, in either order, across LF, CRLF and sentence ends', () => {
+    for (const br of BREAKS) {
+      for (const [before, after, field, value, evidence] of [
+        [`Полная кастрюля окрошки${br}900 ккал`, `900 ккал${br}Полная кастрюля окрошки`, 'energyKcal', '900', '900 ккал'],
+        [`Вся сковорода драников${br}Жиры 45,5 г`, `Жиры 45,5 г${br}Вся сковорода драников`, 'fatG', '45.5', 'Жиры 45,5 г'],
+        [`Целый казан шулюма${br}Белки 80 г`, `Белки 80 г${br}Целый казан шулюма`, 'proteinG', '80', 'Белки 80 г'],
+        [`Полная кастрюля салата${br}углеводы 120 г`, `углеводы 120 г${br}Полная кастрюля салата`, 'carbohydrateG', '120', 'углеводы 120 г'],
+      ] as const) {
+        expect(ground(before, field, value, evidence), JSON.stringify(before)).toEqual(withheld('per_portion'));
+        expect(ground(after, field, value, evidence), JSON.stringify(after)).toEqual(withheld('per_portion'));
+      }
+    }
+  });
+
+  it('withholds a figure beside a synthetic unknown qualifier, so no dictionary membership decides the outcome', () => {
+    for (const qualifier of ['зюмбры', 'кваклы', 'флорпа', 'глокачи']) {
+      for (const br of ['\n', '\r\n', '. ']) {
+        for (const [text, field, value, evidence] of [
+          [`Полная кастрюля ${qualifier}${br}900 ккал`, 'energyKcal', '900', '900 ккал'],
+          [`900 ккал${br}Вся кастрюля ${qualifier}`, 'energyKcal', '900', '900 ккал'],
+          [`Целый казан ${qualifier}${br}Белки 80 г.`, 'proteinG', '80', 'Белки 80 г'],
+        ] as const) {
+          expect(ground(text, field, value, evidence), JSON.stringify(text)).toEqual(withheld('per_portion'));
+        }
+      }
+      for (const text of [`Суп, 900 ккал (полная кастрюля ${qualifier}).`, `(Вся кастрюля ${qualifier})\n900 ккал`]) {
+        expect(ground(text, 'energyKcal', '900', '900 ккал'), JSON.stringify(text)).toEqual(withheld('per_portion'));
+      }
+    }
+    // The English counterpart: a clause with a word the classifier does not know is unresolved too.
+    for (const text of ['Whole pot blorped\n900 kcal', '900 kcal\r\nThe whole pot, zindled', 'Full pot stood. 900 kcal.']) {
+      expect(ground(text, 'energyKcal', '900', '900 kcal'), JSON.stringify(text)).toEqual(withheld('per_portion'));
+    }
+  });
+
+  it('never lets an unresolved figure drop out of conflict detection and authorize another value', () => {
+    for (const br of BREAKS) {
+      for (const [text, field, value, evidence] of [
+        [`Полная кастрюля окрошки${br}900 ккал. Итого съела 300 ккал.`, 'energyKcal', '300', '300 ккал'],
+        [`900 ккал${br}Полная кастрюля окрошки. Итого съела 300 ккал.`, 'energyKcal', '300', '300 ккал'],
+        [`Полная кастрюля салата${br}Белки 80 г. Итого съела белки 20 г.`, 'proteinG', '20', 'белки 20 г'],
+        [`Целый казан зюмбры${br}Жиры 45 г. Итого съела жиры 15 г.`, 'fatG', '15', 'жиры 15 г'],
+        [`Whole pot blorped${br}900 kcal. In total I ate 300 kcal.`, 'energyKcal', '300', '300 kcal'],
+      ] as const) {
+        expect(ground(text, field, value, evidence), JSON.stringify(text)).toEqual(withheld('conflicting'));
+      }
+    }
+    // The unresolved figure itself stays withheld; the same consumed total with no second value is proposed.
+    expect(ground('Полная кастрюля окрошки\n900 ккал. Итого съела 300 ккал.', 'energyKcal', '900', '900 ккал')).toEqual(withheld('per_portion'));
+    expect(ground('Полная кастрюля окрошки\n300 ккал. Итого съела 300 ккал.', 'energyKcal', '300', 'Итого съела 300 ккал')).toEqual(
+      proposed(300, 'Итого съела 300 ккал'),
+    );
+  });
+
+  it('keeps the confirmed cooking and cleaning controls', () => {
+    expect(ground('Washed the whole pan. Protein 25 g. In total I ate protein 20 g.', 'proteinG', '20', 'protein 20 g')).toEqual(withheld('conflicting'));
+    expect(ground('Полная кастрюля помыта\n400 ккал. Итого съела 300 ккал.', 'energyKcal', '300', '300 ккал')).toEqual(withheld('conflicting'));
+    expect(ground('Cooked soup in a full pot. Lunch, 300 kcal.', 'energyKcal', '300', '300 kcal')).toEqual(proposed(300, '300 kcal'));
+    expect(ground('Soup, 300 kcal\nWhole pot washed afterwards', 'energyKcal', '300', '300 kcal')).toEqual(proposed(300, '300 kcal'));
+    expect(ground('Суп, 300 ккал\r\nВсю кастрюлю помыла потом', 'energyKcal', '300', '300 ккал')).toEqual(proposed(300, '300 ккал'));
+  });
+
+  it('keeps the known labels and the consumed total beside a confirmed container figure', () => {
+    for (const br of BREAKS) {
+      const russian = `Полная кастрюля супа${br}900 ккал. Итого съела 300 ккал.`;
+      expect(ground(russian, 'energyKcal', '900', '900 ккал'), JSON.stringify(russian)).toEqual(withheld('per_portion'));
+      expect(ground(russian, 'energyKcal', '300', '300 ккал'), JSON.stringify(russian)).toEqual(proposed(300, '300 ккал'));
+      const english = `Full pot of okroshka${br}900 kcal. In total I ate 300 kcal.`;
+      expect(ground(english, 'energyKcal', '900', '900 kcal'), JSON.stringify(english)).toEqual(withheld('per_portion'));
+      expect(ground(english, 'energyKcal', '300', '300 kcal'), JSON.stringify(english)).toEqual(proposed(300, '300 kcal'));
+    }
+    expect(ground('Суп, 900 ккал (вся кастрюля). Итого съела 300 ккал.', 'energyKcal', '300', '300 ккал')).toEqual(proposed(300, '300 ккал'));
+  });
+
+  it('does not let a food adjective after the vessel pass for a cooking action', () => {
+    // "fried", "жареной" describe the food here, not something done with the vessel: the attribution stays unresolved.
+    expect(ground('Full pan of fried rice\n900 kcal', 'energyKcal', '900', '900 kcal')).toEqual(withheld('per_portion'));
+    expect(ground('Целая сковорода жареной картошки\n900 ккал', 'energyKcal', '900', '900 ккал')).toEqual(withheld('per_portion'));
+    expect(ground('Полная кастрюля вареников стояла\n900 ккал', 'energyKcal', '900', '900 ккал')).toEqual(withheld('per_portion'));
   });
 });

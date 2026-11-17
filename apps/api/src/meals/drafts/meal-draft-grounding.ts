@@ -166,13 +166,18 @@ const CONTAINER_OR_PARTIAL = new RegExp(
 //   "весь/целый казан", "кастрюля целиком") that is
 //   - the subject of a figure: "the whole pot (of chili) is/has/contains/was … 900 kcal" (at most two words before the
 //     figure, any whitespace), "вся кастрюля содержит/была/это 900 ккал";
-//   - set beside a figure with nothing but punctuation and whitespace between them, sentence ends and line breaks
-//     included: "whole pot, fat 45.5 g", "a full pot of soup: 900 kcal", "Whole pot\n900 kcal", "Full pot. 900 kcal.",
-//     "вся кастрюля 900 ккал", "полная кастрюля супа, 900 ккал"; any word between them separates them ("Cooked soup in
-//     a full pot. Lunch, 300 kcal.");
-//   - after a figure, in the same way ("900 kcal\nWhole pot", "900 ккал. Вся кастрюля."), or qualifying it on the same
-//     line through an optional "for/in/of" or "на/за/в/во/для" and an article ("900 kcal for the whole pot", "protein
-//     80 g, the whole pot", "900 ккал на всю кастрюлю", "белки 80 г, весь казан");
+//   - set beside a figure in the same statement: on the same line with at most one "," ":" "=" or dash between them, or
+//     a line break after ":" "=" or a dash ("whole pot, fat 45.5 g", "a full pot of soup: 900 kcal", "вся кастрюля 900
+//     ккал", "полная кастрюля супа, 900 ккал");
+//   - qualifying a figure before it on the same line through an optional "for/in/of" or "на/за/в/во/для" and an article
+//     ("900 kcal for the whole pot", "protein 80 g, the whole pot", "900 ккал на всю кастрюлю");
+//   - a LABEL (its clause is nothing but the vessel reference) next to a figure with only punctuation and whitespace
+//     between them, in either order, across sentence ends, line breaks and parentheses ("Whole pot\n900 kcal", "Full
+//     pot. 900 kcal.", "900 kcal\nWhole pot", "Soup, 900 kcal (for the whole pot).", "(Whole pot)\n900 kcal", "Белки 80 г
+//     (вся кастрюля)."; see `wholeVesselLabelBesideFigure`). A clause that describes an action ("Washed the whole pan.",
+//     "Whole pot washed afterwards", "Помыла всю сковороду.") attributes nothing, so the values beside it keep their
+//     scope and conflicts; any word between the vessel and a figure separates them ("Cooked soup in a full pot. Lunch,
+//     300 kcal.");
 // - the vessel as the subject of a figure: "the/this/that pot (of soup) is/has/contains/was … 900 kcal" (at most two
 //   words before the figure; not after "from" or "out of", which name where the food came from: "Soup from the pot is
 //   300 kcal"), "Pot: 900 kcal" at the start of a clause, "Кастрюля 900 ккал", "Кастрюля: 900 ккал", "Кастрюля
@@ -195,10 +200,10 @@ const FIGURE = `(?:\\d+(?:[.,]\\d+)?${SPACE}?(?:${ENERGY_UNIT}|${GRAM_UNIT})${NO
 const FIGURE_GAP = `\\s*(?:[:=]|${MINUS_OR_DASH})?\\s*`;
 // Horizontal whitespace only (spaces, tabs, no-break spaces): a bare line break separates statements.
 const INLINE_SPACE = '[^\\S\\r\\n]';
-// Nothing but punctuation and whitespace (sentence ends, line breaks, CRLF included): a whole-quantified vessel and a
-// figure with only this between them, in either order, are related ("Whole pot\n900 kcal", "Full pot. 900 kcal.",
-// "900 kcal\nWhole pot"). Any word between them separates them ("Cooked soup in a full pot. Lunch, 300 kcal.").
-const ADJACENT_GAP = `(?:\\s|[,:;.!=]|${MINUS_OR_DASH})*`;
+// Between a whole-quantified vessel and a figure beside it in the same statement: the same line with at most one "," ":"
+// "=" or dash, or a line break only after an explicit ":" "=" or dash. Wider adjacency (sentence ends, bare line breaks,
+// parentheses) is decided by `wholeVesselLabelBesideFigure`, which also looks at the vessel's own clause.
+const BESIDE_GAP = `(?:${INLINE_SPACE}*(?:[,:=]|${MINUS_OR_DASH})?${INLINE_SPACE}*|${INLINE_SPACE}*(?:[:=]|${MINUS_OR_DASH})\\s*)`;
 // Between a figure and the whole-quantified vessel after it when a preposition or an article stands between them: the
 // same line with at most one "," ":" "=" or dash ("900 kcal for the whole pot", "protein 80 g, the whole pot").
 const AFTER_FIGURE_GAP = `${INLINE_SPACE}*(?:[,:=]|${MINUS_OR_DASH})?${INLINE_SPACE}*`;
@@ -208,16 +213,13 @@ const WHOLE_CONTAINER = new RegExp(
   [
     // A whole-quantified vessel as the subject of a figure: "the whole pot (of chili) is … 900 kcal".
     `${WHOLE_VESSEL_EN}(?:\\s+of\\s+\\p{L}+)?\\s+(?:is|was|has|had|contains|contained|holds|held|totals|totaled|totalled|comes\\s+to|came\\s+to)\\s+(?:\\p{L}+\\s+){0,2}${FIGURE}`,
-    // Beside a figure, only punctuation or whitespace between: "whole pot, fat 45.5 g", "a full pot of soup: 900 kcal",
-    // "Whole pot\n900 kcal", "Full pot. 900 kcal.".
-    `${WHOLE_VESSEL_EN}(?:\\s+of\\s+\\p{L}+)?${ADJACENT_GAP}${FIGURE}`,
-    // Russian, beside or as the subject: "вся кастрюля 900 ккал", "Вся кастрюля\n900 ккал", "полная кастрюля супа, 900
-    // ккал", "целая кастрюля — это 900 ккал", "вся кастрюля содержит 900 ккал" (one word may follow the vessel on its line).
-    `${WHOLE_VESSEL_RU}(?:${INLINE_SPACE}+\\p{L}+)?${ADJACENT_GAP}(?:(?:это|содерж\\p{L}*|был[аио]?|составля\\p{L}*)${INLINE_SPACE}*(?:[:=]|${MINUS_OR_DASH})?${INLINE_SPACE}*)?${FIGURE}`,
-    // A figure followed by the whole-quantified vessel, only punctuation or whitespace between: "900 kcal\nWhole pot",
-    // "900 ккал. Вся кастрюля."; or on the same line through a preposition or an article: "900 kcal for the whole pot",
-    // "900 ккал на всю кастрюлю".
-    `${FIGURE}${ADJACENT_GAP}(?:${WHOLE_VESSEL_EN}|${WHOLE_VESSEL_RU})`,
+    // Beside a figure in the same statement: "whole pot, fat 45.5 g", "a full pot of soup: 900 kcal", "Whole pot:\n900 kcal".
+    `${WHOLE_VESSEL_EN}(?:\\s+of\\s+\\p{L}+)?${BESIDE_GAP}${FIGURE}`,
+    // Russian, beside or as the subject: "вся кастрюля 900 ккал", "полная кастрюля супа, 900 ккал", "целая кастрюля —
+    // это 900 ккал", "вся кастрюля содержит 900 ккал" (one word may follow the vessel on its line).
+    `${WHOLE_VESSEL_RU}(?:${INLINE_SPACE}+\\p{L}+)?${BESIDE_GAP}(?:(?:это|содерж\\p{L}*|был[аио]?|составля\\p{L}*)${INLINE_SPACE}*(?:[:=]|${MINUS_OR_DASH})?${INLINE_SPACE}*)?${FIGURE}`,
+    // A figure qualified by the whole-quantified vessel after it on the same line: "900 kcal for the whole pot", "900 ккал
+    // на всю кастрюлю".
     `${FIGURE}${AFTER_FIGURE_GAP}(?:(?:for|in|of)\\s+)?(?:(?:a|an|the|this|that|my|our)\\s+)?${WHOLE_VESSEL_EN}`,
     `${FIGURE}${AFTER_FIGURE_GAP}(?:(?:на|за|в|во|для)\\s+)?${WHOLE_VESSEL_RU}`,
     `${NOT_LETTER_BEFORE}(?<!${NOT_LETTER_BEFORE}(?:from|out\\s+of)\\s+)(?:the|this|that|my|our)\\s+${VESSEL_EN}(?:\\s+of\\s+\\p{L}+)?\\s+(?:is|was|has|had|contains|contained|holds|held|totals|totaled|totalled|comes\\s+to|came\\s+to)\\s+(?:\\p{L}+\\s+){0,2}${FIGURE}`,
@@ -228,8 +230,142 @@ const WHOLE_CONTAINER = new RegExp(
   'iu',
 );
 
-/** A container, product or partial amount (`CONTAINER_OR_PARTIAL`) or a whole-vessel figure (`WHOLE_CONTAINER`). */
-const hasContainerContext = (fragment: string): boolean => CONTAINER_OR_PARTIAL.test(fragment) || WHOLE_CONTAINER.test(fragment);
+// A Russian food qualifier after a whole vessel in a label: a dish or food noun in the genitive ("Полная кастрюля супа",
+// "весь казан плова"), the Russian counterpart of the English "of soup". Russian marks it by case alone, and a genitive
+// noun cannot be told from a short participle by its ending ("супа", "салата", "бульона" against "помыта", "налита",
+// "убрана"), so only the words listed here CONFIRM a label. Another trailing word does not make the clause an action:
+// unless it is an explicit action word (`VESSEL_ACTION`), the attribution is unresolved ("Полная кастрюля окрошки"), and
+// unresolved is treated conservatively (see `vesselClauseBesideFigure`). The list only spares known dishes that
+// abstention; it is not what keeps unknown ones safe.
+const FOOD_QUALIFIER_RU = [
+  'суп(?:а|ов)',
+  'супчика',
+  'борщ(?:а|ей)',
+  'щей',
+  'бульон(?:а|ов)',
+  'солянки',
+  'рассольника',
+  'ухи',
+  'харчо',
+  'лагмана',
+  'шурпы',
+  'плова',
+  'каши',
+  'гречки',
+  'риса',
+  'рагу',
+  'гуляша',
+  'жаркого',
+  'чили',
+  'лапши',
+  'макарон',
+  'пасты',
+  'картошки',
+  'картофеля',
+  'пюре',
+  'овощей',
+  'мяса',
+  'курицы',
+  'фарша',
+  'тушенки',
+  'тушёнки',
+  'котлет',
+  'пельменей',
+  'вареников',
+  'голубцов',
+  'омлета',
+  'яичницы',
+  'компота',
+  'киселя',
+  'соуса',
+  'фасоли',
+  'чечевицы',
+  'капусты',
+].join('|');
+
+// A whole-vessel LABEL (a confirmed attribution): a clause that is nothing but the vessel reference, with an optional
+// preposition and article and an English "of …" or a Russian food qualifier ("Whole pot", "(whole pot)", "(for the whole
+// pot)", "The entire pan", "Вся кастрюля", "(на всю кастрюлю)", "Казан целиком", "Полная кастрюля супа").
+const WHOLE_VESSEL_LABEL = new RegExp(
+  `^\\s*(?:(?:(?:for|in|of)\\s+)?(?:(?:a|an|the|this|that|my|our)\\s+)?${WHOLE_VESSEL_EN}(?:\\s+of\\s+\\p{L}+)?|(?:(?:на|за|в|во|для)\\s+)?${WHOLE_VESSEL_RU}(?:\\s+(?:${FOOD_QUALIFIER_RU})${NOT_LETTER_AFTER})?)\\s*$`,
+  'iu',
+);
+const WHOLE_VESSEL_ANYWHERE = new RegExp(`${WHOLE_VESSEL_EN}|${WHOLE_VESSEL_RU}`, 'giu');
+
+// An explicit ACTION in a vessel clause: something done with the vessel as an object, so the clause attributes no
+// nutrition to it ("Washed the whole pan", "Whole pot washed afterwards", "For the whole pot I used a lid", "Помыла всю
+// сковороду", "Полная кастрюля помыта", "Всю кастрюлю помыла потом", "На всю кастрюлю ушла крышка", "Сварила в полной
+// кастрюле"). Anywhere in the clause: cleaning words and kitchen objects other than food, which never describe a dish, and
+// Russian finite cooking or handling verbs (past tense or infinitive only, never a participle or adjective such as
+// "жареной", "вареников", "тушенки", which name the food). English cooking and handling verbs count only BEFORE the vessel
+// ("Cooked in a full pot", "Made a full pot"), because after it they describe the food ("Full pan of fried rice"). Only
+// listed words count: a clause with neither a label nor one of these is unresolved, never an action by default.
+const VESSEL_ACTION_ANYWHERE = new RegExp(
+  [
+    `${NOT_LETTER_BEFORE}(?:wash\\p{L}*|scrub\\p{L}*|clean\\p{L}*|rins\\p{L}*|soak\\p{L}*|dishwasher\\p{L}*|sinks?|lids?)${NOT_LETTER_AFTER}`,
+    `${NOT_LETTER_BEFORE}(?:(?:по|вы|от|с|про|об|за)?мы(?:л|т|в)\\p{L}*|(?:по|вы|о|от)чист\\p{L}*|чист(?:ая|ую|ил\\p{L}*|ить)|(?:с|о|про)?полосн\\p{L}*|замоч\\p{L}*|крышк\\p{L}*|посудомо\\p{L}*|раковин\\p{L}*)${NOT_LETTER_AFTER}`,
+    `${NOT_LETTER_BEFORE}(?:(?:с|за|на|у|при|до|по|пере)?вари(?:л|ть)\\p{L}*|(?:по|за|об|из|под|пере)?жари(?:л|ть)\\p{L}*|(?:за|по|при|пере)?туши(?:л|ть)\\p{L}*|приготови(?:л|ть)\\p{L}*|постави(?:л|ть)\\p{L}*|убра(?:л|ть)\\p{L}*|накры(?:л|ть)\\p{L}*|использова(?:л|ть)\\p{L}*)${NOT_LETTER_AFTER}`,
+  ].join('|'),
+  'iu',
+);
+const VESSEL_ACTION_BEFORE_EN = new RegExp(
+  `${NOT_LETTER_BEFORE}(?:cook(?:ed|ing|s)?|made|make|making|boiled|boiling|simmered|simmering|stewed|stewing|fried|frying|baked|baking|roasted|roasting|prepared|preparing|used|put|stored|covered)${NOT_LETTER_AFTER}`,
+  'iu',
+);
+
+type VesselClause = 'action' | 'label' | 'unresolved';
+
+/** What a clause holding a whole-vessel reference (starting at `vesselStart` within it) says about the vessel. */
+function classifyVesselClause(clause: string, vesselStart: number): VesselClause {
+  if (WHOLE_VESSEL_LABEL.test(clause)) return 'label';
+  if (VESSEL_ACTION_ANYWHERE.test(clause) || VESSEL_ACTION_BEFORE_EN.test(clause.slice(0, vesselStart))) return 'action';
+  return 'unresolved';
+}
+// Clause edges for a vessel reference: sentence ends, line breaks, parentheses, brackets, commas, colons, semicolons, an
+// equals sign and spaced dashes.
+const VESSEL_CLAUSE_EDGE = /[.;!?,:=()[\]\r\n–—]/u;
+// Only punctuation and whitespace between a label and a figure (parentheses and line breaks included).
+const LABEL_GAP = `(?:\\s|[,:;.!=()[\\]]|${MINUS_OR_DASH})*`;
+const FIGURE_AFTER_LABEL = new RegExp(`^${LABEL_GAP}${FIGURE}`, 'iu');
+const FIGURE_BEFORE_LABEL = new RegExp(`${FIGURE}${LABEL_GAP}$`, 'iu');
+
+/**
+ * How the vessel scope of a value is read. `proposal`: an unresolved vessel clause beside a figure counts as container
+ * context, so the value is withheld rather than taken as the amount eaten. `conflict`: it does not, so the figure stays
+ * a whole-entry value for conflict detection and can never be dropped to clear the way for another value. Only a
+ * confirmed attribution (a label, a `WHOLE_CONTAINER` construction, a package or partial amount) removes a value from the
+ * conflict scan.
+ */
+type VesselReading = 'conflict' | 'proposal';
+
+/**
+ * Whether a whole-vessel clause stands next to a figure with only punctuation and whitespace between them, in either
+ * order, across sentence ends, line breaks and parentheses ("Whole pot\n900 kcal", "Full pot. 900 kcal.", "900
+ * kcal\nWhole pot", "Soup, 900 kcal (for the whole pot).", "(Whole pot)\n900 kcal", "Белки 80 г (вся кастрюля)."), and
+ * attributes it to the vessel under `reading`. The vessel's own clause decides (`classifyVesselClause`): a label
+ * attributes the figure; an explicit action ("Washed the whole pan. Protein 25 g.", "Полная кастрюля помыта\n400 ккал")
+ * does not, so the values beside it keep their whole-entry scope and their conflicts; anything else ("Полная кастрюля
+ * окрошки\n900 ккал") is unresolved, which withholds the figure for a proposal but keeps it in the conflict scan.
+ */
+function vesselClauseBesideFigure(fragment: string, reading: VesselReading): boolean {
+  for (const match of fragment.matchAll(WHOLE_VESSEL_ANYWHERE)) {
+    let left = match.index;
+    while (left > 0 && !VESSEL_CLAUSE_EDGE.test(fragment[left - 1] ?? '')) left -= 1;
+    let right = match.index + match[0].length;
+    while (right < fragment.length && !VESSEL_CLAUSE_EDGE.test(fragment[right] ?? '')) right += 1;
+    if (!FIGURE_AFTER_LABEL.test(fragment.slice(right)) && !FIGURE_BEFORE_LABEL.test(fragment.slice(0, left))) continue;
+    const kind = classifyVesselClause(fragment.slice(left, right), match.index - left);
+    if (kind === 'label' || (kind === 'unresolved' && reading === 'proposal')) return true;
+  }
+  return false;
+}
+
+/**
+ * A container, product or partial amount (`CONTAINER_OR_PARTIAL`), a whole-vessel figure (`WHOLE_CONTAINER`), or a
+ * whole-vessel clause beside a figure that `reading` attributes to the vessel (`vesselClauseBesideFigure`).
+ */
+const hasContainerContext = (fragment: string, reading: VesselReading): boolean =>
+  CONTAINER_OR_PARTIAL.test(fragment) || WHOLE_CONTAINER.test(fragment) || vesselClauseBesideFigure(fragment, reading);
 
 // An assertion that something was eaten or drunk, by the person: a past or perfect consumption verb. In English "had"
 // counts only with a first-person subject ("I had", "we've had"), because "the package had" is not consumption. Third
@@ -561,11 +697,11 @@ function statesFoodQuantity(text: string, start: number, end: number): boolean {
  * sentence and keep their qualifier. Nothing is multiplied or inferred either way: not that a whole package was eaten,
  * and never a fraction of a value.
  */
-function wholeEntryScoped(text: string, start: number, end: number): boolean {
-  if (!hasPortionQualifier(text) && !hasContainerContext(text)) return true;
+function wholeEntryScoped(text: string, start: number, end: number, reading: VesselReading): boolean {
+  if (!hasPortionQualifier(text) && !hasContainerContext(text, reading)) return true;
   const all = sentences(text);
   const own = all.find((sentence) => start >= sentence.start && end <= sentence.end);
-  if (own === undefined || hasPortionQualifier(own.text) || hasContainerContext(own.text) || !ENTRY_SUM.test(own.text)) return false;
+  if (own === undefined || hasPortionQualifier(own.text) || hasContainerContext(own.text, reading) || !ENTRY_SUM.test(own.text)) return false;
   if (statesFoodQuantity(text, own.start, own.end) || !boundToConsumption(text, own, start)) return false;
   return all.every((sentence) => !hasPortionQualifier(sentence.text) || statesAnyNutrient(text, sentence.start, sentence.end));
 }
@@ -782,7 +918,7 @@ function scopeReason(text: string, start: number, end: number, token: NumberToke
   if (AMBIGUOUS.test(clause.text) || clause.closer === '?' || inRange(text, token, start, end, field) || qualifier === 'ambiguous') return 'ambiguous';
   if (NEGATED.test(clause.text) || qualifier === 'negated') return 'negated';
   if (HEDGE.test(text)) return 'ambiguous';
-  if (!wholeEntryScoped(text, start, end)) return 'per_portion';
+  if (!wholeEntryScoped(text, start, end, 'proposal')) return 'per_portion';
   return null;
 }
 
@@ -796,7 +932,8 @@ function distinctStatedValues(text: string, field: MealNutritionField): Set<stri
   for (const token of numberTokens(text)) {
     const mention = checkMention(text, token, field);
     if (mention.kind !== 'mention') continue;
-    if (hasPortionQualifier(clauseAround(text, mention.start, mention.end).text) || !wholeEntryScoped(text, mention.start, mention.end)) continue;
+    // The `conflict` reading: an unresolved vessel attribution keeps its figure in the scan (see `VesselReading`).
+    if (hasPortionQualifier(clauseAround(text, mention.start, mention.end).text) || !wholeEntryScoped(text, mention.start, mention.end, 'conflict')) continue;
     const parsed = parseToken(text, token);
     values.add(parsed.kind === 'value' ? `${parsed.decimal.integer}.${parsed.decimal.fraction}` : `${parsed.kind}@${token.start}`);
   }

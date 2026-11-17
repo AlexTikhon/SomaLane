@@ -710,6 +710,90 @@ describe('ADR-0092 meal draft proposals under the runtime role', () => {
       });
     });
 
+    // Clause classification (2026-11-17): a vessel action ("Washed the whole pan.") attributes nothing and keeps a
+    // conflict visible; a parenthesized whole-vessel label attributes the figure next to it, in either order.
+    it('keeps conflicts beside a vessel action and withholds figures with a parenthesized whole-vessel label', async () => {
+      for (const [text, title, evidence] of [
+        ['Washed the whole pan. Protein 25 g. In total I ate protein 20 g.', 'Washed the whole pan', 'protein 20 g'],
+        ['Помыла всю сковороду. Белки 25 г. Итого съела белки 20 г.', 'Помыла всю сковороду', 'белки 20 г'],
+      ] as const) {
+        expect(await draftFor(text, answer(title, { proteinG: claim('20', evidence) })), text).toMatchObject({
+          proteinG: { reason: 'conflicting', status: 'withheld' },
+        });
+      }
+      for (const [text, title, field, value, evidence] of [
+        ['Soup, 900 kcal (whole pot).', 'Soup', 'energyKcal', '900', '900 kcal'],
+        ['Soup, 900 kcal (for the whole pot).', 'Soup', 'energyKcal', '900', '900 kcal'],
+        ['Soup\n(Whole pot)\n900 kcal', 'Soup', 'energyKcal', '900', '900 kcal'],
+        ['Soup. Protein 80 g (whole pot).', 'Soup', 'proteinG', '80', 'Protein 80 g'],
+        ['Суп, 900 ккал (вся кастрюля).', 'Суп', 'energyKcal', '900', '900 ккал'],
+      ] as const) {
+        expect(await draftFor(text, answer(title, { [field]: claim(value, evidence) })), text).toMatchObject({
+          [field]: { reason: 'per_portion', status: 'withheld' },
+        });
+      }
+    });
+
+    // Russian food qualifier (2026-11-17): "Полная кастрюля супа" is a label like "Full pot of soup", in either order
+    // beside the figure; "Полная кастрюля помыта" is an action and keeps a conflict visible.
+    it('withholds figures beside a Russian food-qualified vessel label and keeps conflicts beside a vessel action', async () => {
+      // Another active orgA member: the fixed clock keeps the whole suite in one rate window, and ids.userDual's 60
+      // proposals per minute (the configuration maximum) are spent by the cases above.
+      const draftFor = async (text: string, value: unknown) => {
+        provider.behaviour = () => Promise.resolve({ value });
+        const parsed = mealDraftProposalResponseSchema.parse((await propose(ids.userOrgA, ids.orgA, { text }).expect(200)).body);
+        if (parsed.outcome !== 'draft') throw new Error('expected a draft');
+        return parsed.nutrition;
+      };
+      for (const [text, title, field, value, evidence] of [
+        ['Полная кастрюля супа\n900 ккал', 'Полная кастрюля супа', 'energyKcal', '900', '900 ккал'],
+        ['Полная кастрюля супа\r\n900 ккал', 'Полная кастрюля супа', 'energyKcal', '900', '900 ккал'],
+        ['Белки 80 г.\nВся сковорода плова.', 'Вся сковорода плова', 'proteinG', '80', 'Белки 80 г'],
+      ] as const) {
+        expect(await draftFor(text, answer(title, { [field]: claim(value, evidence) })), text).toMatchObject({
+          [field]: { reason: 'per_portion', status: 'withheld' },
+        });
+      }
+      expect(
+        await draftFor('Полная кастрюля супа\n900 ккал. Итого съела 300 ккал.', answer('Полная кастрюля супа', { energyKcal: claim('300', '300 ккал') })),
+      ).toMatchObject({ energyKcal: { status: 'proposed', value: 300 } });
+      expect(
+        await draftFor('Полная кастрюля помыта\n400 ккал. Итого съела 300 ккал.', answer('Полная кастрюля помыта', { energyKcal: claim('300', '300 ккал') })),
+      ).toMatchObject({ energyKcal: { reason: 'conflicting', status: 'withheld' } });
+      expect(
+        await draftFor('Вся сковорода вымыта. Жиры 25 г. Итого съела жиры 20 г.', answer('Вся сковорода вымыта', { fatG: claim('20', 'жиры 20 г') })),
+      ).toMatchObject({ fatG: { reason: 'conflicting', status: 'withheld' } });
+    });
+
+    // Unknown-qualifier correction (2026-11-17): a word the classifier does not know ("окрошки", "салата", a made-up
+    // "зюмбры") is neither a confirmed label nor an action. The attribution is unresolved: the figure beside it is
+    // withheld, and it stays in the conflict scan, so it cannot clear the way for another value.
+    it('withholds figures beside an unresolved whole-vessel clause without hiding a conflict', async () => {
+      // ids.userOrgA again (see the test above): 7 proposals there and 6 here stay well inside its 60 per minute.
+      const draftFor = async (text: string, value: unknown) => {
+        provider.behaviour = () => Promise.resolve({ value });
+        const parsed = mealDraftProposalResponseSchema.parse((await propose(ids.userOrgA, ids.orgA, { text }).expect(200)).body);
+        if (parsed.outcome !== 'draft') throw new Error('expected a draft');
+        return parsed.nutrition;
+      };
+      for (const [text, title, field, value, evidence] of [
+        ['Полная кастрюля окрошки\n900 ккал', 'Полная кастрюля окрошки', 'energyKcal', '900', '900 ккал'],
+        ['900 ккал\r\nПолная кастрюля окрошки', 'Полная кастрюля окрошки', 'energyKcal', '900', '900 ккал'],
+        ['Полная кастрюля салата.\nБелки 80 г.', 'Полная кастрюля салата', 'proteinG', '80', 'Белки 80 г'],
+        ['Целый казан зюмбры\r\nЖиры 45 г', 'Целый казан зюмбры', 'fatG', '45', 'Жиры 45 г'],
+      ] as const) {
+        expect(await draftFor(text, answer(title, { [field]: claim(value, evidence) })), text).toMatchObject({
+          [field]: { reason: 'per_portion', status: 'withheld' },
+        });
+      }
+      expect(
+        await draftFor('Полная кастрюля окрошки\n900 ккал. Итого съела 300 ккал.', answer('Полная кастрюля окрошки', { energyKcal: claim('300', '300 ккал') })),
+      ).toMatchObject({ energyKcal: { reason: 'conflicting', status: 'withheld' } });
+      expect(
+        await draftFor('Cooked soup in a full pot. Lunch, 300 kcal.', answer('Cooked soup', { energyKcal: claim('300', '300 kcal') })),
+      ).toMatchObject({ energyKcal: { status: 'proposed', value: 300 } });
+    });
+
     it('withholds forbidden precision and rounded claims, and accepts trailing zeros', async () => {
       expect(
         await draftFor(
