@@ -96,7 +96,8 @@ protein, carbohydrate, fat; at most one decimal, refused rather than rounded), s
 creation per form session (a retry is compared with the original request), edits of type, title and values only, and
 erasures in the ledger (proven through a real backup and restore at the current schema). It is not an AI insight source.
 Today (`daily-overview-2`) shows the number of entries and each recorded total with its own coverage, computed exactly in
-the same snapshot; food energy is never combined with active energy, and there are no targets, balances or advice. Food
+the same snapshot; food energy is never combined with active energy, and there are no targets, balances or advice. The
+weekly review shows the week's recorded nutrition since ADR-0093 (below). Food
 text parsing (AI layer) proposes entries into this table for the person to confirm since ADR-0092 (below).
 
 **Trends** is [ADR-0084](adr/0084-daily-trends.md): a read-only view of the 28 calendar dates ending on a chosen date,
@@ -164,6 +165,18 @@ source, so a TCX import is never deduplicated against a GPX import, a manual ent
 the weekly review and activity trends (with the comparison) show TCX as its own source with its own duration name; it is
 not AI input. No file, lap, trackpoint, heart rate, calories, notes or device identity is stored. FIT, multi-activity files
 and overlap detection remain open.
+
+**Recorded nutrition in the weekly review** is [ADR-0093](adr/0093-weekly-review-meal-nutrition.md): the review
+(`weekly-review-5`) gains a review-only `meals` part for the week's manual meal entries on their stored local dates (any
+saved zone): logged entries, days with entries and, per metric (food energy, protein, carbohydrate, fat), the exact
+recorded total with its own entry and day coverage, for each of the seven dates and for the week. PostgreSQL computes all
+of it in one date-bounded `GROUPING SETS` statement in the review's existing snapshot (at most eight rows, no meal loaded,
+no title read), served by the existing owner/date index; the contract checks that days and week agree. Missing stays
+null, a recorded 0 stays 0, a title-only entry is a logged entry, and coverage never means that everything eaten was
+logged. The Check-in tab shows a "Recorded nutrition" block apart from active energy, with an incomplete-logging
+explanation and a compact daily breakdown; a meal-only week is not empty. No targets, balance, estimates, averages,
+advice or comparisons, and meals stay outside AI input. Verified on the workstation (Chromium only); no physical-device
+or hosted-CI evidence yet.
 
 **Draft from text** is [ADR-0092](adr/0092-meal-draft-from-text.md): an optional panel in the Meal log, off by default
 (`MEAL_DRAFTS_PROVIDER=off`), that sends one meal description, and nothing else, to a local Ollama model. The model only

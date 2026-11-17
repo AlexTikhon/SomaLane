@@ -5048,3 +5048,47 @@ checkpoint report gains a pointer to the new one).
 sets, one model, one CPU; the cold first call again timed out at the 45 s default. The container rule is a fixed list
 of vessels and constructions ("There are 900 kcal in the pot", "Pot total 900 kcal", "Кастрюлю на 900 ккал" are still
 proposed; "cup", "bowl", "тарелка" are not context). The feature stays off by default.
+
+## Recorded meal nutrition in the deterministic weekly review (ADR-0093) (2026-11-17)
+
+**What changed.** `GET /api/orgs/:orgId/weekly-review` (`weekly-review-5`) gains a review-only `meals` part: the
+person's manual meal entries for the stored local dates Monday to Sunday (any saved zone), with `loggedEntries`,
+`daysWithEntries` and, for food energy, protein, carbohydrate and fat, `{ recordedEntries, recordedDays, total }` for the
+week and `{ recordedEntries, total }` for each of the seven dates. One statement (`weekMealsSql`, new module
+`apps/api/src/insights/weekly-review-meals.ts`, `GROUP BY GROUPING SETS ((local_date), ())`) runs last in the review's
+existing authenticated `REPEATABLE READ READ ONLY` transaction with explicit org, user and `source = 'manual'` predicates
+under RLS; PostgreSQL computes every count and exact numeric total for each date and for the week and returns at most
+eight rows; no title, type, zone or id is selected. The API parses each total strictly into integer tenths (no rounding)
+and refuses impossible rows; the strict contract checks null/count relationships, per-entry-derived bounds (10,000
+entries per date, 70,000 per week) and that days and week agree. Statements `meals.none`, `meals.logged`,
+`meals.<metric>_recorded`/`_not_recorded`, `meals.logging_limits`. The Check-in tab's Weekly review shows a "Recorded
+nutrition" block after "Steps and active energy" (totals with entry and day coverage, an incomplete-logging explanation,
+the seven days), and a meal-only week (also a single title-only entry) is not empty. Meals stay outside the AI aggregate,
+facts, data gaps, coverage, input hash, prompts and generation. No migration (the existing `meals_owner_date_created_idx`
+serves the range), no dependency, no new route, nothing stored. OpenAPI, ADR-0093, ADR-0077 addendum, ADR-0083 "amended
+by", reference, product direction and README updated.
+
+**Executed checks** (sequential; Windows 11, Node.js 24.11.1; workstation only).
+
+| Command | Result |
+|---|---|
+| Test database identity (read-only probe through `loadIntegrationTestConfiguration`, before any fixture write; probe file deleted) | each connection: target `127.0.0.1:5433/running_tracker_test`, server `172.18.0.2:5432`, `current_database()` = `running_tracker_test`, `current_user` = `session_user` = `running_tracker_runtime` / `running_tracker_owner` / `running_tracker_maintenance`; `npm run db:migrate:test` skipped every migration (schema current, 0042 newest) |
+| PostgreSQL behaviour probe (`BEGIN READ ONLY` … `ROLLBACK` as the owner on the test database) | the empty grouping set yields exactly one row on empty input; `count(DISTINCT …) FILTER` works with grouping sets; `0.1 + 0.2` sums to `0.3` in numeric |
+| New and changed unit tests | API `weekly-review.spec.ts` +9 (empty week, title-only, independent entry/day coverage with recorded zeros, exact decimals and weekly bounds, numeric-text parsing, refused rows and week/day disagreement, singular/plural, a wording scan for targets/balances/averages/estimates/completeness/advice, the select list and predicates of the SQL) plus the input-hash pin extended to meals; contracts `weekly-review.spec.ts` +7 (every invariant mutated once, weekly bounds at the per-day maximum, OpenAPI); web `WeeklyReviewPanel.spec.tsx` +6 and `weekly-review-controller.spec.ts` +3 (fresh controller after navigation, retry after failure, late answer after session end) |
+| `npm run verify` (`VITEST_MAX_WORKERS=2`), first run | exit 1: one lint error in the new unit spec (a constant used only as a type); fixed |
+| `npm run verify`, second run | exit **0**: lint, typecheck, build; scripts 115, API **2,305** (2,296 + 9), web **1,334** (1,325 + 9), contracts **311** (304 + 7), fixtures 14, simulator 3 |
+| Integration, affected files (16: weekly review, meal and meal-draft HTTP/access, daily overview, daily movement, daily trends, GPX/TCX import, tenant isolation, weekly insights HTTP/access/concurrency/erasure, the new EXPLAIN file) | **363 passed** at the first run. New in `weekly-review-http`: partial, title-only and zero-valued entries through the meal API (5 entries, energy 3 entries/2 days = 1,061.1 kcal, protein 42.7 g, carbohydrate and fat 0), a single title-only entry, exact sums (0.1 + 0.2 = 0.3; ten times 0.1 g = 1; `250.00` + `412.5` = 662.5), stored-date attribution (UTC+14/UTC-11 zones on the first and last day, the Sunday before and Monday after excluded, the same with the week read in Tokyo, in the requested zone and in the neighbouring weeks), owner/other member/run grantee/other organization isolation, the snapshot interleaving, and the AI pin. `meals-http`'s "not a weekly review source" test now pins the AI-shared parts and non-meal statements as unchanged and the meals part as following the writes |
+| Snapshot interleaving (test-only `afterSourcesRead` hook) | a meal edit (500 → 900 kcal), a deletion and a creation committed **through the API** after the review's snapshot began: the answer shows the earlier state, whole and self-consistent (2 entries, 500 kcal, 20 g protein); the next read shows 2 entries on 2 days, 1,000 kcal, protein unknown; after one more deletion only 100 kcal |
+| AI input pin (FakeProvider, stored ready insight) | meal create, edit, delete and a review read leave the insight row (id, input hash, source revision, status, attempts, `updated_at`, output digest), gate revision and view (`current`) identical; provider calls unchanged; a later check-in makes it `stale` |
+| `weekly-review-meals-explain.integration.test.ts` (runtime role, RLS, 5 x 20,000 synthetic entries) | `Index Scan using meals_owner_date_created_idx`, index condition `org_id`, `user_id`, `local_date >= 2026-11-02 AND <= 2026-11-08`; 49 rows read of 100,000; 155 shared buffers; one `GroupAggregate` (keys `local_date` and `()`); 8 rows out; execution 0.51 ms |
+| `npm run test:integration` (full) | exit 1: 78 of 79 files, **1,130 passed**; `backup-restore` 13 failed because `.env` enables the drill but its `BACKUP_ENCRYPTION_KEY_FILE` does not exist on this workstation ("The backup encryption key file cannot be read") |
+| `backup-restore.integration.test.ts` rerun with a throwaway key (`backup:keygen` into the session scratchpad, set in the process environment only, deleted afterwards) | **13 passed** (116 s); no code changed between the runs |
+| Mutation checks (each applied to a copy-backed file, restored and hash-compared equal) | date bound `+ 7`: the stored-date test failed (500, the row guard refused 2026-11-09); transaction without `read-only snapshot`: the meal snapshot test failed; energy summed as `float8`: the exact-decimal test failed (500, `0.30000000000000004` refused); `isEmptyWeek` without meals: the title-only panel test failed |
+| `eval:meal-drafts:check` with the stored 2026-11-16 qwen3:8b reports (output to the scratchpad) | exit **0**: verifier PASS, model PASS, "evidence: valid (current fingerprint, one consistent execution profile)": the meal-draft verifier fingerprint is unchanged. No inference call |
+| Chromium, after `verify`'s build, no edit or rebuild during the run: `weekly-review.spec.ts`, `meal-log.spec.ts` | **6 passed** (1.2 min). New scenario: a single title-only entry makes the week not empty; partial values and a recorded zero on two days (761.1 kcal for 2 of 3 entries on 2 of 7 days; per-day coverage; "No entries logged"); an edit and a deletion in the Meal log are read afresh when the Check-in tab is opened again (760.9 kcal for all 2 entries, no 761.1/410.6); a 503 shows no old numbers and Retry reads again; at 375 px with a wide font the block fits; after sign-out and a new sign-in the week is read afresh; no insight POST at any point |
+| `git diff --check` | clean |
+
+**Not established.** Automated workstation evidence only: no hosted CI run of this change, and no physical device (no
+Safari, WebKit or iPhone; the 375 px check is a Chromium viewport). The full browser suite and Firefox were not rerun. The
+review does not say which zone each meal was saved in; the 10,000 entries per date bound is not enforced by the database
+(more would fail the review's own schema). Meals remain outside AI insights, and between-week comparisons do not exist.

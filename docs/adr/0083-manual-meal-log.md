@@ -6,7 +6,9 @@
 - Date: 2026-11-09
 - Amended by: [ADR-0092](0092-meal-draft-from-text.md) (an optional, off-by-default "Draft from text" that proposes
   values into this form from one meal description; a confirmed draft is saved by the same create route with `source:
-  manual`, read as "entered or confirmed by the person". Table, contract, idempotency and erasure unchanged.)
+  manual`, read as "entered or confirmed by the person". Table, contract, idempotency and erasure unchanged.);
+  [ADR-0093](0093-weekly-review-meal-nutrition.md) (the weekly review shows the week's recorded nutrition with entry and day
+  coverage, `weekly-review-5`; meals are still not AI input; table and contract unchanged).
 - Relates to: ADR-0072/0073 (owner-only activities, erasure ledger, idempotent creation per form session), ADR-0074 (a
   day is a local calendar date with the zone of its first write; "today" by the server clock in the client's zone),
   ADR-0078/0079 (server-owned provenance; unconstrained numeric with precision CHECKs; replay outside AI insights),
@@ -197,5 +199,7 @@ queue and recovery are not touched.
 - Lost update between devices: two devices editing one entry both succeed; the later wins.
 - The zone is the client's word (at most one day ahead of UTC), as in ADR-0074; "today" is fixed when the screen opens.
 - Meals are not shown in the weekly review or in trends, and are not an AI input; any of that is a later decision.
+  (Since then: Trends shows food energy per date, ADR-0084; the weekly review shows recorded nutrition, ADR-0093. Meals
+  remain outside AI input.)
 - Erasures committed but not yet exported when the node is lost still come back with an old backup (ADR-0073).
 - HealthKit or any other import: not started (no macOS/Xcode access).

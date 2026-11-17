@@ -135,3 +135,11 @@ demo-enabled Vite proxying to it (5277). Test harness only; no product configura
 `weekly-review-2`. Nothing above changes meaning: the aggregate, facts, data gaps, coverage denominators and the zone
 rule are the same, and AI insights still do not read movement. The Check-in screen now refreshes the review (not the AI
 insight) after a movement save or deletion as well.
+
+## Addendum (2026-11-17): recorded meal nutrition in the review
+
+[ADR-0093](0093-weekly-review-meal-nutrition.md) adds the person's manual meal entries as a review-only `meals` part
+(logged entries, days with entries and, per nutrition metric, the exact recorded total with its own entry and day
+coverage, for each stored date and for the week, computed by one PostgreSQL `GROUPING SETS` statement in the same
+snapshot) and `meals.*` statements, and raises `WEEKLY_REVIEW_VERSION` to `weekly-review-5`. Nothing above changes
+meaning, and AI insights still do not read meals.
