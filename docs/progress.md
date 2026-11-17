@@ -5003,3 +5003,48 @@ artifacts are unchanged. No dependency, no migration, no Ollama call.
 **Not established.** The verifier gate is still **FAIL** (the 2 deferred container findings). The model reports stay
 legacy (version 2) and are stale against this grounding as well; no new model evidence exists. An addressee followed by
 "?" or "." is not a marker; the marker list is unchanged.
+
+## Draft from text: container-scope remediation and fresh model baseline (ADR-0092 "Amendment 6") (2026-11-16)
+
+**What changed.** Production grounding only (`apps/api/src/meals/drafts/meal-draft-grounding.ts`), its tests and
+documents. A figure for a whole cooking vessel or batch ("the whole pot is 900 kcal", "вся кастрюля 900 ккал") is now
+container context (`WHOLE_CONTAINER`, joined to `CONTAINER_OR_PARTIAL` through `hasContainerContext` in
+`wholeEntryScoped`): every value must then be the person's own consumed total under the existing rule, otherwise it is
+withheld as `per_portion`. A vessel word alone is not context (food names and cooking references keep their values).
+Prompt, wire schema, public contracts, reason codes, saving, provenance, provider defaults, the off-by-default
+configuration, the evaluation tool, gates, thresholds, fingerprint rules, the frozen corpus (`35a51437…`) and sets, and
+every earlier artifact are unchanged. No dependency, no migration.
+
+**Executed checks** (sequential; Windows 11, Node.js 24.11.1).
+
+| Command | Result |
+|---|---|
+| `eval:meal-drafts -- --set safety` before any change (HEAD `ba5854d`, clean tree) | exit 2; verifier FAIL: 2 forbidden (`en-container-pot-unlisted`, `ru-container-pot-unlisted`, 900 each), controls 21/21, mismatches 0 (`verifier-safety-before.json`) |
+| New `meal-draft-grounding-container-scope.spec.ts` against the unchanged grounding | **13 of 16 failed** (900 proposed, or the consumed total `conflicting` because the container figure counted as a second total); the 3 passing are pure positive controls |
+| Four cooking-reference controls added after the first version of the rule ("Soup from the pot: 300 kcal", "… is 300 kcal", "Stew from the pot – 450 kcal", "Chili out of the pot was 420 kcal") | the first failed against that version (the table-driven test stops at its first failure); all pass after restricting the subject form ("from"/"out of" exempt) and the "Pot: N" form (clause start or "in the") |
+| `vitest run src/meals/drafts/ src/evaluation/` after the change | 17 files, **484 passed** (468 earlier, unchanged, + 16 new); rerun after adding three more table rows: 484 passed |
+| `eval:meal-drafts -- --set safety` after the change, corpus unchanged | exit **0**; verifier **PASS**: 53/53 executed, **0** of 191 forbidden, controls **21/21**, mismatches **0**; only the 2 container cases changed; fingerprint `d191b0e4…` → `c1d44a46…` (`verifier-safety-after.json`) |
+| `npm run verify` (`VITEST_MAX_WORKERS=2`) | exit 0: scripts 115, API 2,296 (2,280 + 16), web 1,325, contracts 304, fixtures 14, simulator 3. Three table rows were added to the new spec afterwards (no new test); `eslint` on the changed files exit 0 and the focused rerun above cover them |
+| New HTTP case in `meal-drafts-http` (`-t "whole-container"`) with HEAD's grounding swapped in (byte-identical to HEAD, `c70a724d…`; restored, SHA-256 `2cf90cbc…` verified) | 1 failed (900 proposed) |
+| Test database identity (read-only probe through `loadIntegrationTestConfiguration`, `VITEST_MAX_WORKERS` unset) | each connection: target `127.0.0.1:5433/running_tracker_test`, server `172.18.0.2:5432`, `current_database()` = `running_tracker_test`, `current_user` = `session_user` = `running_tracker_runtime` / `running_tracker_owner` / `running_tracker_maintenance` |
+| Integration: `meal-drafts-http`, `meals-http`, `meals-access`, `observability`, `tenant-isolation` | 5 files, **124 passed** (123 + 1) at the first run |
+| Chromium `meal-draft.spec.ts`, fake provider (after `verify`, no rebuild during the run) | 4/4 passed, no scenario changed (the logged `503 MEAL_DRAFT_DISABLED` is scenario 4, feature off) |
+| Fake harness on the frozen development / held-out sets | exit 0 / 0; unchanged: 0 / 0 incorrectly accepted; recall 15/16 / 15/15; 6 / 6 stopped |
+| Ollama checks (no inference): `/api/version`, `/api/tags`, `/api/ps` | 0.40.16; `qwen3:8b` installed, digest `500a1f06…` (Q4_K_M); no model loaded |
+| Freeze before inference (`freeze-before-inference.txt`) | SHA-256 of grounding, prompt, wire, datasets, corpus, gates file, tracked diff and the untracked spec; all identical after the runs |
+| `MEAL_DRAFTS_MODEL=qwen3:8b eval:meal-drafts -- --set development --provider ollama --dry-run` | exit 0, no inference request |
+| … `--set development --provider ollama --max-calls 20` | exit 0; 20 calls; outcome 17/20, recall 13/16, 0 incorrect, failures 1 `timeout` (cold first call, 45 210 ms) + 1 `ungrounded_output` |
+| … `--set heldout --provider ollama --max-calls 20` | exit 0; 20 calls; outcome 17/20, recall 14/15, 0 incorrect, failures 1 `ungrounded_output` |
+| `eval:meal-drafts:check` with the two new reports | exit **0**; verifier **PASS**; model **PASS** (evidence valid; 40 cases; outcome 85.0 %, recall 87.1 %, precision 100 %, failures 7.5 %) (`gates-check.json`) |
+| `git diff --check` | clean |
+
+**Inference calls: 40** (20 + 20), sequential, no retries, no warm-up; nothing pulled, no cloud.
+
+Artifacts: `docs/reports/artifacts/meal-draft-container-scope-2026-11-16/`. Report:
+`docs/reports/meal-draft-container-scope-2026-11-16.md`. Earlier artifacts and reports are unchanged (the 2026-11-16
+checkpoint report gains a pointer to the new one).
+
+**Not established.** The model PASS is marginal (outcome exactly at 85 %) and is regression evidence on the examined v1
+sets, one model, one CPU; the cold first call again timed out at the 45 s default. The container rule is a fixed list
+of vessels and constructions ("There are 900 kcal in the pot", "Pot total 900 kcal", "Кастрюлю на 900 ккал" are still
+proposed; "cup", "bowl", "тарелка" are not context). The feature stays off by default.

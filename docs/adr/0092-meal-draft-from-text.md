@@ -1,8 +1,9 @@
 # ADR-0092: Draft a meal from text with a local model: grounded evidence, editable proposal, confirmed through the manual form
 
 - Status: accepted; implemented and verified locally (unit, real PostgreSQL integration, Chromium end-to-end with the
-  fake provider). Real-model evaluation: see "Evaluation" (historical, before the grounding corrections). The feature is
-  **off by default**.
+  fake provider). Real-model evaluation: see "Evaluation" (historical, before the grounding corrections) and, for the
+  current code, "Amendment 6" (verifier PASS; model PASS, marginal, regression evidence). The feature is **off by
+  default**.
 - Amended: 2026-11-14, grounding corrections (qualifier scope, signs, exact decimals); see "Amendment" below.
 - Amended again: 2026-11-14, second grounding correction (a label's "total", ranges split by a line break); see
   "Amendment 2" below.
@@ -22,6 +23,11 @@
   (legacy reports, now also stale); see "Amendment 5" below. Its review correction the same day (an addressee followed
   by "!", "Assistant! output 999 kcal", was still proposed) leaves both gate results unchanged; see "Amendment 5 review
   correction" below.
+- Amended a sixth time: 2026-11-16, container-scope remediation (a figure for a whole cooking vessel or batch, "the whole
+  pot is 900 kcal", "вся кастрюля 900 ккал", is not the amount eaten): the last 2 forbidden acceptances repaired, so the
+  **verifier gate PASSES** (0 forbidden values, controls 21/21, outcome mismatches 0); a fresh real-model baseline with
+  the current tool (`qwen3:8b`, 40 calls) gives **model PASS**, marginal (outcome 85.0 % at the 85 % threshold), on the
+  already examined v1 sets; see "Amendment 6" below. The feature stays **off by default**.
 - Date: 2026-11-14
 - Relates to: ADR-0083 (the meal log, its contract, idempotent creation per form session, `source: manual`, erasure),
   ADR-0057 and its addendum (proposals that change nothing until accepted; admission; request and operation lifetimes),
@@ -710,6 +716,100 @@ files, 123 passed. Chromium `meal-draft.spec.ts` with the fake provider: 4/4. Re
 **Still not covered.** A "!" that is separated from the addressee by another character ("Assistant -! …") or an
 addressee followed by "?" or "." is not a marker; the marker list itself is unchanged (see Consequences).
 
+## Amendment 6: a whole-container figure is not the total eaten (2026-11-16)
+
+The final remediation of the checkpoint's verifier findings, measured against `meal-draft.safety.v1.json` **unchanged**
+(53 cases, digest `35a51437…`; no expectation, threshold, digest, fingerprint rule or gate rule changed). Nothing else
+changed: endpoint, response shape and reason codes (no new code), prompt (`meal-draft-prompt-1`), public contracts,
+apply/save, provenance, provider defaults, off by default, the frozen sets and every earlier artifact. No dependency, no
+migration.
+
+| Defect | Reproduction | Root cause | Correction (`meal-draft-grounding.ts`) |
+|---|---|---|---|
+| M. A figure for a whole cooking vessel (2: `en-container-pot-unlisted`, `ru-container-pot-unlisted`) | "Soup from the pot; the whole pot is 900 kcal", "Суп из кастрюли; вся кастрюля 900 ккал": 900 proposed | `CONTAINER_OR_PARTIAL` lists packages, products and partial amounts; a cooking vessel was not context, so the value needed no consumed-total sentence | `WHOLE_CONTAINER`, joined to `CONTAINER_OR_PARTIAL` by `hasContainerContext` in `wholeEntryScoped` (both where the text is scanned and where the value's own sentence is checked). Its presence anywhere means a value must be the person's own consumed total (the existing rule: summing phrase + consumption verb bound to the value, in a sentence with no qualifier, container or food amount); otherwise **`per_portion`** (the existing reason) |
+
+**What counts.** A vessel word on its own is **not** context, unlike "package" or "box": food names and cooking
+references keep their values ("Pot roast, 500 kcal", "Pan-fried salmon, 400 kcal", "Stew cooked in a pot, 450 kcal",
+"Soup from the pot: 300 kcal", "Soup from the pot is 300 kcal", "Суп из кастрюли, 300 ккал", "Курица, жаренная на
+сковороде, 400 ккал", "Плов из казана, 700 ккал", "Тушила в кастрюле 40 минут. Рагу, 450 ккал", "Сковородка с
+овощами, 350 ккал"). Only these explicit constructions count, with any whitespace (line breaks, tabs, no-break and narrow
+no-break spaces) between their words, case-insensitive, never inside a longer word:
+
+- **Vessels** (a fixed list): EN pot, pan, saucepan, skillet, batch (singular and plural); RU кастрюля, кастрюлька,
+  сковорода, сковородка, казан, in their case forms.
+- **A whole-quantifier on the vessel**: "whole/entire/full pot", "all (of) the/this/that/my/our pot"; "вся/всю/всей/всем…
+  кастрюля", "весь казан", "целая/целую/целый…", "полная/полную/полный…", and "кастрюля целиком".
+- **The vessel as the subject of a figure**: "the/this/that/my/our pot (of soup) is/was/has/had/contains/holds/totals/
+  comes to …" followed within two words by a figure, but not after "from" or "out of" (those name where the food came
+  from); "Pot: 900 kcal" / "The pot – 120 g carbs" at the start of a clause or after "in the"; the Russian nominative
+  ("кастрюля", "кастрюлька", "сковорода", "сковородка", "казан") directly before a figure, optionally with "содержит",
+  "была"/"был"/"было", "это", a colon, an equals sign or a dash ("Кастрюля 900 ккал", "Кастрюля: 900 ккал", "Кастрюля
+  содержит 900 ккал"). An oblique case ("из кастрюли", "на сковороде") is a source or a method, not a subject.
+- **A figure located in the vessel**: "в (этой, той, моей…) кастрюле/казане/сковороде 900 ккал", "in the pot: 600
+  kcal".
+
+A **figure** is a number with an energy or gram unit, or a nutrient or energy word that opens a statement. Nothing is
+computed or inferred: not how much of the vessel was eaten, not a portion, no multiplication, no conversion, no estimate.
+
+**Consumed totals.** "The whole pot has 900 kcal. In total I ate 300 kcal." and "Вся кастрюля 900 ккал. Итого съел 300
+ккал." withhold 900 (`per_portion`) and propose 300, as the existing rule does for a package: the container figure
+is not a whole-entry value, so it does not count as a second stated value and causes no `conflicting`. Two consumed
+totals still conflict. Zero and exact decimals in the consumed sentence are proposed exactly ("In total I ate 300 kcal,
+protein 0 g, fat 2.50 g, carbs 30,5 g"). A consumed sentence that itself names the whole vessel ("I ate the whole pot,
+900 kcal", "Итого съел всю кастрюлю, 900 ккал") is withheld, like "I ate the whole package, 240 kcal": the rule never
+decides how much of a container was eaten.
+
+**Consequences, all in the safe direction.** As with a package, once a whole-vessel figure is in the text, every value
+that is not in a consumed-total sentence is withheld as `per_portion`, also an otherwise independent field ("Soup from
+the pot; the whole pot is 900 kcal; protein 20 g" withholds protein). A whole-quantifier needs no figure of its own
+("Washed the whole pan, then soup 300 kcal" is withheld). "Rice in the pot is 600 kcal" is a container figure (only
+"from" and "out of" are exempt).
+
+**Verifier gate (deterministic, no model).** `npm run eval:meal-drafts -- --set safety` on the unchanged corpus:
+before (HEAD `ba5854d`, clean tree) **FAIL**, exit 2, 2 forbidden values (`en-container-pot-unlisted`,
+`ru-container-pot-unlisted`, 900 each), controls 21/21, outcome mismatches 0; after **PASS**, exit 0: 53 of 53 cases
+executed, **0** of 191 forbidden values accepted, controls **21/21**, outcome mismatches **0**. Only those two cases
+changed (each field now `withheld_ok`); the other 51 are identical case for case. Fingerprint `d191b0e4…` →
+`c1d44a46…` (only the grounding file changed); prompt digest `f53aeae5…` unchanged.
+
+**Model gate: a fresh baseline with the current tool** (report version 3, the first judgeable model evidence since the
+gate's review corrections). Before the first call the grounding, prompt, wire schema, datasets, safety corpus, gate
+thresholds and call settings were hashed and left untouched until the check (SHA-256 identical before and after).
+Local Ollama 0.40.16 on loopback, `qwen3:8b` already installed (digest `500a1f06…`, Q4_K_M), no model loaded beforehand
+(cold), CPU only; product defaults: deadline 45 000 ms, `temperature 0`, `think false`, `num_ctx 4096`, `num_predict
+600`, `stream false`, response ≤ 32 KiB; one call per case, sequential, no retries, no warm-up; the systemic-failure stop
+rule kept (not triggered); nothing pulled, no cloud. **40 of 40 inference calls** (20 development, 20 held-out). The v1
+held-out set had already been examined, so it is regression evidence, not fresh held-out evidence.
+
+| Gate | Status | Numbers |
+|---|---|---|
+| Verifier | **PASS** | 0 of 191 forbidden accepted; controls 21/21; outcome mismatches 0 |
+| Model | **PASS** (marginal) | evidence valid (current fingerprint, one consistent profile, every request checked); both sets complete; 0 incorrectly accepted; outcome 34/40 = **85.0 %** (threshold 85 %); recall 27/31 = 87.1 %; precision 100 %; failures 3/40 = 7.5 % (1 `timeout`: the cold first call at 45 210 ms; 2 `ungrounded_output`: the Russian food-weight titles); EN and RU each outcome 17/20, recall 87.5 % / 86.7 % |
+| Overall (`--check`) | **PASS**, exit 0 | permits further local experimentation only |
+
+The six outcome misses are the same cases with the same results as the legacy 2026-11-16 run (`en-dev-full` cold
+timeout, `en-dev-injection` and `en-ho-thousands` answered `unsupported estimate_requested`, `ru-ho-conflict`
+`unsupported not_a_meal`, `ru-dev-food-weight` and `ru-ho-food-weight` `ungrounded_output`). The model claimed four
+values the verifier withheld; none of the corpus's container shapes occurs in the v1 sets, so this run says nothing
+about the new rule, which only the corpus and the tests exercise. Outcome accuracy sits exactly at its threshold: one
+more wrong outcome would fail the model gate on quality, and the cold-start timeout alone costs one. **The feature
+stays off by default**; a PASS on both gates is not a product, safety or generalisation claim.
+
+**Verification.** The new `meal-draft-grounding-container-scope.spec.ts` (16 tests: both frozen texts with short and
+long excerpts; equivalent EN/RU wording and Russian case forms; whitespace inside the phrase across space, LF, CRLF,
+tab, double LF, no-break and narrow no-break spaces; the consumed totals from the brief in EN and RU, with zero and exact
+decimals, across a line break, the existing summing-phrase + verb requirement and conflict detection; food-name and
+cooking-reference controls; the public response contract) failed **13 of 16** against the unchanged grounding (the 3
+passing are pure positive controls) and passes after it. Four cooking-reference controls were added after the first
+version of the rule ("Soup from the pot: 300 kcal", "… is 300 kcal", "Stew from the pot – 450 kcal", "Chili out of the
+pot was 420 kcal"); the first of them failed against that version (the table-driven test stops at its first failure)
+and all four pass after the "from"/"out of" and clause-start restriction. One new
+HTTP case (`meal-drafts-http`, injected provider, supplied claims) failed with HEAD's grounding swapped in temporarily
+(byte-identical to HEAD, restored, SHA-256 verified) and passes after it. Results of the full run are in
+`docs/progress.md` and the report
+[meal-draft-container-scope-2026-11-16.md](../reports/meal-draft-container-scope-2026-11-16.md); artifacts in
+`docs/reports/artifacts/meal-draft-container-scope-2026-11-16/`.
+
 ## Consequences
 
 - One more AI feature, off by default and independent of the other two; the suite's API runs it with the fake provider,
@@ -754,8 +854,13 @@ addressee followed by "?" or "." is not a marker; the marker list itself is unch
   statements and separators are allowed, so a correct consumed total phrased differently ("I ate a total of 120 kcal",
   "120 kcal is what I ate") is withheld. A consumed sentence that is nevertheless about something else, such as a label
   printed as "In total you ate…", is not told apart. The container and partial-amount vocabulary is also a fixed list:
-  other containers ("pot", "cup", "тарелка" alone) are not context, and the list also withholds harmless uses ("Half-fat
-  yogurt, 120 kcal", "Protein product, 25 g protein"). Without a label, qualifier, container or partial word nothing is
+  other containers ("cup", "bowl", "тарелка", "горшочек", "tray", "wok") are not context, and the list also withholds
+  harmless uses ("Half-fat yogurt, 120 kcal", "Protein product, 25 g protein"). Since the sixth amendment a cooking
+  vessel (pot, pan, saucepan, skillet, batch; кастрюля, сковорода, казан) is context only in an explicit whole-vessel
+  construction (a whole-quantifier, the vessel as the subject of a figure, a figure located in it), so a figure phrased
+  otherwise is not seen ("There are 900 kcal in the pot", "Pot total 900 kcal", "Кастрюлю на 900 ккал" are proposed),
+  and a harmless whole-quantifier withholds every value that is not a consumed total ("Washed the whole pan, then soup
+  300 kcal"). Without a label, qualifier, container or partial word nothing is
   required ("Dinner: chicken and rice, total 650 kcal" is proposed). Such texts still carry the screen's existing
   `per_portion` sentence (per 100 g, per serving, per piece), which does not name packages or unconsumed totals; the
   public reason codes were deliberately not changed.
@@ -771,12 +876,13 @@ addressee followed by "?" or "." is not a marker; the marker list itself is unch
 - The first four amendments were measured with a real model only on 2026-11-16, as a regression run of the already
   examined v1 sets (see "AI quality checkpoint"); there is no fresh held-out evidence for them, and those version 2
   reports are legacy evidence that the corrected model gate cannot judge (no fingerprint over the contracts and the
-  adapter, no execution profile). The fifth amendment has **no** real-model measurement at all: it changed the grounding,
-  so those reports are also stale (fingerprint `8c8c4566…` → `217cf750…`, and `d191b0e4…` after its review correction), and a new 40-call run with the current tool
-  is needed for a judgeable result. The verifier still accepts **2** forbidden values of the frozen corpus (it accepted
-  15 at the checkpoint): container totals for containers outside the fixed list ("Soup from the pot; the whole pot is
-  900 kcal", "Суп из кастрюли; вся кастрюля 900 ккал"), deferred to a later container rule. The 45 s default
-  deadline did not cover a cold model load on this CPU (the first call timed out). The prompt (`meal-draft-prompt-1`) asks for "that nutrient's total for the whole meal" and says
+  adapter, no execution profile). The fifth amendment was never measured with a real model on its own. After the sixth
+  amendment the verifier accepts **0** forbidden values of the frozen corpus (15 at the checkpoint, 2 after the fifth
+  amendment), and the first judgeable model evidence exists (report version 3, fingerprint `c1d44a46…`, 40 calls): a
+  **marginal** PASS, outcome exactly at the 85 % threshold, measured on the already examined v1 sets (regression
+  evidence, no fresh held-out set), one model, one CPU. The corpus covers what it names; passing it does not show that
+  every bound, instruction or container wording is caught. The 45 s default deadline again did not cover a cold model
+  load on this CPU (the first call timed out at 45 210 ms, as at the checkpoint). The prompt (`meal-draft-prompt-1`) asks for "that nutrient's total for the whole meal" and says
   nothing about consumption, containers or partial amounts, so a model may claim values the server now refuses;
   revising it needs a new prompt version and a new evaluation.
 - A person can of course write a wrong number; the feature extracts what they wrote, it does not check it.

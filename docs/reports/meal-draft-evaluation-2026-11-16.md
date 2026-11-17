@@ -6,6 +6,11 @@ Decision record: [ADR-0092](../adr/0092-meal-draft-from-text.md), section "AI qu
 four grounding amendments: [meal-draft-model-evaluation-2026-11-14.md](meal-draft-model-evaluation-2026-11-14.md)
 (unchanged).
 
+> **Superseded as the current result.** The two deferred container cases below were repaired by ADR-0092 "Amendment 6"
+> (later the same day), and a fresh model baseline was measured with the current tool: verifier **PASS**, model
+> **PASS** (marginal). See [meal-draft-container-scope-2026-11-16.md](meal-draft-container-scope-2026-11-16.md). This
+> report and its artifacts are kept unchanged as history.
+
 ## Partial remediation (Amendment 5, later the same day)
 
 ADR-0092 "Amendment 5" repaired 13 of the 15 forbidden acceptances listed below, as the "Smallest recommended

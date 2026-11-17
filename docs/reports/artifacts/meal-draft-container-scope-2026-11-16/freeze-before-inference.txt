@@ -1,0 +1,22 @@
+Frozen before the first inference call: 2026-11-16T17:21:58Z
+HEAD ba5854de3de41fadee783a0519b045d28467fa37
+git status --short:
+ M apps/api/src/meals/drafts/meal-draft-grounding-instructions-and-wording.spec.ts
+ M apps/api/src/meals/drafts/meal-draft-grounding.ts
+ M apps/api/test/meal-drafts-http.integration.test.ts
+ M docs/adr/0092-meal-draft-from-text.md
+?? apps/api/src/meals/drafts/meal-draft-grounding-container-scope.spec.ts
+?? docs/reports/artifacts/meal-draft-container-scope-2026-11-16/
+SHA-256 (working tree bytes):
+2cf90cbc9546d2b97f75ad34b9328c7c9dc7ca92326ccd8e3b3cd30bad0cf6c6 *apps/api/src/meals/drafts/meal-draft-grounding.ts
+c374100b34179dfd6ebfb79f9144348d24029432e4ed2617da8fa17439638ed7 *apps/api/src/meals/drafts/meal-draft-prompt.ts
+893910b98d23e26b7b355c0846f72ca48e20d84a1738b812ed04e2da6999faa9 *apps/api/src/meals/drafts/meal-draft-wire.ts
+sha256sum: apps/api/src/meals/drafts/ollama-meal-draft-provider.ts: No such file or directory
+064ce4129f9b2b9b279442d250865dbebc8c90d4300efe9eca3e87b4d82e9dac *apps/api/evaluation/meal-draft.development.v1.json
+28dcf2fa704aa77e75be35cff2097eb996130b195b3e67900fec525a3460ecb4 *apps/api/evaluation/meal-draft.heldout.v1.json
+002ae63eea3a4326b76c6786cb137773367a8ea4f4be138c7196194e60b7b8cf *apps/api/evaluation/meal-draft.safety.v1.json
+e5391212f2a61ceb29ee71992832ae50420d1f74e342c3101bf102dc0a997f4d *apps/api/src/evaluation/meal-draft-gates.ts
+git diff HEAD (tracked) sha256: 2610cfff5987d671efb22f25447062c7504f1f71fffd84dbfbfdc9960de74336 *-
+untracked spec sha256: 9c2cbeae5d2cbb9c4171bc6fea76528a40d287bbadf17da55f79412a8221fc05 *apps/api/src/meals/drafts/meal-draft-grounding-container-scope.spec.ts
+Settings: MEAL_DRAFTS_MODEL=qwen3:8b; every other MEAL_DRAFTS_* unset (product defaults); MEAL_DRAFTS_OLLAMA_BASE_URL default http://127.0.0.1:11434
+Ollama: {"version":"0.40.16"}; /api/ps before: {"models":[]}

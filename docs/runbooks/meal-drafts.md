@@ -140,14 +140,15 @@ every positive control still correct); the verifier gate stays FAIL until every 
 gone. The v1
 held-out set was first run on 2026-11-14 and has been examined, so later runs of it are **regression measurements**, not
 fresh held-out evidence. A fake run is labelled as harness verification and is never quoted as model quality. Results:
+[meal-draft-container-scope-2026-11-16.md](../reports/meal-draft-container-scope-2026-11-16.md) (**current**: after
+Amendment 6, verifier **PASS**, 0 forbidden values, controls 21/21; model **PASS**, marginal, `qwen3:8b`, 40 of 40
+calls, outcome 34/40 = 85.0 % at the threshold, recall 87.1 %, 0 incorrectly accepted; fingerprint `c1d44a46…`),
 [meal-draft-evaluation-2026-11-16.md](../reports/meal-draft-evaluation-2026-11-16.md) (the checkpoint after the four
-grounding amendments, and its section "Partial remediation (Amendment 5)": verifier **FAIL** with 2 forbidden values,
-the deferred unlisted-container cases; controls 21/21) and
-[meal-draft-model-evaluation-2026-11-14.md](../reports/meal-draft-model-evaluation-2026-11-14.md) (historical, before
-them). **Current model evidence: none that the gate can judge.** The 2026-11-16 model reports are legacy (version 2)
-and, since Amendment 5 changed the grounding, also stale (fingerprint `217cf750…`, `d191b0e4…` after its review
-correction for an addressee followed by "!"); the next real-model run (40 calls,
-current tool) is deferred until the container cases are addressed.
+grounding amendments, and Amendment 5) and
+[meal-draft-model-evaluation-2026-11-14.md](../reports/meal-draft-model-evaluation-2026-11-14.md) (historical). The
+current model PASS is regression evidence on the examined v1 sets, not fresh held-out evidence; it permits further local
+experimentation only, and **the feature stays off by default**. Any later change to a fingerprinted file makes those
+reports stale again, and the model gate FAILs until a new 40-call run.
 
 ## Troubleshooting
 
@@ -163,7 +164,12 @@ current tool) is deferred until the container cases are addressed.
   120 kcal, protein 8 g", "Итого съел 240 ккал"). "In total the package has 4 g protein", "Итого 240 ккал" without a verb,
   a label-style "Total 120 kcal", "Fat 4 g total", "overall" or "всего" are not enough, and neither is a summing sentence
   that also gives the food's weight ("I ate 200 g in total, protein 8 g") or names the package or a part. Nothing is
-  calculated from a package total. A hedge such as "about" or "примерно" anywhere withholds every value; a dash with a
+  calculated from a package total. The same holds for a figure for a whole cooking vessel or batch: "the whole pot is
+  900 kcal", "the pot has 900 kcal", "Pot: 900 kcal", "вся кастрюля 900 ккал", "весь казан 3000 ккал", "в кастрюле 900
+  ккал" (pot, pan, saucepan, skillet, batch; кастрюля, сковорода, казан). "The whole pot has 900 kcal. In total I ate 300
+  kcal." fills 300 and leaves 900 empty. A vessel in a food name or a cooking reference changes nothing ("Pot roast, 500
+  kcal", "Pan-fried salmon", "Soup from the pot, 300 kcal", "Суп из кастрюли, 300 ккал", "жаренная на сковороде").
+  A hedge such as "about" or "примерно" anywhere withholds every value; a dash with a
   space before a number ("- 500 kcal") is read as a possible minus sign and withheld; two numbers joined by "to",
   "through", "or", "до" or "или" are a range or alternative and withheld whatever their units ("500 kcal to 2500 kJ",
   "500 through 600 kcal", "fat 5 g or 6000
