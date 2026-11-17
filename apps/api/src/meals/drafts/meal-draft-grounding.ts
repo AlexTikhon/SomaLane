@@ -153,6 +153,51 @@ const CONTAINER_OR_PARTIAL = new RegExp(
   'iu',
 );
 
+// A figure for a whole cooking vessel or batch ("the whole pot is 900 kcal", "вся кастрюля 900 ккал"): like a package
+// total, it is not the amount eaten, so its presence anywhere in the text means a value's whole-entry scope must be
+// established explicitly (see `wholeEntryScoped`). Unlike the package words of `CONTAINER_OR_PARTIAL`, a vessel word on
+// its own is NOT context: food names and cooking references ("Pot roast", "Pan-fried salmon", "Soup from the pot",
+// "Суп из кастрюли", "Плов из казана", "Тушила в кастрюле 40 минут") name the vessel without giving it a figure. Only
+// these explicit constructions count, each word separated by any whitespace:
+// - a whole-quantifier on the vessel: "whole/entire/full pot", "all (of) the pot", "вся/всю/всей/целая/полная
+//   кастрюля", "весь/целый казан", "кастрюля целиком";
+// - the vessel as the subject of a figure: "the/this/that pot (of soup) is/has/contains/was … 900 kcal" (at most two
+//   words before the figure; not after "from" or "out of", which name where the food came from: "Soup from the pot is
+//   300 kcal"), "Pot: 900 kcal" at the start of a clause, "Кастрюля 900 ккал", "Кастрюля: 900 ккал", "Кастрюля
+//   содержит 900 ккал" (the nominative only: "Суп из кастрюли 300 ккал" is a source);
+// - a figure located in the vessel: "в (этой) кастрюле 900 ккал", "in the pot: 900 kcal".
+// A figure is a number with an energy or gram unit, or a nutrient or energy word that opens a statement. Nothing is
+// inferred from these constructions: not how much of the vessel was eaten, and never a fraction of a value.
+const VESSEL_EN = '(?:saucepans|saucepan|skillets|skillet|batches|batch|pots|pot|pans|pan)';
+const VESSEL_RU = [
+  'кастрюл(?:я|и|ю|е|ей|ею|ь|ям|ями|ях)',
+  'кастрюльк(?:а|и|у|е|ой|ою)',
+  'сковород(?:а|ы|у|е|ой|ою)',
+  'сковородк(?:а|и|у|е|ой|ою)',
+  'казан(?:а|у|ом|е|ы|ов)?',
+].join('|');
+const VESSEL_RU_NOMINATIVE = '(?:кастрюля|кастрюлька|сковорода|сковородка|казан)';
+const VESSEL_RU_LOCATIVE = '(?:кастрюле|кастрюльке|сковороде|сковородке|казане)';
+const NUTRIENT_WORD = `(?:${Object.values(METRIC).join('|')}|${ENERGY_UNIT_WORD_BEFORE})`;
+const FIGURE = `(?:\\d+(?:[.,]\\d+)?${SPACE}?(?:${ENERGY_UNIT}|${GRAM_UNIT})${NOT_LETTER_AFTER}|${NOT_LETTER_BEFORE}${NUTRIENT_WORD}${NOT_LETTER_AFTER})`;
+const FIGURE_GAP = `\\s*(?:[:=]|${MINUS_OR_DASH})?\\s*`;
+const WHOLE_CONTAINER = new RegExp(
+  [
+    `${NOT_LETTER_BEFORE}(?:whole|entire|full)\\s+${VESSEL_EN}${NOT_LETTER_AFTER}`,
+    `${NOT_LETTER_BEFORE}all\\s+(?:of\\s+)?(?:the|this|that|my|our)\\s+${VESSEL_EN}${NOT_LETTER_AFTER}`,
+    `${NOT_LETTER_BEFORE}(?<!${NOT_LETTER_BEFORE}(?:from|out\\s+of)\\s+)(?:the|this|that|my|our)\\s+${VESSEL_EN}(?:\\s+of\\s+\\p{L}+)?\\s+(?:is|was|has|had|contains|contained|holds|held|totals|totaled|totalled|comes\\s+to|came\\s+to)\\s+(?:\\p{L}+\\s+){0,2}${FIGURE}`,
+    `(?:(?:^|[\\r\\n.;!?,(])\\s*(?:(?:the|this|that|my|our)\\s+)?|${NOT_LETTER_BEFORE}in\\s+(?:the|this|that|my|our)\\s+)${VESSEL_EN}\\s*(?:[:=]|${MINUS_OR_DASH})\\s*${FIGURE}`,
+    `${NOT_LETTER_BEFORE}(?:вс(?:я|ю|ей|ею|ем|его|ё|е)|весь|цел(?:ая|ую|ой|ый|ого|ом)|полн(?:ая|ую|ой|ый|ого|ом))\\s+(?:${VESSEL_RU})${NOT_LETTER_AFTER}`,
+    `${NOT_LETTER_BEFORE}(?:${VESSEL_RU})\\s+целиком${NOT_LETTER_AFTER}`,
+    `${NOT_LETTER_BEFORE}${VESSEL_RU_NOMINATIVE}(?:\\s+(?:содерж\\p{L}*|был[аио]?|это))?${FIGURE_GAP}${FIGURE}`,
+    `${NOT_LETTER_BEFORE}в\\s+(?:(?:этой|этом|той|том|моей|моём|моем)\\s+)?${VESSEL_RU_LOCATIVE}${FIGURE_GAP}${FIGURE}`,
+  ].join('|'),
+  'iu',
+);
+
+/** A container, product or partial amount (`CONTAINER_OR_PARTIAL`) or a whole-vessel figure (`WHOLE_CONTAINER`). */
+const hasContainerContext = (fragment: string): boolean => CONTAINER_OR_PARTIAL.test(fragment) || WHOLE_CONTAINER.test(fragment);
+
 // An assertion that something was eaten or drunk, by the person: a past or perfect consumption verb. In English "had"
 // counts only with a first-person subject ("I had", "we've had"), because "the package had" is not consumption. Third
 // persons in Russian are accepted as written ("съел", "съедено"); the rule is wording, not understanding.
@@ -484,10 +529,10 @@ function statesFoodQuantity(text: string, start: number, end: number): boolean {
  * and never a fraction of a value.
  */
 function wholeEntryScoped(text: string, start: number, end: number): boolean {
-  if (!hasPortionQualifier(text) && !CONTAINER_OR_PARTIAL.test(text)) return true;
+  if (!hasPortionQualifier(text) && !hasContainerContext(text)) return true;
   const all = sentences(text);
   const own = all.find((sentence) => start >= sentence.start && end <= sentence.end);
-  if (own === undefined || hasPortionQualifier(own.text) || CONTAINER_OR_PARTIAL.test(own.text) || !ENTRY_SUM.test(own.text)) return false;
+  if (own === undefined || hasPortionQualifier(own.text) || hasContainerContext(own.text) || !ENTRY_SUM.test(own.text)) return false;
   if (statesFoodQuantity(text, own.start, own.end) || !boundToConsumption(text, own, start)) return false;
   return all.every((sentence) => !hasPortionQualifier(sentence.text) || statesAnyNutrient(text, sentence.start, sentence.end));
 }

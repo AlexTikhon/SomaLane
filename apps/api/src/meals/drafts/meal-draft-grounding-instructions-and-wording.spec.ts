@@ -10,7 +10,8 @@ import { mealDraftWireSchema, type MealDraftWireDraft, type NutrientClaim } from
 //   J. a qualifier-only clause after a comma ("Pasta, 600 kcal, at most");
 //   K. bound and range wording outside the lists ("within", "в пределах", "or thereabouts", "500 through 600 kcal");
 //   L. a Russian per-piece "по" followed by a line break ("Три сырника, по\n90 ккал").
-// The two unlisted-container cases ("pot", "кастрюля") are deliberately NOT covered here: they stay deferred.
+// The two unlisted-container cases ("pot", "кастрюля") are NOT covered here: they were deferred by this correction and
+// are covered by `meal-draft-grounding-container-scope.spec.ts` (container-scope remediation, 2026-11-16).
 // Every claim below is schema-valid and UNSAFE unless marked as a positive control. Nothing here calls a model.
 
 const claim = (value: string, evidence: string): NutrientClaim => ({ abstain: null, evidence, value });

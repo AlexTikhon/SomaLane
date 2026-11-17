@@ -642,6 +642,46 @@ describe('ADR-0092 meal draft proposals under the runtime role', () => {
       ).toMatchObject({ energyKcal: { reason: 'per_portion', status: 'withheld' } });
     });
 
+    // Container-scope remediation (2026-11-16): a whole-vessel figure ("the whole pot is 900 kcal", "вся кастрюля 900
+    // ккал") is not the amount eaten; the person's own consumed total in another sentence still is. Vessel words in food
+    // names and cooking references are not container figures.
+    it('withholds whole-container figures, keeps an explicitly consumed total and values beside vessel food names', async () => {
+      expect(await draftFor('Soup from the pot; the whole pot is 900 kcal', answer('Soup from the pot', { energyKcal: claim('900', '900 kcal') }))).toEqual({
+        carbohydrateG: { status: 'not_stated' },
+        energyKcal: { reason: 'per_portion', status: 'withheld' },
+        fatG: { status: 'not_stated' },
+        proteinG: { status: 'not_stated' },
+      });
+      expect(await draftFor('Суп из кастрюли; вся кастрюля 900 ккал', answer('Суп из кастрюли', { energyKcal: claim('900', '900 ккал') }))).toMatchObject({
+        energyKcal: { reason: 'per_portion', status: 'withheld' },
+      });
+      expect(
+        await draftFor(
+          'Chili. The whole pot has 900 kcal, protein 80 g. In total I ate 300 kcal, protein 0 g, fat 2.50 g, carbs 30,5 g.',
+          answer('Chili', { carbohydrateG: claim('30,5', 'carbs 30,5 g'), energyKcal: claim('900', '900 kcal'), fatG: claim('2.5', 'fat 2.50 g'), proteinG: claim('80', 'protein 80 g') }),
+        ),
+      ).toEqual({
+        carbohydrateG: { excerpt: 'carbs 30,5 g', status: 'proposed', value: 30.5 },
+        energyKcal: { reason: 'per_portion', status: 'withheld' },
+        fatG: { excerpt: 'fat 2.50 g', status: 'proposed', value: 2.5 },
+        proteinG: { reason: 'per_portion', status: 'withheld' },
+      });
+      expect(await draftFor('Вся кастрюля 900 ккал. Итого съел 300 ккал.', answer('кастрюля', { energyKcal: claim('300', '300 ккал') }))).toMatchObject({
+        energyKcal: { excerpt: '300 ккал', status: 'proposed', value: 300 },
+      });
+      expect(
+        await draftFor('Pot roast, 500 kcal, protein 0 g, fat 12.50 g', answer('Pot roast', { energyKcal: claim('500', '500 kcal'), fatG: claim('12.5', 'fat 12.50 g'), proteinG: claim('0', 'protein 0 g') })),
+      ).toEqual({
+        carbohydrateG: { status: 'not_stated' },
+        energyKcal: { excerpt: '500 kcal', status: 'proposed', value: 500 },
+        fatG: { excerpt: 'fat 12.50 g', status: 'proposed', value: 12.5 },
+        proteinG: { excerpt: 'protein 0 g', status: 'proposed', value: 0 },
+      });
+      expect(await draftFor('Курица, жаренная на сковороде, 400 ккал', answer('Курица', { energyKcal: claim('400', '400 ккал') }))).toMatchObject({
+        energyKcal: { excerpt: '400 ккал', status: 'proposed', value: 400 },
+      });
+    });
+
     it('withholds forbidden precision and rounded claims, and accepts trailing zeros', async () => {
       expect(
         await draftFor(
