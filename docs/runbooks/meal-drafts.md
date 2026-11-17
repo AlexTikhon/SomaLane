@@ -140,9 +140,13 @@ every positive control still correct); the verifier gate stays FAIL until every 
 gone. The v1
 held-out set was first run on 2026-11-14 and has been examined, so later runs of it are **regression measurements**, not
 fresh held-out evidence. A fake run is labelled as harness verification and is never quoted as model quality. Results:
-[meal-draft-container-scope-2026-11-16.md](../reports/meal-draft-container-scope-2026-11-16.md) (**current**: after
-Amendment 6, verifier **PASS**, 0 forbidden values, controls 21/21; model **PASS**, marginal, `qwen3:8b`, 40 of 40
-calls, outcome 34/40 = 85.0 % at the threshold, recall 87.1 %, 0 incorrectly accepted; fingerprint `c1d44a46…`),
+[meal-draft-container-relation-2026-11-17.md](../reports/meal-draft-container-relation-2026-11-17.md) (**current**:
+after the Amendment 6 correction and its adjacency follow-up, verifier **PASS**, 0 forbidden values, controls 21/21, no
+corpus case changed; **no current model evidence**: its `qwen3:8b` 40-call reports (model PASS, marginal, outcome 34/40
+= 85.0 %) were measured at fingerprint `e410e3f0…` and are stale since the follow-up moved it to `f26e9239…`; the model
+gate FAILs for evidence until a new 40-call run),
+[meal-draft-container-scope-2026-11-16.md](../reports/meal-draft-container-scope-2026-11-16.md) (Amendment 6; its
+model reports are stale since the correction, fingerprint `c1d44a46…`),
 [meal-draft-evaluation-2026-11-16.md](../reports/meal-draft-evaluation-2026-11-16.md) (the checkpoint after the four
 grounding amendments, and Amendment 5) and
 [meal-draft-model-evaluation-2026-11-14.md](../reports/meal-draft-model-evaluation-2026-11-14.md) (historical). The

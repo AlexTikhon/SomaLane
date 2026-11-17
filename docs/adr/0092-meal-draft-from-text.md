@@ -2,8 +2,8 @@
 
 - Status: accepted; implemented and verified locally (unit, real PostgreSQL integration, Chromium end-to-end with the
   fake provider). Real-model evaluation: see "Evaluation" (historical, before the grounding corrections) and, for the
-  current code, "Amendment 6" (verifier PASS; model PASS, marginal, regression evidence). The feature is **off by
-  default**.
+  current code, "Amendment 6" and its "Amendment 6 correction" of 2026-11-17 (verifier PASS; model PASS, marginal,
+  regression evidence on the corrected code). The feature is **off by default**.
 - Amended: 2026-11-14, grounding corrections (qualifier scope, signs, exact decimals); see "Amendment" below.
 - Amended again: 2026-11-14, second grounding correction (a label's "total", ranges split by a line break); see
   "Amendment 2" below.
@@ -28,6 +28,10 @@
   **verifier gate PASSES** (0 forbidden values, controls 21/21, outcome mismatches 0); a fresh real-model baseline with
   the current tool (`qwen3:8b`, 40 calls) gives **model PASS**, marginal (outcome 85.0 % at the 85 % threshold), on the
   already examined v1 sets; see "Amendment 6" below. The feature stays **off by default**.
+- Corrected: 2026-11-17, Amendment 6 correction (a bare whole-quantified vessel, "I washed the whole pan", is no
+  longer container context; only a vessel related to a figure is): verifier **PASS** (no corpus case changed); one v1
+  regression rerun (`qwen3:8b`, 40 calls) gives model **PASS**, marginal, with the new fingerprint; a regression in the
+  unsafe direction found after the freeze is recorded, not corrected; see "Amendment 6 correction" below.
 - Date: 2026-11-14
 - Relates to: ADR-0083 (the meal log, its contract, idempotent creation per form session, `source: manual`, erasure),
   ADR-0057 and its addendum (proposals that change nothing until accepted; admission; request and operation lifetimes),
@@ -762,7 +766,7 @@ decides how much of a container was eaten.
 **Consequences, all in the safe direction.** As with a package, once a whole-vessel figure is in the text, every value
 that is not in a consumed-total sentence is withheld as `per_portion`, also an otherwise independent field ("Soup from
 the pot; the whole pot is 900 kcal; protein 20 g" withholds protein). A whole-quantifier needs no figure of its own
-("Washed the whole pan, then soup 300 kcal" is withheld). "Rice in the pot is 600 kcal" is a container figure (only
+("Washed the whole pan, then soup 300 kcal" is withheld; reversed by the 2026-11-17 correction below). "Rice in the pot is 600 kcal" is a container figure (only
 "from" and "out of" are exempt).
 
 **Verifier gate (deterministic, no model).** `npm run eval:meal-drafts -- --set safety` on the unchanged corpus:
@@ -809,6 +813,76 @@ HTTP case (`meal-drafts-http`, injected provider, supplied claims) failed with H
 `docs/progress.md` and the report
 [meal-draft-container-scope-2026-11-16.md](../reports/meal-draft-container-scope-2026-11-16.md); artifacts in
 `docs/reports/artifacts/meal-draft-container-scope-2026-11-16/`.
+
+### Amendment 6 correction: whole-vessel context needs a relationship to a figure (2026-11-17)
+
+Measured against `meal-draft.safety.v1.json` **unchanged** (digest `35a51437…`). Nothing else changed: endpoint, response
+shape and reason codes, prompt (`meal-draft-prompt-1`, digest `f53aeae5…`), wire schema, public contracts, apply/save,
+provenance, provider defaults, off by default, the frozen sets, the gate thresholds and every earlier artifact. No
+dependency, no migration. Only `WHOLE_CONTAINER` in `meal-draft-grounding.ts` changed.
+
+| Defect | Reproduction (claim `300`, evidence `300 kcal`) | Root cause | Correction |
+|---|---|---|---|
+| N. A bare whole-quantified vessel reclassified every value | "Cooked soup in a full pot. Lunch, 300 kcal." withheld `per_portion`; "I washed the whole pan. Soup, 400 kcal. In total I ate 300 kcal." **proposed 300** | Amendment 6 counted "whole/entire/full pot", "all of the pot", "вся/полная кастрюля", "кастрюля целиком" as container context anywhere, with no figure. The same `hasContainerContext` decides acceptance (`wholeEntryScoped`) and the conflict scan (`distinctStatedValues`), so the unrelated phrase withheld a plain value and removed the 400 from the conflict scan | A whole-quantified vessel is context only in a construction relating it to a figure (below); otherwise it is ignored. The 300 of the first text is proposed; the second text is withheld `conflicting`, as "Soup, 400 kcal. In total I ate 300 kcal." always was |
+
+**Supported constructions** (a figure is, as before, a number with an energy or gram unit, or a nutrient or energy word
+that opens a statement):
+
+- **subject of a figure**: "the whole pot (of chili) is/was/has/had/contains/holds/totals/comes to …" with at most two
+  words before the figure, any whitespace; "вся кастрюля содержит/была/это/составляет 900 ккал";
+- **beside a figure in the same clause**: on the same line with at most one `,` `:` `=` or dash between them, or across a
+  line break only after an explicit `:` `=` or dash ("Whole pot:\n900 kcal"); an English "of …" or one Russian word may
+  follow the vessel ("A full pot of soup, 900 kcal", "Полная кастрюля супа, 900 ккал");
+- **after a figure it qualifies**, on the same line with at most one `,` `:` `=` or dash, then an optional "for/in/of" or
+  "на/за/в/во/для" and an article ("900 kcal for the whole pot", "protein 80 g, the whole pot", "900 ккал на всю
+  кастрюлю").
+
+A sentence end, a comma followed by other words, or a bare line break separates the vessel from a figure. Unchanged: the
+non-quantified vessel constructions, the effect of a genuine container figure on the other values, the consumed-total
+rule ("The whole pot has 900 kcal. In total I ate 300 kcal." withholds 900 and proposes 300), food names and cooking
+references, bounds, negations, ranges, per-portion handling, consumption binding and same-field conflict detection. The
+one Amendment 6 consequence it reverses on purpose: "Washed the whole pan, then soup 300 kcal" is now proposed.
+
+**Regression in the unsafe direction (found after the freeze, not corrected here).** A figure that follows a bare
+whole-quantified vessel across a sentence end or a bare line break, with nothing else between them, was withheld by
+Amendment 6 and is now proposed: "Full pot. 900 kcal.", "Whole pot\n900 kcal". Neither the corpus nor the v1 sets
+contain the shape. Treating such adjacency as related is the first follow-up; it was not applied because the model
+evidence below had already been measured on the frozen code and the task allowed one 40-call run.
+**Fixed later the same day (adjacency follow-up):** a whole-quantified vessel and a figure with only punctuation or
+whitespace between them (sentence ends and line breaks included), in either order, are related; a word between them
+still separates them. Verifier PASS (no corpus case changed); fingerprint `e410e3f0…` → `f26e9239…`, so the model
+evidence below is **stale** and there is no current model PASS until a new 40-call run (none made). See the report's
+update note.
+
+**Verifier gate.** Before (HEAD `ba4ea30`, unchanged grounding) **PASS**, exit 0; after **PASS**, exit 0: 53/53
+executed, **0** of 191 forbidden values accepted, controls **21/21**, outcome mismatches **0**, and **no case changed
+outcome** (the corpus contains no unrelated whole-vessel phrase). Fingerprint `c1d44a46…` → `e410e3f0…` (grounding file
+only); the 2026-11-16 model reports are therefore stale (`FINGERPRINT_MISMATCH`).
+
+**Model gate: one v1 regression rerun after the freeze** (regression evidence; the v1 held-out set has been examined).
+Freeze before the first call (SHA-256 of grounding, prompt, wire, Ollama adapter, datasets, corpus, gate file, tracked
+diff and the new spec; all equal afterwards). Ollama 0.40.16, `qwen3:8b` already installed (digest `500a1f06…`,
+Q4_K_M), cold (no model loaded), CPU only, product defaults (only `MEAL_DRAFTS_MODEL` set), one call per case,
+sequential, no retries, no warm-up, stop rule kept (not triggered), nothing pulled, no cloud. **40 of 40 calls.**
+
+| Gate | Status | Numbers |
+|---|---|---|
+| Verifier | **PASS** | 0 of 191 forbidden accepted; controls 21/21; mismatches 0 |
+| Model | **PASS** (marginal) | evidence valid (fingerprint `e410e3f0…`, one profile); both sets complete; 0 incorrectly accepted; outcome 34/40 = **85.0 %** (threshold 85 %); recall 27/31 = 87.1 %; precision 100 %; failures 3/40 = 7.5 % (1 cold-start `timeout` at 45 396 ms, 2 Russian food-weight `ungrounded_output`) |
+| Overall (`--check`) | **PASS**, exit 0 | permits further local experimentation only |
+
+All 40 outcomes equal the 2026-11-16 run. No v1 case contains a whole-vessel phrase, so the rerun shows only that the
+correction cost no recall or precision there. **The feature stays off by default.**
+
+**Verification.** The new `meal-draft-grounding-container-relation.spec.ts` (15 tests: the reproductions and their
+Russian equivalents; unrelated context before and after values across punctuation, CRLF and blank lines for every field;
+conflicts, bounds, negations, ranges, per-portion and consumption binding beside unrelated context; the three supported
+constructions in EN and RU; five related/unrelated pairs; preserved container figures and food names) failed **7 of 15**
+against the unchanged grounding and passes after it. One `meal-draft-grounding-container-scope.spec.ts` case moved from
+the withheld list to the positive controls ("Washed the whole pan, then soup 300 kcal"). One new `meal-drafts-http` case
+failed with the committed grounding swapped in and passes after it. Report:
+[meal-draft-container-relation-2026-11-17.md](../reports/meal-draft-container-relation-2026-11-17.md); artifacts in
+`docs/reports/artifacts/meal-draft-container-relation-2026-11-17/`; full check list in `docs/progress.md`.
 
 ## Consequences
 

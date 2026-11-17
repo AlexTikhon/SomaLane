@@ -5092,3 +5092,82 @@ by", reference, product direction and README updated.
 Safari, WebKit or iPhone; the 375 px check is a Chromium viewport). The full browser suite and Firefox were not rerun. The
 review does not say which zone each meal was saved in; the 10,000 entries per date bound is not enforced by the database
 (more would fail the review's own schema). Meals remain outside AI insights, and between-week comparisons do not exist.
+
+## Draft from text: whole-vessel context needs a relationship (ADR-0092 "Amendment 6 correction") (2026-11-17)
+
+**What changed.** Production grounding only (`WHOLE_CONTAINER` in `apps/api/src/meals/drafts/meal-draft-grounding.ts`),
+its tests and documents. Amendment 6 made a bare whole-quantified vessel ("whole/entire/full pot", "all of the pot",
+"вся/полная кастрюля", "кастрюля целиком") container context anywhere in the text. Because `hasContainerContext` decides
+both acceptance (`wholeEntryScoped`) and the conflict scan (`distinctStatedValues`), unrelated cooking or cleaning words
+withheld a plain value ("Cooked soup in a full pot. Lunch, 300 kcal." → `per_portion`) and hid a conflicting one ("I
+washed the whole pan. Soup, 400 kcal. In total I ate 300 kcal." → 300 proposed). A whole-quantified vessel is now
+context only as the subject of a figure, beside a figure in the same clause (a line break only after `:` `=` or a dash),
+or after a figure it qualifies; otherwise it is ignored. Prompt, wire schema, public contracts, reason codes, provider
+defaults, the off-by-default setting, the frozen datasets, the safety corpus, thresholds and earlier artifacts are
+unchanged. No dependency, no migration. The ADR-0093 weekly-review work is committed on `feat/weekly-review-meal-nutrition`
+(`3896517`, `ba4ea30`) at the owner's request before this task; this correction is uncommitted on top of it and touches
+none of those files.
+
+**Executed checks** (sequential; Windows 11, Node.js 24.11.1; workstation only).
+
+| Command | Result |
+|---|---|
+| New `meal-draft-grounding-container-relation.spec.ts` against the unchanged grounding | **7 of 15 failed** (reproductions 1 and 2, the Russian equivalents, unrelated context before and after values, the conflict group, the related/unrelated pairs); the 8 passing are reproduction 3 and the preservation and negative controls |
+| `eval:meal-drafts -- --set safety` before the change (unchanged corpus) | exit 0, verifier PASS: 0 of 191 forbidden, controls 21/21, mismatches 0 (`verifier-safety-before.json`) |
+| `vitest run src/meals/drafts/ src/evaluation/` after the change | 1 failure: the container-scope case that documented the defect ("Washed the whole pan, then soup 300 kcal" withheld); moved to the positive controls with a note; rerun **499 passed** (484 + 15) |
+| `eval:meal-drafts -- --set safety` after the change | exit **0**, verifier **PASS**: 53/53, **0** of 191 forbidden, controls **21/21**, mismatches **0**; **0 of 53 cases changed outcome**; fingerprint `c1d44a46…` → `e410e3f0…` (`verifier-safety-after.json`) |
+| Test database identity (read-only probe through `loadIntegrationTestConfiguration`, before any write; probe deleted; `VITEST_MAX_WORKERS` unset) | each connection: target `127.0.0.1:5433/running_tracker_test`, server `172.18.0.2:5432`, `current_user` = `session_user` = `running_tracker_runtime` / `running_tracker_owner` / `running_tracker_maintenance` |
+| Integration: `meal-drafts-http`, `meals-http`, `meals-access`, `observability`, `tenant-isolation` | first run 1 failure in the new HTTP case (502: the test used the bare meal-type words "Lunch"/"Обед" as titles, which `groundTitle` refuses by design); titles corrected; **125 passed** (124 + 1) |
+| New HTTP case with the committed grounding swapped in (restored, hash equal) | 1 failed (reproduction 1 withheld) |
+| `npm run verify` (`VITEST_MAX_WORKERS=2`) | exit **0**: scripts 115, API **2,320** (2,305 + 15), web 1,334, contracts 311, fixtures 14, simulator 3 |
+| Chromium `meal-draft.spec.ts`, fake provider (after `verify`'s build, no edit during the run) | **4/4** passed (the logged `503 MEAL_DRAFT_DISABLED` is scenario 4, feature off) |
+| Ollama checks (no inference): `/api/version`, `/api/tags`, `/api/ps` | 0.40.16; `qwen3:8b` installed, digest `500a1f06…` (Q4_K_M); no model loaded |
+| Freeze before inference (`freeze-before-inference.txt`) | SHA-256 of grounding, prompt, wire, Ollama adapter, datasets, corpus, gate file, tracked diff and the new spec; prompt, wire, datasets, corpus and gate file equal to the 2026-11-16 freeze; **all equal after the runs** |
+| `MEAL_DRAFTS_MODEL=qwen3:8b eval:meal-drafts -- --set development --provider ollama --dry-run` | exit 0, no inference request |
+| … `--set development --provider ollama --max-calls 20` | exit 0; 20 calls; outcome 17/20, recall 13/16, 0 incorrect; failures 1 `timeout` (cold first call, 45 396 ms) + 1 `ungrounded_output` |
+| … `--set heldout --provider ollama --max-calls 20` | exit 0; 20 calls; outcome 17/20, recall 14/15, 0 incorrect; failures 1 `ungrounded_output` |
+| `eval:meal-drafts:check` with the two new reports | exit **0**; verifier **PASS**; model **PASS** (evidence valid, fingerprint `e410e3f0…`; 40 cases; outcome 85.0 %, recall 87.1 %, precision 100 %, failures 7.5 %) (`gates-check.json`); all 40 outcomes equal the 2026-11-16 run |
+| `eval:meal-drafts:check` with the 2026-11-16 reports | exit 2: evidence NOT VALID, `FINGERPRINT_MISMATCH` (grounding changed); those reports are stale |
+| Probe of stated limits on the final code (temporary file, deleted) | "Full pot. 900 kcal." and "Whole pot\n900 kcal" **proposed** (Amendment 6 withheld them); "Cooked soup in a full pot, 300 kcal" withheld; "There are 900 kcal in the pot", "Pot total 900 kcal", "Кастрюлю на 900 ккал" proposed (as before) |
+| `git diff --check` | clean |
+
+**Inference calls: 40** (20 + 20), sequential, no retries, no warm-up; nothing pulled, no cloud. Regression evidence on
+the examined v1 sets, not fresh held-out evidence; no v1 case contains a whole-vessel phrase.
+
+Artifacts: `docs/reports/artifacts/meal-draft-container-relation-2026-11-17/`. Report:
+`docs/reports/meal-draft-container-relation-2026-11-17.md`. Earlier artifacts and reports are unchanged; ADR-0092 gains a
+status line, the "Amendment 6 correction" section and a pointer in Amendment 6's consequences; the runbook names the new
+report as current.
+
+**Not established.** A regression in the unsafe direction, found after the freeze and **not corrected**: a figure that
+follows a bare whole-quantified vessel across a sentence end or a bare line break with nothing else between them is now
+proposed ("Full pot. 900 kcal.", "Whole pot\n900 kcal"); neither the corpus nor the v1 sets contain the shape. Fixing it
+changes the grounding and needs a new 40-call run. The model PASS is marginal (outcome exactly 85 %), one model, one CPU,
+synthetic sets; the cold first call timed out at the 45 s default again. No hosted CI or physical-device evidence. The
+feature stays off by default.
+
+### Adjacency follow-up to the Amendment 6 correction (2026-11-17)
+
+**What changed.** `WHOLE_CONTAINER` only: a whole-quantified vessel and a figure with nothing but punctuation or
+whitespace between them (sentence ends, LF, CRLF), in either order, are related (`ADJACENT_GAP`), which closes the
+unsafe-direction gap recorded above ("Whole pot\n900 kcal", "Full pot. 900 kcal.", "900 kcal\nWhole pot", "Full
+pot.\nProtein 80 g." and the Russian forms now withhold the figure; "Whole pot\n900 kcal. In total I ate 300 kcal."
+withholds 900 and proposes 300). No global whole-vessel flag: any word between them still separates them. Consequence,
+pinned by a test: a verb before the vessel does not break adjacency ("Washed the whole pan. Protein 25 g. In total I ate
+protein 20 g." withholds 25 and proposes 20); two earlier controls of that shape got a word before the figure, and two
+"context after the value" controls ("Soup, 300 kcal\nWhole pot washed afterwards" and its Russian twin) were replaced by
+ones with words between, because the requested rule makes the originals related. Contracts, prompt, wire, datasets,
+corpus and thresholds unchanged. No Ollama call.
+
+| Command | Result |
+|---|---|
+| 4 new adjacency tests (5 required regressions with LF, CRLF, blank lines and Russian forms, energy and macronutrients; the two controls across `. ` LF CRLF) against the previous grounding | **3 failed** (the three regression groups); the controls test passed |
+| `vitest run src/meals/drafts/ src/evaluation/` after the change | first 1, then 1 more failure: the two conflict controls with only `. ` between the vessel and the figure (EN, RU), related under the requested rule; rewritten with a word before the figure and the originals pinned as the documented consequence; then **504 passed** (499 + 5) |
+| `eval:meal-drafts -- --set safety` (unchanged corpus) | exit **0**, verifier **PASS**: 0 of 191 forbidden, controls 21/21, mismatches 0; **0 of 53 cases changed**; fingerprint `e410e3f0…` → `f26e9239…` |
+| `eval:meal-drafts:check` with the saved `qwen3:8b` reports (offline, no Ollama) | exit 2: model gate **FAIL for evidence** (`FINGERPRINT_MISMATCH`, grounding changed). **No current model PASS**; a new 40-call run is needed |
+| Test database identity (read-only probe, deleted; `VITEST_MAX_WORKERS` unset) | `127.0.0.1:5433/running_tracker_test`, server `172.18.0.2:5432`, `running_tracker_runtime` / `running_tracker_owner` / `running_tracker_maintenance` |
+| `meal-drafts-http.integration.test.ts` | **28 passed** |
+| `git diff --check` | clean |
+
+Not run for this follow-up: `npm run verify`, Chromium and the other integration files (only the grounding regex and
+its tests changed). The report, ADR-0092 and the runbook carry a short update.
