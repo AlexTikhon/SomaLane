@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { RunnerApiError, type WeeklyReviewTarget } from './runner-api.js';
 import { WeeklyInsightController, type InsightPanelSnapshot } from './weekly-insight-controller.js';
 import { WeeklyReviewController, type ReviewReader, type ReviewSnapshot } from './weekly-review-controller.js';
-import { movementFixture, reviewFixture } from './weekly-review-fixtures.js';
+import { mealsFixture, movementFixture, reviewFixture } from './weekly-review-fixtures.js';
 
 const WEEK = '2026-11-02';
 const OTHER = '2026-10-26';
@@ -210,6 +210,61 @@ describe('weekly review controller', () => {
       await flush();
       expect(last().load.kind).toBe('error');
       expect(JSON.stringify(last())).not.toContain('8042');
+    });
+  });
+
+  describe('meals edited elsewhere (ADR-0093)', () => {
+    // Meals are edited on the Meal log screen; coming back to the Check-in tab mounts a new section and controller.
+    const before = reviewFixture({ meals: mealsFixture([{ energyKcal: 650.5, offset: 0 }, { offset: 1 }]) });
+    const after = reviewFixture({ meals: mealsFixture([{ energyKcal: 410.6, offset: 0 }]) });
+
+    it('a controller mounted after navigation reads the week afresh and shows only the new answer', async () => {
+      const first = harness(() => Promise.resolve(before));
+      first.controller.start();
+      await flush();
+      expect(first.last().load).toMatchObject({ kind: 'ready', review: before });
+      first.controller.dispose();
+      const reader = deferredReader();
+      const second = harness(reader.read);
+      expect(second.controller.snapshot.load).toEqual({ kind: 'loading' });
+      second.controller.start();
+      expect(reader.calls).toHaveLength(1);
+      expect(reader.calls[0]!.target.weekStart).toBe(WEEK);
+      reader.calls[0]!.resolve(after);
+      await flush();
+      expect(second.last().load).toEqual({ kind: 'ready', refreshing: false, review: after });
+      expect(JSON.stringify(second.snapshots)).not.toContain('650.5');
+    });
+
+    it('a retry after a failure reads again and shows the current meals; the failure shows none of the old ones', async () => {
+      const reader = deferredReader();
+      const { controller, last } = harness(reader.read);
+      controller.start();
+      reader.calls[0]!.resolve(before);
+      await flush();
+      controller.refresh();
+      reader.calls[1]!.reject(new RunnerApiError('Unavailable', 503, 'SERVICE_UNAVAILABLE', 'req-2'));
+      await flush();
+      expect(last().load.kind).toBe('error');
+      expect(JSON.stringify(last())).not.toContain('650.5');
+      controller.refresh();
+      expect(reader.calls).toHaveLength(3);
+      reader.calls[2]!.resolve(after);
+      await flush();
+      expect(last().load).toEqual({ kind: 'ready', refreshing: false, review: after });
+    });
+
+    it('after the session ends, a late answer with meals is never shown', async () => {
+      const reader = deferredReader();
+      const session = new AbortController();
+      const { controller, snapshots } = harness(reader.read, session.signal);
+      controller.start();
+      session.abort();
+      reader.calls[0]!.resolve(after);
+      await flush();
+      controller.refresh();
+      expect(snapshots).toEqual([]);
+      expect(reader.calls).toHaveLength(1);
     });
   });
 });

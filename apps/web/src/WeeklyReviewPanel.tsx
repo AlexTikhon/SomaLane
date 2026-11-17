@@ -2,6 +2,7 @@ import type {
   WeeklyReview,
   WeeklyReviewCoverage,
   WeeklyReviewImportedActivities,
+  WeeklyReviewMeals,
   WeeklyReviewMovement,
   WeeklyReviewTcxImportedActivities,
 } from '@running-tracker/contracts';
@@ -9,10 +10,12 @@ import { useEffect, useRef, useState } from 'react';
 
 import { activityTypeLabels } from './activity-form.js';
 import { formatActiveEnergy, formatSteps, movementSourceLabel } from './daily-movement.js';
+import { mealSourceLabel } from './meal-log.js';
 import { formatDistance, formatDuration } from './run-search.js';
 import { readWeeklyReview } from './runner-api.js';
 import { loadingReview, WeeklyReviewController, type ReviewSnapshot } from './weekly-review-controller.js';
 import { formatWeek } from './weekly-insight.js';
+import { MEAL_COVERAGE_EXPLANATION, mealDayRows, mealWeekRows } from './weekly-review-meals.js';
 
 // The Weekly review section of the Check-in tab: the primary, deterministic description of a week. Every sentence and
 // number is computed by the app from the person's own records on each read; no AI model is involved. The optional AI
@@ -56,14 +59,18 @@ function zoneLine(review: WeeklyReview): string {
     : `Days are read in ${week.timeZone}, the time zone of this device (no check-in this week has one).`;
 }
 
-/** Nothing of any source in the week. A movement day counts, also one with only recorded zeros; so does a GPX or TCX import. */
+/**
+ * Nothing of any source in the week. A movement day counts, also one with only recorded zeros; so does a GPX or TCX
+ * import, and so does a logged meal entry, also a title-only one.
+ */
 export const isEmptyWeek = (review: WeeklyReview) =>
   review.coverage.daysWithCheckInRecord === 0 &&
   review.coverage.manualActivities.count === 0 &&
   review.coverage.gpsRuns.count === 0 &&
   review.importedActivities.count === 0 &&
   review.tcxImportedActivities.count === 0 &&
-  review.movement.daysWithRecord === 0;
+  review.movement.daysWithRecord === 0 &&
+  review.meals.loggedEntries === 0;
 
 /** GPX imports of the week (ADR-0086): their own part, never added to manual activities or GPS runs. */
 export function ReviewImports({ imported }: { imported: WeeklyReviewImportedActivities }) {
@@ -190,6 +197,52 @@ export function ReviewMovement({ movement, weekTimeZone }: { movement: WeeklyRev
   );
 }
 
+/**
+ * Recorded nutrition of the week's logged meals (ADR-0093): totals with their entry and day coverage, the
+ * incomplete-logging explanation, then every day. Its own block, apart from movement: food energy is never put next to
+ * active energy as a balance.
+ */
+export function ReviewMeals({ meals }: { meals: WeeklyReviewMeals }) {
+  return (
+    <section aria-labelledby="review-meals-title" className="review-movement review-meals">
+      <h3 id="review-meals-title">Recorded nutrition</h3>
+      <p className="review-movement__source">
+        <span className="review-badge">{mealSourceLabel(meals.source)}</span> Food energy, protein, carbohydrate and fat you
+        entered for your logged meals and snacks, each entry on the date it was logged for. Food energy is what you reported
+        eating; it is kept apart from active energy.
+      </p>
+      {meals.loggedEntries === 0 ? (
+        <p className="review-meals__none">No meals or snacks were logged this week.</p>
+      ) : (
+        <>
+          <p className="review-movement__source">{MEAL_COVERAGE_EXPLANATION}</p>
+          <dl className="review-movement__totals">
+            {mealWeekRows(meals).map((row) => (
+              <div key={row.label}><dt>{row.label}</dt><dd>{row.value}</dd></div>
+            ))}
+          </dl>
+          <ul aria-label="Recorded nutrition by day" className="review-movement__days">
+            {meals.days.map((day) => (
+              <li className={day.loggedEntries > 0 ? 'review-movement__day' : 'review-movement__day review-movement__day--missing'} key={day.localDate}>
+                <time dateTime={day.localDate}>{formatReviewDay(day.localDate)}</time>
+                {day.loggedEntries > 0 ? (
+                  <dl>
+                    {mealDayRows(day).map((row) => (
+                      <div key={row.label}><dt>{row.label}</dt><dd>{row.value}</dd></div>
+                    ))}
+                  </dl>
+                ) : (
+                  <p>No entries logged</p>
+                )}
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+    </section>
+  );
+}
+
 /** A computed review: statements, coverage, numbers, data gaps and where it comes from. */
 export function ReviewContent({ review }: { review: WeeklyReview }) {
   return (
@@ -211,6 +264,7 @@ export function ReviewContent({ review }: { review: WeeklyReview }) {
       <ReviewImports imported={review.importedActivities} />
       <ReviewTcxImports imported={review.tcxImportedActivities} />
       <ReviewMovement movement={review.movement} weekTimeZone={review.week.timeZone} />
+      <ReviewMeals meals={review.meals} />
       {review.facts.length > 0 && (
         <section aria-label="Numbers" className="review-numbers">
           <h3>Numbers</h3>
@@ -257,7 +311,7 @@ export function ReviewPanelView({ onRefresh, onSelectWeek, snapshot, weeks }: Re
         <h2 id="review-title">Weekly review</h2>
         <p className="insight-panel__positioning">
           <span className="review-badge">Computed by the app</span> Counted from your own check-ins, manual activities, GPS
-          runs and manually entered movement each time you open it. No AI model writes this section. It describes what was recorded; it is not medical
+          runs, manually entered movement and logged meals each time you open it. No AI model writes this section. It describes what was recorded; it is not medical
           advice. Only you can see it.
         </p>
       </div>
@@ -289,7 +343,10 @@ export function ReviewPanelView({ onRefresh, onSelectWeek, snapshot, weeks }: Re
 export interface WeeklyReviewPanelProps {
   onSelectWeek: (weekStart: string) => void;
   orgId: string;
-  /** Changes whenever a check-in or a movement day of this person was saved or deleted: the section reads its week again. */
+  /**
+   * Changes whenever a check-in or a movement day of this person was saved or deleted: the section reads its week again.
+   * Meals are edited on the Meal log screen; opening the Check-in tab again mounts a new section, which reads afresh.
+   */
   refreshKey: number;
   signal: AbortSignal;
   timeZone: string;

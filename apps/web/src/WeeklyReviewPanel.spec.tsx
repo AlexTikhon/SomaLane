@@ -6,7 +6,8 @@ import { loadingInsight } from './weekly-insight-controller.js';
 import { recentWeeks } from './weekly-insight.js';
 import { InsightPanelView } from './WeeklyInsightPanel.js';
 import { loadingReview, type ReviewSnapshot } from './weekly-review-controller.js';
-import { movementFixture, reviewFixture } from './weekly-review-fixtures.js';
+import { mealsFixture, movementFixture, reviewFixture } from './weekly-review-fixtures.js';
+import { mealDayRows, mealWeekRows } from './weekly-review-meals.js';
 import { coverageRows, formatReviewDay, isEmptyWeek, movementTotalRows, ReviewPanelView } from './WeeklyReviewPanel.js';
 
 const WEEK = '2026-11-02';
@@ -217,5 +218,103 @@ describe('weekly review section: movement (ADR-0079)', () => {
 
   it('formats a calendar date without shifting it by a zone', () => {
     expect(['2026-11-02', '2026-03-29', '2026-10-25'].map(formatReviewDay)).toEqual(['Mon 2 Nov', 'Sun 29 Mar', 'Sun 25 Oct']);
+  });
+});
+
+describe('weekly review section: recorded nutrition (ADR-0093)', () => {
+  // Monday: three entries (energy on two, protein on one, one title-only); Wednesday: recorded zeros; Saturday: energy 0.
+  const partial = mealsFixture([
+    { energyKcal: 650.5, offset: 0, proteinG: 30 },
+    { energyKcal: 410.6, offset: 0 },
+    { offset: 0 },
+    { carbohydrateG: 0, fatG: 0, offset: 2 },
+    { energyKcal: 0, offset: 5, proteinG: 12.5 },
+  ]);
+  const ready = (review = reviewFixture()) => render({ load: { kind: 'ready', refreshing: false, review } });
+  const mealBlock = (html: string) => html.slice(html.indexOf('id="review-meals-title"'), html.indexOf('</section>', html.indexOf('id="review-meals-title"')));
+  const emptyCoverage = {
+    ...reviewFixture().coverage,
+    daysWithCheckInRecord: 0,
+    daysWithCheckInValues: 0,
+    gpsRuns: { count: 0, withCurrentDistance: 0, withoutCurrentDistance: 0 },
+    manualActivities: { count: 0, withDistance: 0 },
+    metrics: { mood: { daysRecorded: 0 }, sleepDuration: { daysRecorded: 0 }, sleepQuality: { daysRecorded: 0 }, soreness: { daysRecorded: 0 }, weight: { daysRecorded: 0 } },
+    noteOnlyDays: 0,
+  };
+
+  it('shows the totals with entry and day coverage, the explanation and the manual source, in its own labelled block', () => {
+    const html = ready(reviewFixture({ meals: partial }));
+    expect(html).toContain('aria-labelledby="review-meals-title"');
+    expect(html).toContain('<h3 id="review-meals-title">Recorded nutrition</h3>');
+    const block = mealBlock(html);
+    expect(block).toContain('<span class="review-badge">Manually entered</span>');
+    expect(block).toContain('Food energy is what you reported eating; it is kept apart from active energy.');
+    expect(block).toContain('it does not mean every meal or snack was logged, and a day without entries is unknown.');
+    expect(block).toContain('<dt>Logged entries</dt><dd>5 entries on 3 of 7 days</dd>');
+    expect(block).toContain('<dt>Food energy, recorded total</dt><dd>1,061.1 kcal for 3 of 5 entries, on 2 of 7 days</dd>');
+    expect(block).toContain('<dt>Protein, recorded total</dt><dd>42.5 g for 2 of 5 entries, on 2 of 7 days</dd>');
+    expect(block).toContain('<dt>Carbohydrate, recorded total</dt><dd>0 g for 1 of 5 entries, on 1 of 7 days</dd>');
+    expect(block).toContain('<dt>Fat, recorded total</dt><dd>0 g for 1 of 5 entries, on 1 of 7 days</dd>');
+    // Food energy and active energy are separate blocks; nothing is balanced, targeted, averaged or advised.
+    expect(html.indexOf('id="review-movement-title"')).toBeLessThan(html.indexOf('id="review-meals-title"'));
+    expect(block).not.toContain('Active energy,');
+    expect(block).not.toMatch(/balance|target|goal|deficit|surplus|average|per day|estimat|recommend|should|complete diary/iu);
+  });
+
+  it('lists every day compactly: entries, values with the entries they cover, "Not recorded", and days without entries', () => {
+    const block = mealBlock(ready(reviewFixture({ meals: partial })));
+    const start = block.indexOf('aria-label="Recorded nutrition by day"');
+    const days = block.slice(start, block.indexOf('</ul>', start));
+    expect(days.match(/<li /gu)).toHaveLength(7);
+    expect(days).toContain(
+      '<time dateTime="2026-11-02">Mon 2 Nov</time><dl><div><dt>Entries</dt><dd>3</dd></div><div><dt>Food energy</dt><dd>1,061.1 kcal (2 of 3 entries)</dd></div><div><dt>Protein</dt><dd>30 g (1 of 3 entries)</dd></div><div><dt>Carbohydrate</dt><dd>Not recorded</dd></div><div><dt>Fat</dt><dd>Not recorded</dd></div></dl>',
+    );
+    expect(days).toContain('<dt>Carbohydrate</dt><dd>0 g (1 of 1 entry)</dd></div><div><dt>Fat</dt><dd>0 g (1 of 1 entry)</dd>');
+    expect(days).toContain('<time dateTime="2026-11-07">Sat 7 Nov</time><dl><div><dt>Entries</dt><dd>1</dd></div><div><dt>Food energy</dt><dd>0 kcal (1 of 1 entry)</dd>');
+    expect(days.match(/<p>No entries logged<\/p>/gu)).toHaveLength(4);
+    expect(days.match(/review-movement__day--missing/gu)).toHaveLength(4);
+    expect(days).toContain('<time dateTime="2026-11-08">Sun 8 Nov</time><p>No entries logged</p>');
+  });
+
+  it('treats a meal-only week, even a single title-only entry, as not empty', () => {
+    const titleOnly = reviewFixture({ coverage: emptyCoverage, meals: mealsFixture([{ offset: 3 }]) });
+    expect(isEmptyWeek(reviewFixture({ coverage: emptyCoverage }))).toBe(true);
+    expect(isEmptyWeek(titleOnly)).toBe(false);
+    const html = ready(titleOnly);
+    expect(html).not.toContain('Nothing is recorded');
+    const block = mealBlock(html);
+    expect(block).toContain('<dt>Logged entries</dt><dd>1 entry on 1 of 7 days</dd>');
+    expect(block).toContain('<dt>Food energy, recorded total</dt><dd>Not recorded for the only entry</dd>');
+    expect(block).toContain('<time dateTime="2026-11-05">Thu 5 Nov</time><dl><div><dt>Entries</dt><dd>1</dd></div><div><dt>Food energy</dt><dd>Not recorded</dd>');
+    expect(ready(reviewFixture({ coverage: emptyCoverage }))).toContain('Nothing is recorded for 2 Nov – 8 Nov 2026 yet.');
+  });
+
+  it('says nothing was logged, without totals or a day list, and shows exact totals for every entry and all days', () => {
+    const empty = mealBlock(ready());
+    expect(empty).toContain('<p class="review-meals__none">No meals or snacks were logged this week.</p>');
+    expect(empty).not.toContain('<dl');
+    expect(empty).not.toContain('Recorded nutrition by day');
+    const allDays = mealsFixture([0, 1, 2, 3, 4, 5, 6].map((offset) => ({ energyKcal: offset === 0 ? 0.1 : 0.2, offset })));
+    expect(allDays.energyKcal.total).toBe(1.3);
+    expect(mealWeekRows(allDays)[1]).toEqual({ label: 'Food energy, recorded total', value: '1.3 kcal for all 7 entries, on all 7 days' });
+    expect(mealWeekRows(mealsFixture([]))).toEqual([]);
+    expect(mealDayRows(allDays.days[0]!)).toEqual([
+      { label: 'Entries', value: '1' },
+      { label: 'Food energy', value: '0.1 kcal (1 of 1 entry)' },
+      { label: 'Protein', value: 'Not recorded' },
+      { label: 'Carbohydrate', value: 'Not recorded' },
+      { label: 'Fat', value: 'Not recorded' },
+    ]);
+  });
+
+  it('keeps the meals of the shown review while refreshing, and shows none while loading or after an error', () => {
+    const review = reviewFixture({ meals: partial });
+    expect(render({ load: { kind: 'ready', refreshing: true, review } })).toContain('1,061.1 kcal for 3 of 5 entries');
+    expect(render({})).not.toContain('Recorded nutrition');
+    expect(render({ load: { kind: 'error', message: 'The review could not be loaded.' } })).not.toContain('Recorded nutrition');
+  });
+
+  it('names logged meals among the sources the section counts', () => {
+    expect(ready()).toContain('runs, manually entered movement and logged meals each time you open it.');
   });
 });

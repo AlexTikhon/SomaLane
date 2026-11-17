@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 
 import {
   apiErrorResponseSchema,
+  mealViewSchema,
   weeklyInsightAcceptedSchema,
   weeklyInsightViewSchema,
   weeklyReviewSchema,
@@ -104,6 +105,7 @@ describe('weekly review HTTP API (deterministic, no model)', () => {
     await ownerPool?.query('DELETE FROM activities').catch(() => undefined);
     await ownerPool?.query('DELETE FROM daily_metrics').catch(() => undefined);
     await ownerPool?.query('DELETE FROM daily_movement').catch(() => undefined);
+    await ownerPool?.query('DELETE FROM meals').catch(() => undefined);
     await ownerPool?.query('DELETE FROM erasure_ledger').catch(() => undefined);
     await runtimePool?.end();
     await ownerPool?.end();
@@ -371,7 +373,7 @@ describe('weekly review HTTP API (deterministic, no model)', () => {
       await putMovement(owner, '2026-11-03', { activeEnergyKcal: 412.5, steps: 8042 }).expect(201);
       await putMovement(owner, '2026-11-04', { activeEnergyKcal: 250, steps: null }).expect(201);
       const review = await readReview();
-      expect(review.provenance.reviewVersion).toBe('weekly-review-4');
+      expect(review.provenance.reviewVersion).toBe('weekly-review-5');
       expect(review.movement).toMatchObject({
         activeEnergyKcal: { daysRecorded: 2, recordedTotal: 662.5 },
         daysInWeek: 7,
@@ -588,6 +590,302 @@ describe('weekly review HTTP API (deterministic, no model)', () => {
       // The review saw every step; the insight saw none.
       const review = weeklyReviewSchema.parse((await get(owner, undefined, { target: withAi }).expect(200)).body);
       expect(review.movement).toMatchObject({ daysWithRecord: 1, steps: { daysRecorded: 1, recordedTotal: 9000 } });
+
+      // The pin is sensitive: a check-in change makes the same insight stale.
+      await checkIn('2026-11-06', { mood: 5 });
+      expect((await view()).freshness).toBe('stale');
+    });
+  });
+
+  describe('recorded meal nutrition (ADR-0093)', () => {
+    const mealsPath = (orgId: string = ids.orgA) => `/api/orgs/${orgId}/meals`;
+    type MealValues = { carbohydrateG?: number; energyKcal?: number; fatG?: number; proteinG?: number };
+    const postMeal = async (auth: Authentication, localDate: string, values: MealValues = {}, title = 'SECRET-MEAL-TITLE') =>
+      mealViewSchema.parse(
+        (
+          await request(app)
+            .post(mealsPath())
+            .set('Cookie', auth.cookie)
+            .set('Origin', allowedOrigin)
+            .set(csrfHeaderName, auth.csrfToken)
+            .type('application/json')
+            .send({ idempotencyKey: randomUUID(), localDate, mealType: 'lunch', timeZone: ZONE, title, ...values })
+            .expect(201)
+        ).body,
+      );
+    const putMeal = (auth: Authentication, mealId: string, values: MealValues, title = 'SECRET-MEAL-TITLE') =>
+      request(app)
+        .put(`${mealsPath()}/${mealId}`)
+        .set('Cookie', auth.cookie)
+        .set('Origin', allowedOrigin)
+        .set(csrfHeaderName, auth.csrfToken)
+        .type('application/json')
+        .send({ mealType: 'snack', title, ...values })
+        .expect(200);
+    const deleteMeal = (auth: Authentication, mealId: string) =>
+      request(app).delete(`${mealsPath()}/${mealId}`).set('Cookie', auth.cookie).set('Origin', allowedOrigin).set(csrfHeaderName, auth.csrfToken).expect(204);
+    /** A stored entry written directly (owner connection): its zone and owner are chosen by the test. */
+    const insertMeal = (
+      localDate: string,
+      values: { carbohydrate?: string; energy?: string; fat?: string; orgId?: string; protein?: string; timeZone?: string; userId?: string } = {},
+    ) =>
+      ownerPool.query(
+        `INSERT INTO meals (org_id, user_id, local_date, time_zone, meal_type, title, energy_kcal, protein_g, carbohydrate_g, fat_g,
+                            idempotency_key, creation_digest)
+         VALUES ($1, $2, $3::date, $4, 'snack', 'SECRET-MEAL-TITLE', $5::numeric, $6::numeric, $7::numeric, $8::numeric,
+                 gen_random_uuid(), sha256(gen_random_uuid()::text::bytea))`,
+        [
+          values.orgId ?? ids.orgA,
+          values.userId ?? ids.userOrgA,
+          localDate,
+          values.timeZone ?? ZONE,
+          values.energy ?? null,
+          values.protein ?? null,
+          values.carbohydrate ?? null,
+          values.fat ?? null,
+        ],
+      );
+    const loggedDays = (review: WeeklyReview) => review.meals.days.filter((day) => day.loggedEntries > 0).map((day) => [day.localDate, day.loggedEntries]);
+
+    it('describes partial, title-only and zero-valued entries written through the meal API, each metric with its own coverage', async () => {
+      await postMeal(owner, '2026-11-02', { energyKcal: 650.5, proteinG: 30.2 });
+      await postMeal(owner, '2026-11-02', { energyKcal: 410.6 });
+      await postMeal(owner, '2026-11-02'); // title only
+      await postMeal(owner, '2026-11-04', { carbohydrateG: 0, fatG: 0 });
+      await postMeal(owner, '2026-11-07', { energyKcal: 0, proteinG: 12.5 });
+      const response = await get(owner).expect(200);
+      expect(response.headers['cache-control']).toBe('no-store');
+      const review = weeklyReviewSchema.parse(response.body);
+      expect(review.provenance.reviewVersion).toBe('weekly-review-5');
+      expect(review.meals).toMatchObject({
+        carbohydrateG: { recordedDays: 1, recordedEntries: 1, total: 0 },
+        daysInWeek: 7,
+        daysWithEntries: 3,
+        energyKcal: { recordedDays: 2, recordedEntries: 3, total: 1061.1 },
+        fatG: { recordedDays: 1, recordedEntries: 1, total: 0 },
+        loggedEntries: 5,
+        proteinG: { recordedDays: 2, recordedEntries: 2, total: 42.7 },
+        source: 'manual',
+      });
+      expect(review.meals.days[0]).toEqual({
+        carbohydrateG: { recordedEntries: 0, total: null },
+        energyKcal: { recordedEntries: 2, total: 1061.1 },
+        fatG: { recordedEntries: 0, total: null },
+        localDate: '2026-11-02',
+        loggedEntries: 3,
+        proteinG: { recordedEntries: 1, total: 30.2 },
+      });
+      expect(review.meals.days[1]).toEqual({
+        carbohydrateG: { recordedEntries: 0, total: null },
+        energyKcal: { recordedEntries: 0, total: null },
+        fatG: { recordedEntries: 0, total: null },
+        localDate: '2026-11-03',
+        loggedEntries: 0,
+        proteinG: { recordedEntries: 0, total: null },
+      });
+      expect(response.text).toContain('"energyKcal":{"recordedEntries":3,"recordedDays":2,"total":1061.1}');
+      expect(statement(review, 'meals.logged')).toBe('5 meal entries were logged on 3 of 7 days; each counts on the date it was logged for.');
+      expect(statement(review, 'meals.energy_recorded')).toBe(
+        'Food energy was recorded for 3 of 5 logged entries, on 2 of 7 days: 1,061.1 kcal in total for those entries; 2 other entries are unknown.',
+      );
+      expect(codes(review)).toContain('meals.logging_limits');
+      // A meal-only week: the check-in, activity and movement parts are as empty as before, and nothing is derived.
+      expect(review.coverage).toMatchObject({ daysWithCheckInRecord: 0, manualActivities: { count: 0 } });
+      expect(statement(review, 'check_ins.none')).toBe('No check-ins were recorded this week.');
+      expect(review.movement.daysWithRecord).toBe(0);
+      expect(JSON.stringify(review.facts)).not.toMatch(/meal|food|protein|kcal/iu);
+      expect(response.text).not.toContain('SECRET');
+    });
+
+    it('counts a single title-only entry as a logged entry with every metric unknown', async () => {
+      await postMeal(owner, '2026-11-05');
+      const review = await readReview();
+      expect(review.meals).toMatchObject({
+        daysWithEntries: 1,
+        energyKcal: { recordedDays: 0, recordedEntries: 0, total: null },
+        fatG: { recordedDays: 0, recordedEntries: 0, total: null },
+        loggedEntries: 1,
+      });
+      expect(codes(review).filter((code) => code.startsWith('meals.'))).toEqual([
+        'meals.logged',
+        'meals.energy_not_recorded',
+        'meals.protein_not_recorded',
+        'meals.carbohydrate_not_recorded',
+        'meals.fat_not_recorded',
+        'meals.logging_limits',
+      ]);
+      expect(codes(await readReview(owner, '2026-10-26'))).toContain('meals.none');
+    });
+
+    it('adds the values PostgreSQL stores exactly: 0.1 + 0.2 kcal is 0.3, ten times 0.1 g is 1, scales are ignored', async () => {
+      await postMeal(owner, '2026-11-03', { energyKcal: 0.1 });
+      await postMeal(owner, '2026-11-06', { energyKcal: 0.2 });
+      for (let index = 0; index < 10; index += 1) await insertMeal('2026-11-08', { fat: '0.1' });
+      await insertMeal('2026-11-08', { carbohydrate: '250.00' });
+      await insertMeal('2026-11-08', { carbohydrate: '412.5' });
+      const response = await get(owner).expect(200);
+      expect(response.text).toContain('"energyKcal":{"recordedEntries":2,"recordedDays":2,"total":0.3}');
+      expect(response.text).toContain('"fatG":{"recordedEntries":10,"recordedDays":1,"total":1}');
+      expect(response.text).toContain('"carbohydrateG":{"recordedEntries":2,"recordedDays":1,"total":662.5}');
+      const review = weeklyReviewSchema.parse(response.body);
+      expect(review.meals.days[6]).toMatchObject({ carbohydrateG: { recordedEntries: 2, total: 662.5 }, fatG: { recordedEntries: 10, total: 1 }, loggedEntries: 12 });
+      expect(statement(review, 'meals.energy_recorded')).toMatch(/: 0\.3 kcal in total for those entries;/u);
+    });
+
+    it('counts an entry on its stored date, whatever zone it was saved in and whatever zone the week is read in', async () => {
+      await checkIn('2026-11-03', { mood: 3 }, { timeZone: 'Asia/Tokyo' }); // the week's activities are read in Tokyo
+      await insertMeal('2026-11-01', { energy: '111', timeZone: 'Pacific/Kiritimati' }); // the Sunday before
+      await insertMeal('2026-11-02', { energy: '1', timeZone: 'Pacific/Pago_Pago' }); // UTC-11, first day
+      await insertMeal('2026-11-08', { energy: '2', timeZone: 'Pacific/Kiritimati' }); // UTC+14, last day
+      await insertMeal('2026-11-09', { energy: '999', timeZone: 'Pacific/Pago_Pago' }); // the Monday after
+      const review = await readReview(owner, WEEK, 'America/New_York');
+      expect(review.week).toMatchObject({ timeZone: 'Asia/Tokyo', timeZoneSource: 'check_ins' });
+      expect(loggedDays(review)).toEqual([
+        ['2026-11-02', 1],
+        ['2026-11-08', 1],
+      ]);
+      expect(review.meals.energyKcal).toEqual({ recordedDays: 2, recordedEntries: 2, total: 3 });
+      // The same dates without check-ins (the week read in the requested zone), and the neighbouring weeks.
+      await ownerPool.query('DELETE FROM daily_metrics');
+      const requested = await readReview(owner, WEEK, 'Pacific/Kiritimati');
+      expect(requested.week).toMatchObject({ timeZone: 'Pacific/Kiritimati', timeZoneSource: 'request' });
+      expect(requested.meals.energyKcal).toEqual({ recordedDays: 2, recordedEntries: 2, total: 3 });
+      expect((await readReview(owner, '2026-10-26', 'UTC')).meals.energyKcal.total).toBe(111);
+      expect((await readReview(owner, '2026-11-09', 'UTC')).meals.energyKcal.total).toBe(999);
+    });
+
+    it("isolates meals: another member, a run-sharing grantee and another organization never see or add to the owner's", async () => {
+      await insertMeal('2026-11-02', { energy: '650.5' });
+      await insertMeal('2026-11-02', { energy: '5', userId: ids.userStranger });
+      await insertMeal('2026-11-03', { protein: '7', userId: ids.userDual });
+      await insertMeal('2026-11-02', { energy: '12000', orgId: ids.orgB, userId: ids.userOrgB });
+      expect((await readReview(owner)).meals).toMatchObject({ energyKcal: { recordedEntries: 1, total: 650.5 }, loggedEntries: 1 });
+      expect((await readReview(stranger)).meals).toMatchObject({ energyKcal: { recordedEntries: 1, total: 5 }, loggedEntries: 1 });
+      const granteeReview = await readReview(grantee);
+      expect(granteeReview.meals).toMatchObject({ energyKcal: { recordedEntries: 0, total: null }, loggedEntries: 1, proteinG: { recordedEntries: 1, total: 7 } });
+      expect(errorCode(await get(outsider, undefined, { orgId: ids.orgA }).expect(403))).toBe('ORG_ACCESS_DENIED');
+      expect(errorCode(await get(owner, undefined, { orgId: ids.orgB }).expect(403))).toBe('ORG_ACCESS_DENIED');
+      const outsiderOwn = weeklyReviewSchema.parse((await get(outsider, { timeZone: ZONE, weekStart: WEEK }, { orgId: ids.orgB }).expect(200)).body);
+      expect(outsiderOwn.meals).toMatchObject({ energyKcal: { recordedEntries: 1, total: 12_000 }, loggedEntries: 1 });
+      expect(JSON.stringify(outsiderOwn)).not.toContain('650.5');
+      expect(JSON.stringify(granteeReview)).not.toContain('650.5');
+    });
+
+    it('answers from one snapshot while a meal edit, deletion and creation commit through the API mid-read; the next read has them', async () => {
+      const edited = await postMeal(owner, '2026-11-02', { energyKcal: 500 });
+      const deleted = await postMeal(owner, '2026-11-02', { proteinG: 20 });
+      let interleave: (() => Promise<void>) | null = null;
+      const reached: string[] = [];
+      const hooked = createApp({
+        clock,
+        config,
+        logger: silent,
+        pool: runtimePool,
+        sessionManager: sessions,
+        testOnlyWeeklyReviewHooks: {
+          afterSourcesRead: async () => {
+            reached.push('after sources');
+            await interleave?.();
+          },
+        },
+      });
+      interleave = async () => {
+        // Committed on other connections after the review's snapshot began and before its meal statement runs.
+        await putMeal(owner, edited.mealId, { energyKcal: 900 });
+        await deleteMeal(owner, deleted.mealId);
+        await postMeal(owner, '2026-11-03', { energyKcal: 100 });
+      };
+      const during = weeklyReviewSchema.parse((await get(owner, undefined, { target: hooked }).expect(200)).body);
+      expect(reached).toEqual(['after sources']);
+      // The earlier state, whole and self-consistent (the contract checks days against the week).
+      expect(during.meals).toMatchObject({
+        daysWithEntries: 1,
+        energyKcal: { recordedDays: 1, recordedEntries: 1, total: 500 },
+        loggedEntries: 2,
+        proteinG: { recordedDays: 1, recordedEntries: 1, total: 20 },
+      });
+      expect(loggedDays(during)).toEqual([['2026-11-02', 2]]);
+
+      interleave = null;
+      const next = weeklyReviewSchema.parse((await get(owner, undefined, { target: hooked }).expect(200)).body);
+      expect(next.meals).toMatchObject({
+        daysWithEntries: 2,
+        energyKcal: { recordedDays: 2, recordedEntries: 2, total: 1000 },
+        loggedEntries: 2,
+        proteinG: { recordedDays: 0, recordedEntries: 0, total: null },
+      });
+      expect(loggedDays(next)).toEqual([
+        ['2026-11-02', 1],
+        ['2026-11-03', 1],
+      ]);
+      // Deleting the rest over HTTP: the next read has none.
+      await deleteMeal(owner, edited.mealId);
+      const after = await readReview();
+      expect(after.meals.energyKcal).toEqual({ recordedDays: 1, recordedEntries: 1, total: 100 });
+      expect(JSON.stringify(after)).not.toMatch(/"total":(?:500|900|1000|20)\b/u);
+    });
+
+    it('changes no AI input identity, insight row, freshness, gate revision or provider call on meal writes and deletions', async () => {
+      const provider = new FakeProvider();
+      const insights = new WeeklyInsightService({
+        clock,
+        logger: silent,
+        pool: runtimePool,
+        provider,
+        settings: { attemptTimeoutMs: 1_000, maxAttempts: 1, maxOutputTokens: 800, maxPerPerson: 2, maxQueue: 16, totalBudgetMs: 3_000 },
+      });
+      services.push(insights);
+      const withAi = createApp({ clock, config, logger: silent, pool: runtimePool, sessionManager: sessions, weeklyInsights: insights });
+      await checkIn('2026-11-02', { mood: 4, sleepMinutes: 450, soreness: 2 });
+      await checkIn('2026-11-04', { mood: 3, sleepMinutes: 420, soreness: 3 });
+      weeklyInsightAcceptedSchema.parse(
+        (
+          await request(withAi)
+            .post(`/api/orgs/${ids.orgA}/insights/weekly`)
+            .set('Cookie', owner.cookie)
+            .set('Origin', allowedOrigin)
+            .set(csrfHeaderName, owner.csrfToken)
+            .type('application/json')
+            .send({ timeZone: ZONE, weekStart: WEEK })
+            .expect(202)
+        ).body,
+      );
+      await insights.whenIdle();
+      const view = async () =>
+        weeklyInsightViewSchema.parse(
+          (await request(withAi).get(`/api/orgs/${ids.orgA}/insights/weekly`).query({ weekStart: WEEK }).set('Cookie', owner.cookie).expect(200)).body,
+        );
+      const state = async () =>
+        (
+          await ownerPool.query<{ gate: string | null; rows: string | null }>(
+            `SELECT (SELECT revision::text FROM weekly_insight_source_gates WHERE org_id = $1 AND user_id = $2) AS gate,
+                    (SELECT string_agg(concat_ws('|', id, input_hash, source_revision, status, attempts, updated_at, md5(output::text)), ',' ORDER BY id)
+                       FROM weekly_insights WHERE org_id = $1 AND user_id = $2) AS rows`,
+            [ids.orgA, ids.userOrgA],
+          )
+        ).rows[0]!;
+      const readyView = await view();
+      expect(readyView).toMatchObject({ freshness: 'current', status: 'ready' });
+      const before = await state();
+      expect(before.rows).not.toBeNull();
+      const calls = provider.calls.length;
+      const unchanged = async (step: string) => {
+        expect(await state(), step).toEqual(before);
+        expect(await view(), step).toEqual(readyView);
+      };
+
+      const lunch = await postMeal(owner, '2026-11-02', { energyKcal: 650.5, proteinG: 30.2 });
+      await unchanged('create');
+      await putMeal(owner, lunch.mealId, { energyKcal: 700 });
+      await unchanged('edit');
+      const snack = await postMeal(owner, '2026-11-03');
+      await deleteMeal(owner, snack.mealId);
+      await unchanged('delete');
+      // Reading the review (which now includes meals) calls no model either.
+      const review = weeklyReviewSchema.parse((await get(owner, undefined, { target: withAi }).expect(200)).body);
+      expect(review.meals).toMatchObject({ energyKcal: { recordedEntries: 1, total: 700 }, loggedEntries: 1 });
+      expect(provider.calls).toHaveLength(calls);
+      await unchanged('review read');
 
       // The pin is sensitive: a check-in change makes the same insight stale.
       await checkIn('2026-11-06', { mood: 5 });

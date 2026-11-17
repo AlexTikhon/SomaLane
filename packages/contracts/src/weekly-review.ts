@@ -9,6 +9,7 @@ import {
   dailyStepsSchema,
 } from './daily-movement.js';
 import { ACTIVITY_TYPES } from './activities.js';
+import { hasAtMostOneDecimal, MEAL_NUTRITION_FIELDS, MEAL_NUTRITION_MAX, MEAL_SOURCES, type MealNutritionField } from './meals.js';
 import { localDateSchema, timestampSchema, ianaTimeZoneSchema } from './primitives.js';
 import { weeklyInsightDataGapSchema, weeklyInsightFactSchema, weeklyInsightWeekStartSchema } from './weekly-insights.js';
 
@@ -27,8 +28,11 @@ import { weeklyInsightDataGapSchema, weeklyInsightFactSchema, weeklyInsightWeekS
  *   the coverage count manual activities only, as before: no other source existed until then.
  * - `weekly-review-4`: adds `tcxImportedActivities` and the `imported.tcx` statement (ADR-0091). `importedActivities`
  *   and `imported.gpx` stay GPX imports only; `manual.*`, the facts and the coverage are unchanged.
+ * - `weekly-review-5`: adds `meals` (recorded nutrition of the week's manual meal entries, per stored date and for the
+ *   week, with independent entry and day coverage per metric) and the `meals.*` statements (ADR-0093). The facts, the
+ *   coverage, the data gaps and every earlier statement are unchanged; meals are not AI input.
  */
-export const WEEKLY_REVIEW_VERSION = 'weekly-review-4';
+export const WEEKLY_REVIEW_VERSION = 'weekly-review-5';
 
 export const WEEKLY_REVIEW_STATEMENTS_MAX = 40;
 export const WEEKLY_REVIEW_FACTS_MAX = 64;
@@ -47,6 +51,9 @@ export const WEEKLY_REVIEW_STATEMENT_MAX_LENGTH = 240;
  *   totals with their coverage, the manual source, and days saved in other zones. Never added to activity figures.
  * - `imported.*`: activities imported from GPX files (ADR-0086) and TCX files (ADR-0091), each format described apart from
  *   the other, from manual activities and from GPS runs.
+ * - `meals.*`: manual meal entries (ADR-0093): how many were logged on how many days, each nutrition metric's recorded
+ *   total with its own entry and day coverage, and that the totals cover only what was logged. Food energy is never
+ *   combined with active energy.
  */
 export const weeklyReviewStatementCodes = [
   'week.in_progress',
@@ -91,6 +98,17 @@ export const weeklyReviewStatementCodes = [
   'movement.time_zones',
   'imported.gpx',
   'imported.tcx',
+  'meals.none',
+  'meals.logged',
+  'meals.energy_recorded',
+  'meals.energy_not_recorded',
+  'meals.protein_recorded',
+  'meals.protein_not_recorded',
+  'meals.carbohydrate_recorded',
+  'meals.carbohydrate_not_recorded',
+  'meals.fat_recorded',
+  'meals.fat_not_recorded',
+  'meals.logging_limits',
 ] as const;
 export const weeklyReviewStatementCodeSchema = z.enum(weeklyReviewStatementCodes);
 
@@ -344,6 +362,124 @@ export const weeklyReviewTcxImportedActivitiesSchema = z
     if (imported.byType.some((entry) => entry.count === 0)) issue('only types with an import are listed', ['byType']);
   });
 
+// --- Recorded nutrition of the week's meal entries (ADR-0093) ---------------------------------------------------------
+//
+// Technical bounds, not dietary limits: at most 10,000 entries per stored date (the daily overview's bound), so at most
+// 70,000 per week, each value within the meal log's own per-entry bound (MEAL_NUTRITION_MAX). A week's energy total is
+// then at most 1.4e9 kcal, i.e. 1.4e10 tenths, far inside the range where a JSON number holds one decimal exactly.
+
+export const WEEKLY_REVIEW_MEAL_ENTRIES_PER_DAY_MAX = 10_000;
+export const WEEKLY_REVIEW_MEAL_ENTRIES_PER_WEEK_MAX = 7 * WEEKLY_REVIEW_MEAL_ENTRIES_PER_DAY_MAX;
+
+const mealDayEntries = z.int().min(0).max(WEEKLY_REVIEW_MEAL_ENTRIES_PER_DAY_MAX);
+const mealWeekEntries = z.int().min(0).max(WEEKLY_REVIEW_MEAL_ENTRIES_PER_WEEK_MAX);
+
+/** Integer tenths of a non-negative value with at most one decimal (exact for every value the bounds below allow). */
+const tenthsOf = (value: number) => Math.round(value * 10);
+
+/** A recorded total of `field` over at most `entries` entries: finite, non-negative, at most one decimal. */
+const mealTotal = (field: MealNutritionField, entries: number) =>
+  z.number().finite().min(0).max(entries * MEAL_NUTRITION_MAX[field]).refine(hasAtMostOneDecimal, 'A recorded total has at most one decimal');
+
+/**
+ * One metric on one stored date: `recordedEntries` entries hold a value (a recorded 0 included) and `total` is the exact
+ * sum of exactly those values. No value recorded: `total` is null (unknown), never 0; recorded zeros give 0.
+ */
+function mealDayMetricSchema(field: MealNutritionField) {
+  return z
+    .strictObject({ recordedEntries: mealDayEntries, total: mealTotal(field, WEEKLY_REVIEW_MEAL_ENTRIES_PER_DAY_MAX).nullable() })
+    .refine((metric) => (metric.total === null) === (metric.recordedEntries === 0), {
+      message: 'a total exists exactly when at least one entry records the value',
+      path: ['total'],
+    })
+    .refine((metric) => metric.total === null || metric.total <= metric.recordedEntries * MEAL_NUTRITION_MAX[field], {
+      message: 'a total cannot exceed what its recorded entries can hold',
+      path: ['total'],
+    });
+}
+
+/**
+ * One metric over the week: `recordedEntries` entries and `recordedDays` stored dates hold a value, independently of the
+ * other metrics; `total` is the exact sum over those entries (null when none).
+ */
+function mealWeekMetricSchema(field: MealNutritionField) {
+  return z
+    .strictObject({
+      recordedEntries: mealWeekEntries,
+      recordedDays: dayCount,
+      total: mealTotal(field, WEEKLY_REVIEW_MEAL_ENTRIES_PER_WEEK_MAX).nullable(),
+    })
+    .refine((metric) => (metric.total === null) === (metric.recordedEntries === 0), {
+      message: 'a total exists exactly when at least one entry records the value',
+      path: ['total'],
+    })
+    .refine((metric) => (metric.recordedDays === 0) === (metric.recordedEntries === 0) && metric.recordedDays <= metric.recordedEntries, {
+      message: 'a day records the value exactly when one of its entries does',
+      path: ['recordedDays'],
+    })
+    .refine((metric) => metric.total === null || metric.total <= metric.recordedEntries * MEAL_NUTRITION_MAX[field], {
+      message: 'a total cannot exceed what its recorded entries can hold',
+      path: ['total'],
+    });
+}
+
+/** The entries logged for one stored date. A date with no entry has `loggedEntries` 0 and every metric unknown. */
+export const weeklyReviewMealDaySchema = z
+  .strictObject({
+    localDate: localDateSchema,
+    loggedEntries: mealDayEntries,
+    energyKcal: mealDayMetricSchema('energyKcal'),
+    proteinG: mealDayMetricSchema('proteinG'),
+    carbohydrateG: mealDayMetricSchema('carbohydrateG'),
+    fatG: mealDayMetricSchema('fatG'),
+  })
+  .refine((day) => MEAL_NUTRITION_FIELDS.every((field) => day[field].recordedEntries <= day.loggedEntries), {
+    message: 'a metric cannot be recorded for more entries than were logged',
+    path: ['loggedEntries'],
+  });
+
+/**
+ * The person's manual meal entries of the week (ADR-0093): the entries logged for the stored local dates Monday to Sunday,
+ * whatever zone each was logged in and whatever zone the week's activities are read in. PostgreSQL computes every count
+ * and every total (exact numeric) for each date and for the week in one statement; this schema checks that the two
+ * agree. A title-only entry is a logged entry with no value. Coverage says how many logged entries and days hold a value;
+ * it never says that everything eaten was logged. Review-only: not part of `facts`, `coverage` or `dataGaps`, which AI
+ * insights share. Food energy is what the person reported eating, never combined with movement's active energy.
+ */
+export const weeklyReviewMealsSchema = z
+  .strictObject({
+    /** Server-owned provenance; manual entry is the only source. */
+    source: z.enum(MEAL_SOURCES),
+    daysInWeek: z.literal(7),
+    loggedEntries: mealWeekEntries,
+    /** Stored dates with at least one logged entry, a title-only one included. */
+    daysWithEntries: dayCount,
+    energyKcal: mealWeekMetricSchema('energyKcal'),
+    proteinG: mealWeekMetricSchema('proteinG'),
+    carbohydrateG: mealWeekMetricSchema('carbohydrateG'),
+    fatG: mealWeekMetricSchema('fatG'),
+    /** Monday to Sunday, in order (checked against the week by the review schema). */
+    days: z.array(weeklyReviewMealDaySchema).length(7),
+  })
+  .superRefine((meals, context) => {
+    const issue = (message: string, path: (string | number)[]) => context.addIssue({ code: 'custom', message, path });
+    const sum = (values: readonly number[]) => values.reduce((total, value) => total + value, 0);
+    if (meals.loggedEntries !== sum(meals.days.map((day) => day.loggedEntries))) issue('the logged entries are the sum of the days', ['loggedEntries']);
+    if (meals.daysWithEntries !== meals.days.filter((day) => day.loggedEntries > 0).length) {
+      issue('days with entries must match the days', ['daysWithEntries']);
+    }
+    for (const field of MEAL_NUTRITION_FIELDS) {
+      const week = meals[field];
+      const days = meals.days.map((day) => day[field]);
+      if (week.recordedEntries !== sum(days.map((day) => day.recordedEntries))) issue('recorded entries are the sum of the days', [field, 'recordedEntries']);
+      if (week.recordedDays !== days.filter((day) => day.recordedEntries > 0).length) issue('recorded days must match the days', [field, 'recordedDays']);
+      if (week.recordedEntries > meals.loggedEntries) issue('a metric cannot be recorded for more entries than were logged', [field, 'recordedEntries']);
+      const recorded = days.flatMap((day) => (day.total === null ? [] : [tenthsOf(day.total)]));
+      const expected = recorded.length === 0 ? null : sum(recorded);
+      if ((week.total === null ? null : tenthsOf(week.total)) !== expected) issue('the week total is the sum of the day totals', [field, 'total']);
+    }
+  });
+
 export const weeklyReviewSchema = z
   .strictObject({
     coverage: weeklyReviewCoverageSchema,
@@ -353,6 +489,8 @@ export const weeklyReviewSchema = z
     facts: z.array(weeklyInsightFactSchema).max(WEEKLY_REVIEW_FACTS_MAX),
     /** GPX imports, review-only: not part of `facts`, `coverage` or `dataGaps`, which AI insights share. */
     importedActivities: weeklyReviewImportedActivitiesSchema,
+    /** Recorded nutrition of manual meal entries, review-only: not part of `facts`, `coverage` or `dataGaps`. */
+    meals: weeklyReviewMealsSchema,
     /** Manual daily movement, review-only: not part of `facts`, `coverage` or `dataGaps`, which AI insights share. */
     movement: weeklyReviewMovementSchema,
     provenance: weeklyReviewProvenanceSchema,
@@ -365,6 +503,10 @@ export const weeklyReviewSchema = z
   .refine((review) => review.movement.days.every((day, index) => day.localDate === addLocalDays(review.week.start, index)), {
     message: 'movement days are the week from Monday to Sunday, in order',
     path: ['movement', 'days'],
+  })
+  .refine((review) => review.meals.days.every((day, index) => day.localDate === addLocalDays(review.week.start, index)), {
+    message: 'meal days are the week from Monday to Sunday, in order',
+    path: ['meals', 'days'],
   });
 
 /**
@@ -385,5 +527,7 @@ export type WeeklyReviewMovementDay = z.infer<typeof weeklyReviewMovementDaySche
 export type WeeklyReviewMovement = z.infer<typeof weeklyReviewMovementSchema>;
 export type WeeklyReviewImportedActivities = z.infer<typeof weeklyReviewImportedActivitiesSchema>;
 export type WeeklyReviewTcxImportedActivities = z.infer<typeof weeklyReviewTcxImportedActivitiesSchema>;
+export type WeeklyReviewMealDay = z.infer<typeof weeklyReviewMealDaySchema>;
+export type WeeklyReviewMeals = z.infer<typeof weeklyReviewMealsSchema>;
 export type WeeklyReview = z.infer<typeof weeklyReviewSchema>;
 export type WeeklyReviewQuery = z.infer<typeof weeklyReviewQuerySchema>;

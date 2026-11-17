@@ -654,8 +654,8 @@ describe('ADR-0083 meal log HTTP API', () => {
     });
   });
 
-  describe('not an insight or weekly review source', () => {
-    it('creating, editing and deleting entries changes no weekly insight, no source gate and nothing in the weekly review', async () => {
+  describe('not an insight source; in the weekly review only as recorded nutrition (ADR-0093)', () => {
+    it('creating, editing and deleting entries changes no weekly insight, no source gate and no AI-shared part of the weekly review', async () => {
       const review = () =>
         request(app)
           .get(`/api/orgs/${ids.orgA}/weekly-review`)
@@ -673,13 +673,30 @@ describe('ADR-0083 meal log HTTP API', () => {
                     coalesce((SELECT string_agg(revision::text, ',' ORDER BY user_id) FROM weekly_insight_source_gates), '') AS gates`,
           )
         ).rows[0];
+      // Everything AI insights share, and every statement that is not about meals, stays as it was.
+      const shared = (built: Awaited<ReturnType<typeof review>>) => ({
+        coverage: built.coverage,
+        dataGaps: built.dataGaps,
+        facts: built.facts,
+        importedActivities: built.importedActivities,
+        movement: built.movement,
+        statements: built.statements.filter((statement) => !statement.code.startsWith('meals.')),
+        tcxImportedActivities: built.tcxImportedActivities,
+        week: built.week,
+      });
       const reviewBefore = await review();
+      expect(reviewBefore.meals.loggedEntries).toBe(0);
       const insightsBefore = await insightState();
       const created = parseView(await create(owner, lunch).expect(201));
+      expect((await review()).meals).toMatchObject({ energyKcal: { recordedDays: 1, recordedEntries: 1, total: 650.5 }, fatG: { total: 0 }, loggedEntries: 1 });
       await replace(owner, created.mealId, { energyKcal: 1, mealType: 'snack', title: 'x' }).expect(200);
       const second = parseView(await create(owner, titleOnly).expect(201));
+      expect((await review()).meals).toMatchObject({ daysWithEntries: 1, energyKcal: { recordedEntries: 1, total: 1 }, fatG: { recordedEntries: 0, total: null }, loggedEntries: 2 });
       await remove(owner, second.mealId).expect(204);
-      expect(await review()).toEqual(reviewBefore);
+      const reviewAfter = await review();
+      expect(shared(reviewAfter)).toEqual(shared(reviewBefore));
+      expect(reviewAfter.meals).toMatchObject({ energyKcal: { recordedEntries: 1, total: 1 }, loggedEntries: 1, proteinG: { recordedEntries: 0, total: null } });
+      expect(JSON.stringify(reviewAfter)).not.toMatch(/Chicken|Apple|"x"/u);
       expect(await insightState()).toEqual(insightsBefore);
     });
   });

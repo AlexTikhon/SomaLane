@@ -24,10 +24,12 @@ import {
   type WeekWindow,
   type WeeklyAggregate,
 } from './weekly-aggregate.js';
+import { describeMeals, mealsOf, type MealSummaryRecord } from './weekly-review-meals.js';
 
 // The deterministic weekly review: descriptive sentences written by code from the week's aggregate (the same object an
-// AI insight is generated from), a few counts the aggregate does not carry, and the week's manual daily movement, which
-// is review-only (ADR-0079). Pure: no clock, no database.
+// AI insight is generated from), a few counts the aggregate does not carry, and the review-only parts: manual daily
+// movement (ADR-0079), GPX and TCX imports (ADR-0086, ADR-0091) and recorded meal nutrition (ADR-0093,
+// weekly-review-meals.ts). Pure: no clock, no database.
 //
 // Rules every statement follows:
 // - Denominators are explicit: days in the week (7), days with numeric check-in values, days with the metric. A
@@ -535,7 +537,7 @@ export function coverageOf(aggregate: WeeklyAggregate, detail: ReviewDetail): We
 
 /**
  * The whole review, validated against the contract. `computedAt` is an ISO instant. `movement` are the week's stored
- * manual movement days, read in the same snapshot as the aggregate's sources.
+ * manual movement days and `meals` the rows of its meal summary, read in the same snapshot as the aggregate's sources.
  */
 export function buildWeeklyReview(input: {
   aggregate: WeeklyAggregate;
@@ -543,6 +545,8 @@ export function buildWeeklyReview(input: {
   detail: ReviewDetail;
   /** The week's GPX imports (ADR-0086), read in the same snapshot; review-only. */
   imported: readonly ImportedActivityRecord[];
+  /** The rows of the week's meal summary statement (ADR-0093), read in the same snapshot; review-only. */
+  meals: readonly MealSummaryRecord[];
   movement: readonly MovementDayRecord[];
   /** The week's TCX imports (ADR-0091), read in the same snapshot; review-only. */
   tcxImported: readonly TcxImportedActivityRecord[];
@@ -551,11 +555,13 @@ export function buildWeeklyReview(input: {
   const movement = movementOf(input.movement, aggregate.week.start);
   const importedActivities = importedActivitiesOf(input.imported);
   const tcxImportedActivities = tcxImportedActivitiesOf(input.tcxImported);
+  const meals = mealsOf(input.meals, aggregate.week.start);
   return weeklyReviewSchema.parse({
     coverage: coverageOf(aggregate, detail),
     dataGaps: dataGapsOf(aggregate),
     facts: buildFacts(aggregate),
     importedActivities,
+    meals,
     movement,
     provenance: {
       computedAt: input.computedAt,
@@ -570,6 +576,7 @@ export function buildWeeklyReview(input: {
       ...describeImported(importedActivities),
       ...describeTcxImported(tcxImportedActivities),
       ...describeMovement(movement, aggregate.week.timeZone),
+      ...describeMeals(meals),
     ],
     tcxImportedActivities,
     week: {

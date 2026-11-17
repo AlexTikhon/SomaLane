@@ -1,4 +1,11 @@
-import { WEEKLY_REVIEW_VERSION, weeklyReviewSchema, type WeeklyReview, type WeeklyReviewStatementCode } from '@running-tracker/contracts';
+import {
+  addLocalDays,
+  WEEKLY_REVIEW_VERSION,
+  weeklyReviewSchema,
+  type MealNutritionField,
+  type WeeklyReview,
+  type WeeklyReviewStatementCode,
+} from '@running-tracker/contracts';
 import { describe, expect, it } from 'vitest';
 
 import { validationCases } from '../evaluation/weekly-insight-evaluation.js';
@@ -24,6 +31,7 @@ import {
   type MovementDayRecord,
   type ReviewDetail,
 } from './weekly-review.js';
+import { describeMeals, formatTenths, mealsOf, nutritionTenthsOf, weekMealsSql, type MealSummaryRecord } from './weekly-review-meals.js';
 
 const WEEK = '2026-11-02'; // a Monday; Europe/Warsaw is on CET (UTC+1) all week
 const day = (offset: number) => `2026-11-0${2 + offset}`;
@@ -47,11 +55,49 @@ const gpsRun = (startedAt: string, minutes: number, distanceM: number | null): G
   startedAtMs: at(startedAt),
 });
 
+/** One stored meal entry as the database holds it: values as numeric text, a missing value absent (null). */
+interface MealEntry {
+  carbohydrateG?: string;
+  energyKcal?: string;
+  fatG?: string;
+  localDate: string;
+  proteinG?: string;
+}
+
+/**
+ * The rows the weekly meal statement returns for these entries (one per date with an entry, then the week), computed
+ * in integer tenths like PostgreSQL's numeric. Only for unit tests of the pure code: the real statement is exercised
+ * against PostgreSQL in weekly-review-http.integration.test.ts.
+ */
+function mealRecordsOf(entries: readonly MealEntry[], weekStart = WEEK): MealSummaryRecord[] {
+  const weekEnd = addLocalDays(weekStart, 6);
+  const inWeek = entries.filter((entry) => entry.localDate >= weekStart && entry.localDate <= weekEnd);
+  const summarize = (group: readonly MealEntry[], localDate: string | null): MealSummaryRecord => {
+    const metric = (field: MealNutritionField) => {
+      const holding = group.filter((entry) => entry[field] !== undefined);
+      return {
+        days: new Set(holding.map((entry) => entry.localDate)).size,
+        entries: holding.length,
+        totalTenths: holding.length === 0 ? null : holding.reduce((sum, entry) => sum + nutritionTenthsOf(entry[field]!), 0),
+      };
+    };
+    return {
+      daysWithEntries: new Set(group.map((entry) => entry.localDate)).size,
+      localDate,
+      loggedEntries: group.length,
+      metrics: { carbohydrateG: metric('carbohydrateG'), energyKcal: metric('energyKcal'), fatG: metric('fatG'), proteinG: metric('proteinG') },
+    };
+  };
+  const dates = [...new Set(inWeek.map((entry) => entry.localDate))].sort();
+  return [...dates.map((date) => summarize(inWeek.filter((entry) => entry.localDate === date), date)), summarize(inWeek, null)];
+}
+
 function review(input: {
   activities?: ManualActivityRecord[];
   checkIns?: CheckInRecord[];
   gpsRuns?: GpsRunRecord[];
   imported?: ImportedActivityRecord[];
+  meals?: MealEntry[];
   movement?: MovementDayRecord[];
   tcxImported?: TcxImportedActivityRecord[];
   requestTimeZone?: string;
@@ -67,6 +113,7 @@ function review(input: {
     computedAt: '2026-11-20T10:00:00.000Z',
     detail: reviewDetailOf({ activities, checkIns, window }),
     imported: input.imported ?? [],
+    meals: mealRecordsOf(input.meals ?? [], input.weekStart ?? WEEK),
     movement: input.movement ?? [],
     tcxImported: input.tcxImported ?? [],
   });
@@ -134,7 +181,7 @@ describe('weekly review: the three-of-four sleep regression', () => {
 describe('weekly review: empty, partial and complete weeks', () => {
   it('an empty week says nothing was recorded, has no metric facts and no zero values', () => {
     const built = review({ requestTimeZone: 'Europe/Warsaw' });
-    expect(codes(built)).toEqual(['week.time_zone_from_request', 'check_ins.none', 'manual.none', 'gps.none', 'movement.none']);
+    expect(codes(built)).toEqual(['week.time_zone_from_request', 'check_ins.none', 'manual.none', 'gps.none', 'movement.none', 'meals.none']);
     expect(text(built, 'movement.none')).toBe('No daily movement was recorded this week.');
     expect(text(built, 'check_ins.none')).toBe('No check-ins were recorded this week.');
     expect(built.facts.map((fact) => fact.id)).toEqual(['check_ins.days_with_data', 'check_ins.days_missing', 'check_ins.coverage', 'manual.activities', 'gps.runs']);
@@ -319,6 +366,15 @@ describe('weekly review: contract, provenance and wording', () => {
     // Movement: extreme values, zeros, a single metric, and days saved in other zones.
     review({ movement: [moved(day(0), 200_000, '20000.0', 'America/New_York'), moved(day(1), 0, '0.0'), moved(day(2), null, '0.1', 'Asia/Tokyo')] }),
     review({ movement: [0, 1, 2, 3, 4, 5, 6].map((offset) => moved(day(offset), 0, null)) }),
+    // Meals: title-only, zeros, partial and extreme values (ADR-0093).
+    review({ meals: [{ localDate: day(0) }] }),
+    review({
+      meals: [
+        { carbohydrateG: '0', energyKcal: '20000.0', fatG: '0.0', localDate: day(0), proteinG: '2000' },
+        { energyKcal: '0.1', localDate: day(3) },
+        { localDate: day(6) },
+      ],
+    }),
   ];
 
   it('is a valid, app-computed, unpersisted review with stable unique codes', () => {
@@ -354,6 +410,7 @@ describe('weekly review: contract, provenance and wording', () => {
       computedAt: '2026-11-20T10:00:00.000Z',
       detail: reviewDetailOf({ activities: [], checkIns, window }),
       imported: [{ distanceM: 10_000, durationS: 3_600, type: 'ride' }],
+      meals: mealRecordsOf([{ energyKcal: '650.5', localDate: day(0), proteinG: '30.0' }, { localDate: day(1) }]),
       movement: [moved(day(0), 8042, '412.5'), moved(day(1), 0, null)],
       tcxImported: [{ distanceM: 12_000, reportedDurationS: 2_400, type: 'swim' }],
     });
@@ -366,10 +423,14 @@ describe('weekly review: contract, provenance and wording', () => {
       computedAt: '2026-11-20T10:00:00.000Z',
       detail: reviewDetailOf({ activities: [], checkIns, window }),
       imported: [],
+      meals: mealRecordsOf([]),
       movement: [],
       tcxImported: [],
     });
     expect([built.facts, built.dataGaps, built.coverage]).toEqual([without.facts, without.dataGaps, without.coverage]);
+    // Nor do meals (ADR-0093).
+    expect(built.meals.loggedEntries).toBe(2);
+    expect(JSON.stringify([built.facts, built.dataGaps, built.coverage])).not.toMatch(/meal|food|protein|650/iu);
     expect(JSON.stringify(built.facts)).not.toMatch(/step|energy|kcal|movement/iu);
     // Neither do GPX imports (ADR-0086).
     expect(built.importedActivities.count).toBe(1);
@@ -592,12 +653,222 @@ describe('weekly review: manual daily movement (ADR-0079)', () => {
       '3 activities were imported from TCX files: 2 h reported by their laps, 31.5 km. Shown on their own, not added to manual activities, GPX imports or GPS runs, and not checked against them.',
     );
     expect(codes(built).indexOf('imported.tcx')).toBe(codes(built).indexOf('imported.gpx') + 1);
-    expect(built.provenance.reviewVersion).toBe('weekly-review-4');
+    expect(built.provenance.reviewVersion).toBe('weekly-review-5');
   });
 
-  it('keeps the in-progress notice first, and movement statements after every other statement', () => {
+  it('keeps the in-progress notice first, and movement statements after every other statement but the meal statements', () => {
     const built = review({ checkIns: [checkIn(day(0), { mood: 3 })], movement: [moved(day(0), 10, '1.5', 'UTC')], today: day(2) });
     expect(codes(built)[0]).toBe('week.in_progress');
-    expect(codes(built).slice(-4)).toEqual(['movement.steps_recorded', 'movement.active_energy_recorded', 'movement.manual_source', 'movement.time_zones']);
+    expect(codes(built).slice(-5)).toEqual([
+      'movement.steps_recorded',
+      'movement.active_energy_recorded',
+      'movement.manual_source',
+      'movement.time_zones',
+      'meals.none',
+    ]);
+  });
+});
+
+describe('weekly review: recorded meal nutrition (ADR-0093)', () => {
+  const emptyMetric = { recordedEntries: 0, total: null };
+  const mealText = (built: WeeklyReview) =>
+    built.statements
+      .filter((statement) => statement.code.startsWith('meals.'))
+      .map((statement) => statement.text)
+      .join('\n');
+
+  it('an empty week has seven empty days, unknown totals, zero coverage and one "none" statement', () => {
+    const built = review({});
+    expect(built.meals).toEqual({
+      carbohydrateG: { recordedDays: 0, recordedEntries: 0, total: null },
+      days: [0, 1, 2, 3, 4, 5, 6].map((offset) => ({
+        carbohydrateG: emptyMetric,
+        energyKcal: emptyMetric,
+        fatG: emptyMetric,
+        localDate: day(offset),
+        loggedEntries: 0,
+        proteinG: emptyMetric,
+      })),
+      daysInWeek: 7,
+      daysWithEntries: 0,
+      energyKcal: { recordedDays: 0, recordedEntries: 0, total: null },
+      fatG: { recordedDays: 0, recordedEntries: 0, total: null },
+      loggedEntries: 0,
+      proteinG: { recordedDays: 0, recordedEntries: 0, total: null },
+      source: 'manual',
+    });
+    expect(codes(built).filter((code) => code.startsWith('meals.'))).toEqual(['meals.none']);
+    expect(text(built, 'meals.none')).toBe('No meals or snacks were logged this week.');
+  });
+
+  it('a title-only entry is a logged entry without values, and a meal-only week leaves the shared parts untouched', () => {
+    const built = review({ meals: [{ localDate: day(4) }] });
+    expect(built.meals).toMatchObject({
+      carbohydrateG: { recordedDays: 0, recordedEntries: 0, total: null },
+      daysWithEntries: 1,
+      energyKcal: { recordedDays: 0, recordedEntries: 0, total: null },
+      loggedEntries: 1,
+    });
+    expect(built.meals.days[4]).toEqual({ carbohydrateG: emptyMetric, energyKcal: emptyMetric, fatG: emptyMetric, localDate: day(4), loggedEntries: 1, proteinG: emptyMetric });
+    expect(codes(built).filter((code) => code.startsWith('meals.'))).toEqual([
+      'meals.logged',
+      'meals.energy_not_recorded',
+      'meals.protein_not_recorded',
+      'meals.carbohydrate_not_recorded',
+      'meals.fat_not_recorded',
+      'meals.logging_limits',
+    ]);
+    expect(text(built, 'meals.logged')).toBe('1 meal entry was logged on 1 of 7 days; each counts on the date it was logged for.');
+    expect(text(built, 'meals.energy_not_recorded')).toBe('Food energy was not recorded for the only logged entry.');
+    expect(text(built, 'meals.logging_limits')).toBe(
+      'Meals were entered manually. The totals add up only the values recorded on logged entries; they do not show everything eaten this week, and food energy is not combined with active energy.',
+    );
+    const empty = review({});
+    expect([built.coverage, built.facts, built.dataGaps, built.movement]).toEqual([empty.coverage, empty.facts, empty.dataGaps, empty.movement]);
+    expect(text(built, 'check_ins.none')).toBe('No check-ins were recorded this week.');
+  });
+
+  it('counts each metric on its own, by entries and by days, keeps a recorded zero and sums exactly', () => {
+    const built = review({
+      meals: [
+        { energyKcal: '650.5', localDate: day(0), proteinG: '30.0' },
+        { energyKcal: '410.6', localDate: day(0) },
+        { localDate: day(0) },
+        { carbohydrateG: '0', fatG: '0.0', localDate: day(2) },
+        { energyKcal: '0', localDate: day(5), proteinG: '12.5' },
+      ],
+    });
+    expect(built.meals).toMatchObject({
+      carbohydrateG: { recordedDays: 1, recordedEntries: 1, total: 0 },
+      daysWithEntries: 3,
+      energyKcal: { recordedDays: 2, recordedEntries: 3, total: 1061.1 },
+      fatG: { recordedDays: 1, recordedEntries: 1, total: 0 },
+      loggedEntries: 5,
+      proteinG: { recordedDays: 2, recordedEntries: 2, total: 42.5 },
+    });
+    expect(built.meals.days.map((entry) => entry.loggedEntries)).toEqual([3, 0, 1, 0, 0, 1, 0]);
+    expect(built.meals.days[0]).toEqual({
+      carbohydrateG: emptyMetric,
+      energyKcal: { recordedEntries: 2, total: 1061.1 },
+      fatG: emptyMetric,
+      localDate: day(0),
+      loggedEntries: 3,
+      proteinG: { recordedEntries: 1, total: 30 },
+    });
+    expect(built.meals.days[5]?.energyKcal).toEqual({ recordedEntries: 1, total: 0 });
+    expect(text(built, 'meals.logged')).toBe('5 meal entries were logged on 3 of 7 days; each counts on the date it was logged for.');
+    expect(text(built, 'meals.energy_recorded')).toBe(
+      'Food energy was recorded for 3 of 5 logged entries, on 2 of 7 days: 1,061.1 kcal in total for those entries; 2 other entries are unknown.',
+    );
+    expect(text(built, 'meals.protein_recorded')).toBe(
+      'Protein was recorded for 2 of 5 logged entries, on 2 of 7 days: 42.5 g in total for those entries; 3 other entries are unknown.',
+    );
+    expect(text(built, 'meals.carbohydrate_recorded')).toBe(
+      'Carbohydrate was recorded for 1 of 5 logged entries, on 1 of 7 days: 0 g in total for those entries; 4 other entries are unknown.',
+    );
+    // Food energy stays apart from movement's active energy, also when both exist.
+    const withMovement = review({ meals: [{ energyKcal: '500', localDate: day(0) }], movement: [moved(day(0), null, '300.0')] });
+    expect(withMovement.meals.energyKcal.total).toBe(500);
+    expect(withMovement.movement.activeEnergyKcal.recordedTotal).toBe(300);
+    expect(allText(withMovement)).not.toMatch(/800|200 kcal|balance|net /iu);
+  });
+
+  it('adds one-decimal values exactly: 0.1 + 0.2 is 0.3, ten times 0.1 is 1, and a week at the bounds is exact', () => {
+    expect(0.1 + 0.2).not.toBe(0.3);
+    const small = review({ meals: [{ energyKcal: '0.1', localDate: day(0) }, { energyKcal: '0.2', localDate: day(1) }] });
+    expect(small.meals.energyKcal).toEqual({ recordedDays: 2, recordedEntries: 2, total: 0.3 });
+    expect(JSON.stringify(small.meals.energyKcal)).toBe('{"recordedEntries":2,"recordedDays":2,"total":0.3}');
+    expect(text(small, 'meals.energy_recorded')).toBe('Food energy was recorded for all 2 logged entries, on 2 of 7 days: 0.3 kcal in total.');
+    const tenths = review({ meals: Array.from({ length: 10 }, () => ({ fatG: '0.1', localDate: day(3) })) });
+    expect(tenths.meals.fatG.total).toBe(1);
+    expect(tenths.meals.days[3]?.fatG).toEqual({ recordedEntries: 10, total: 1 });
+    const bounds = review({
+      meals: [0, 1, 2, 3, 4, 5, 6].map((offset) => ({ carbohydrateG: '1999.9', energyKcal: '19999.9', fatG: '2000', localDate: day(offset), proteinG: '0.1' })),
+    });
+    expect(bounds.meals).toMatchObject({
+      carbohydrateG: { total: 13_999.3 },
+      daysWithEntries: 7,
+      energyKcal: { recordedDays: 7, recordedEntries: 7, total: 139_999.3 },
+      fatG: { total: 14_000 },
+      proteinG: { total: 0.7 },
+    });
+    expect(text(bounds, 'meals.logged')).toBe('7 meal entries were logged on all 7 days; each counts on the date it was logged for.');
+    expect(text(bounds, 'meals.energy_recorded')).toBe('Food energy was recorded for all 7 logged entries, on all 7 days: 139,999.3 kcal in total.');
+  });
+
+  it('reads PostgreSQL numeric text exactly and refuses what a one-decimal sum cannot be', () => {
+    expect(['1061.1', '0.0', '0', '250', '250.30', '1400000000.0', '0.1'].map(nutritionTenthsOf)).toEqual([10_611, 0, 0, 2500, 2503, 14_000_000_000, 1]);
+    for (const bad of ['412.55', '-0.1', '1e3', 'NaN', 'Infinity', '', '.5', '412.', '12345678901']) {
+      expect(() => nutritionTenthsOf(bad), bad).toThrow(/at most one meaningful decimal/u);
+    }
+    expect([formatTenths(0), formatTenths(3), formatTenths(10_611), formatTenths(2500), formatTenths(1_399_993)]).toEqual(['0', '0.3', '1,061.1', '250', '139,999.3']);
+  });
+
+  it('refuses summary rows the statement cannot return, and a week that disagrees with its days', () => {
+    const rows = mealRecordsOf([{ energyKcal: '100', localDate: day(1) }]);
+    const weekRow = rows.at(-1)!;
+    const dayRow = rows[0]!;
+    expect(() => mealsOf([dayRow], WEEK)).toThrow(/0 week rows/u);
+    expect(() => mealsOf([...rows, weekRow], WEEK)).toThrow(/2 week rows/u);
+    expect(() => mealsOf([dayRow, dayRow, weekRow], WEEK)).toThrow(/unexpected date: 2026-11-03/u);
+    expect(() => mealsOf([{ ...dayRow, localDate: '2026-11-09' }, weekRow], WEEK)).toThrow(/unexpected date: 2026-11-09/u);
+    expect(() => mealsOf([{ ...dayRow, localDate: '2026-11-01' }, weekRow], WEEK)).toThrow(/unexpected date: 2026-11-01/u);
+    // The week row and the day rows must agree; the contract refuses the review otherwise.
+    const tampered = { ...weekRow, metrics: { ...weekRow.metrics, energyKcal: { days: 1, entries: 1, totalTenths: 1001 } } };
+    const checkIns: CheckInRecord[] = [];
+    const window = resolveWeekWindow({ checkIns, requestTimeZone: 'Europe/Warsaw', weekStart: WEEK });
+    const aggregate = aggregateWeek({ activities: [], checkIns, gpsRuns: [], todayLocalDate: '2026-11-20', window });
+    const build = (meals: MealSummaryRecord[]) =>
+      buildWeeklyReview({
+        aggregate,
+        computedAt: '2026-11-20T10:00:00.000Z',
+        detail: reviewDetailOf({ activities: [], checkIns, window }),
+        imported: [],
+        meals,
+        movement: [],
+        tcxImported: [],
+      });
+    expect(build(rows).meals.energyKcal.total).toBe(100);
+    expect(() => build([dayRow, tampered])).toThrow();
+    expect(() => build([dayRow, { ...weekRow, loggedEntries: 2 }])).toThrow();
+    expect(() => build([dayRow, { ...weekRow, daysWithEntries: 2 }])).toThrow();
+  });
+
+  it('describes singular and plural forms, and a metric not recorded for any of several entries', () => {
+    const meals = mealsOf(mealRecordsOf([{ localDate: day(0), proteinG: '20' }, { localDate: day(0) }, { localDate: day(1) }]), WEEK);
+    expect(describeMeals(meals).map((statement) => statement.text)).toEqual([
+      '3 meal entries were logged on 2 of 7 days; each counts on the date it was logged for.',
+      'Food energy was not recorded for any of the 3 logged entries.',
+      'Protein was recorded for 1 of 3 logged entries, on 1 of 7 days: 20 g in total for those entries; 2 other entries are unknown.',
+      'Carbohydrate was not recorded for any of the 3 logged entries.',
+      'Fat was not recorded for any of the 3 logged entries.',
+      'Meals were entered manually. The totals add up only the values recorded on logged entries; they do not show everything eaten this week, and food energy is not combined with active energy.',
+    ]);
+    const one = describeMeals(mealsOf(mealRecordsOf([{ energyKcal: '1', localDate: day(6) }, { localDate: day(6) }]), WEEK));
+    expect(one[1]?.text).toBe('Food energy was recorded for 1 of 2 logged entries, on 1 of 7 days: 1 kcal in total for those entries; 1 other entry is unknown.');
+    const only = describeMeals(mealsOf(mealRecordsOf([{ energyKcal: '1', localDate: day(6) }]), WEEK));
+    expect(only[1]?.text).toBe('Food energy was recorded for the only logged entry, on 1 of 7 days: 1 kcal in total.');
+  });
+
+  it('never words targets, balances, averages, estimates, completeness, comparisons or advice', () => {
+    const words = /\b(target|goal|balance|deficit|surplus|net|average|per day|daily|estimate\w*|complete\w*|every|all meals|full|missed|skipped|more|less|than|recommend\w*|should|need\w*|limit|budget|over|under)\b/iu;
+    for (const built of [
+      review({ meals: [{ localDate: day(0) }] }),
+      review({ meals: [{ energyKcal: '650.5', localDate: day(0), proteinG: '30.0' }, { carbohydrateG: '0', localDate: day(2) }] }),
+      review({ meals: [0, 1, 2, 3, 4, 5, 6].map((offset) => ({ carbohydrateG: '1', energyKcal: '1', fatG: '1', localDate: day(offset), proteinG: '1' })) }),
+    ]) {
+      expect(mealText(built)).not.toMatch(words);
+      for (const statement of built.statements) expect(statement.text.length).toBeLessThanOrEqual(240);
+    }
+  });
+
+  it('the statement selects no title, type, description, zone or identifier, and keeps explicit owner, source and date bounds', () => {
+    const selected = weekMealsSql.slice(0, weekMealsSql.indexOf('FROM meals'));
+    expect(selected).not.toMatch(/title|meal_type|description|note|time_zone|\bid\b|idempotency|creation_digest|created_at/u);
+    expect(weekMealsSql).toMatch(/meal\.org_id = \$1/u);
+    expect(weekMealsSql).toMatch(/meal\.user_id = \$2/u);
+    expect(weekMealsSql).toMatch(/meal\.source = 'manual'/u);
+    expect(weekMealsSql).toMatch(/meal\.local_date BETWEEN \$3::date AND \$3::date \+ 6/u);
+    expect(weekMealsSql).toMatch(/GROUP BY GROUPING SETS \(\(meal\.local_date\), \(\)\)/u);
   });
 });

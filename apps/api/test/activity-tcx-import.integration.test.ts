@@ -660,7 +660,7 @@ describe('ADR-0091 TCX activity import', () => {
     it('describes TCX imports in the weekly review on their own, outside every AI-shared part', async () => {
       await seed();
       const review = weeklyReviewSchema.parse((await get(`/api/orgs/${ids.orgA}/weekly-review`, { timeZone: ZONE, weekStart: '2026-11-09' })).body);
-      expect(review.provenance.reviewVersion).toBe('weekly-review-4');
+      expect(review.provenance.reviewVersion).toBe('weekly-review-5');
       expect(review.tcxImportedActivities).toEqual({
         byType: [
           { count: 1, distanceM: 20000, reportedDurationS: 3601, type: 'ride' },

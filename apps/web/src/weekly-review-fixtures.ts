@@ -1,4 +1,54 @@
-import { addLocalDays, type WeeklyReview, type WeeklyReviewMovement } from '@running-tracker/contracts';
+import {
+  addLocalDays,
+  MEAL_NUTRITION_FIELDS,
+  type MealNutritionField,
+  type WeeklyReview,
+  type WeeklyReviewMealDay,
+  type WeeklyReviewMeals,
+  type WeeklyReviewMovement,
+} from '@running-tracker/contracts';
+
+/** One logged meal entry for a fixture: its day (offset from Monday) and the values it records (absent = unknown). */
+export type MealFixtureEntry = { offset: number } & Partial<Record<MealNutritionField, number>>;
+
+/**
+ * The meals part of a review of the week starting 2026-11-02 from the entries given; counts and totals are computed as
+ * PostgreSQL does (exact sums, here in integer tenths), per day and for the week.
+ */
+export function mealsFixture(entries: readonly MealFixtureEntry[], weekStart = '2026-11-02'): WeeklyReviewMeals {
+  const sumTenths = (values: readonly number[]) => values.reduce((sum, value) => sum + Math.round(value * 10), 0);
+  const metricOf = (group: readonly MealFixtureEntry[], field: MealNutritionField) => {
+    const values = group.flatMap((entry) => (entry[field] === undefined ? [] : [entry[field]]));
+    return { recordedEntries: values.length, total: values.length === 0 ? null : sumTenths(values) / 10 };
+  };
+  const days: WeeklyReviewMealDay[] = Array.from({ length: 7 }, (_, offset) => {
+    const group = entries.filter((entry) => entry.offset === offset);
+    return {
+      carbohydrateG: metricOf(group, 'carbohydrateG'),
+      energyKcal: metricOf(group, 'energyKcal'),
+      fatG: metricOf(group, 'fatG'),
+      localDate: addLocalDays(weekStart, offset),
+      loggedEntries: group.length,
+      proteinG: metricOf(group, 'proteinG'),
+    };
+  });
+  const weekMetric = (field: MealNutritionField) => ({
+    ...metricOf(entries, field),
+    recordedDays: days.filter((day) => day[field].recordedEntries > 0).length,
+  });
+  const [energyKcal, proteinG, carbohydrateG, fatG] = MEAL_NUTRITION_FIELDS.map(weekMetric);
+  return {
+    carbohydrateG: carbohydrateG!,
+    days,
+    daysInWeek: 7,
+    daysWithEntries: days.filter((day) => day.loggedEntries > 0).length,
+    energyKcal: energyKcal!,
+    fatG: fatG!,
+    loggedEntries: entries.length,
+    proteinG: proteinG!,
+    source: 'manual',
+  };
+}
 
 /**
  * The movement part of a review of the week starting 2026-11-02, from the recorded days given (by offset from Monday);
@@ -54,6 +104,7 @@ export function reviewFixture(patch: Partial<WeeklyReview> = {}): WeeklyReview {
     ],
     importedActivities: { byType: [], count: 0, distanceM: 0, elapsedDurationS: 0, source: 'gpx' },
     tcxImportedActivities: { byType: [], count: 0, distanceM: 0, reportedDurationS: 0, source: 'tcx' },
+    meals: mealsFixture([]),
     movement: movementFixture([]),
     provenance: {
       computedAt: '2026-11-09T08:00:00.000Z',

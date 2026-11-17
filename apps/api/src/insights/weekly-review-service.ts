@@ -7,6 +7,7 @@ import { withAuthenticatedTenantTransaction } from '../database/authenticated-te
 import { ApiError } from '../http/errors.js';
 import { localDateOf } from '../runs/run-search-period.js';
 import { canonicalTimeZone, computeWeek } from './weekly-insight-service.js';
+import { readWeekMeals } from './weekly-review-meals.js';
 import {
   buildWeeklyReview,
   kcalTenthsOf,
@@ -27,11 +28,12 @@ import {
 // GPS runs are filtered by owner explicitly, so a run another person shared with this one is never part of their review.
 //
 // Movement has its own statement on purpose: the source statement is the AI input (weekSourcesSql), and movement must
-// not become part of it.
+// not become part of it. The same holds for GPX and TCX imports and for meals (ADR-0093: one date-bounded summary
+// statement, weekMealsSql, read last in the same snapshot; it returns counts and exact totals only, never an entry).
 
 /** Barriers for deterministic snapshot tests. Never set in production. */
 export interface WeeklyReviewTestHooks {
-  /** Inside the read transaction, after the AI-shared sources were read and before movement is read. */
+  /** Inside the read transaction, after the AI-shared sources were read and before imports, movement and meals are read. */
   afterSourcesRead?: () => Promise<void>;
 }
 
@@ -169,7 +171,7 @@ export class WeeklyReviewService {
       });
     }
     const owner = { orgId, userId: session.userId };
-    const { imported, movement, tcxImported, week } = await withAuthenticatedTenantTransaction(
+    const { imported, meals, movement, tcxImported, week } = await withAuthenticatedTenantTransaction(
       this.#pool,
       session,
       orgId,
@@ -180,12 +182,14 @@ export class WeeklyReviewService {
           imported: await readWeekImports(client, owner, computed.rangeStart, computed.rangeEnd),
           movement: await readWeekMovement(client, owner, query.weekStart),
           tcxImported: await readWeekTcxImports(client, owner, computed.rangeStart, computed.rangeEnd),
+          // The stored local dates of the requested week, like movement: never the activity range of the week's zone.
+          meals: await readWeekMeals(client, owner, query.weekStart),
           week: computed,
         };
       },
       { snapshot: 'read-only snapshot' },
     );
     const detail = reviewDetailOf({ activities: week.sources.activities, checkIns: week.sources.checkIns, window: week.window });
-    return buildWeeklyReview({ aggregate: week.aggregate, computedAt: now.toISOString(), detail, imported, movement, tcxImported });
+    return buildWeeklyReview({ aggregate: week.aggregate, computedAt: now.toISOString(), detail, imported, meals, movement, tcxImported });
   }
 }

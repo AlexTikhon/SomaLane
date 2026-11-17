@@ -1,6 +1,25 @@
 import { describe, expect, it } from 'vitest';
 
-import { openApiDocument, weeklyReviewMovementDaySchema, weeklyReviewQuerySchema, weeklyReviewSchema, WEEKLY_REVIEW_VERSION } from './index.js';
+import {
+  openApiDocument,
+  weeklyReviewMealDaySchema,
+  weeklyReviewMovementDaySchema,
+  weeklyReviewQuerySchema,
+  weeklyReviewSchema,
+  WEEKLY_REVIEW_MEAL_ENTRIES_PER_DAY_MAX,
+  WEEKLY_REVIEW_VERSION,
+} from './index.js';
+
+const unknown = { recordedEntries: 0, total: null };
+const mealDay = (localDate: string, loggedEntries = 0, values: Record<string, { recordedEntries: number; total: number | null }> = {}) => ({
+  carbohydrateG: unknown,
+  energyKcal: unknown,
+  fatG: unknown,
+  localDate,
+  loggedEntries,
+  proteinG: unknown,
+  ...values,
+});
 
 const review = {
   coverage: {
@@ -58,6 +77,27 @@ const review = {
     source: 'manual',
     steps: { daysRecorded: 2, recordedTotal: 8042 },
   },
+  // Monday: three entries (energy on two, protein on one, one title-only); Wednesday: one with recorded zeros; Saturday:
+  // one with energy 0 and protein. Each metric has its own entry and day coverage.
+  meals: {
+    carbohydrateG: { recordedDays: 1, recordedEntries: 1, total: 0 },
+    days: [
+      mealDay('2026-11-02', 3, { energyKcal: { recordedEntries: 2, total: 1061.1 }, proteinG: { recordedEntries: 1, total: 30 } }),
+      mealDay('2026-11-03'),
+      mealDay('2026-11-04', 1, { carbohydrateG: { recordedEntries: 1, total: 0 }, fatG: { recordedEntries: 1, total: 0 } }),
+      mealDay('2026-11-05'),
+      mealDay('2026-11-06'),
+      mealDay('2026-11-07', 1, { energyKcal: { recordedEntries: 1, total: 0 }, proteinG: { recordedEntries: 1, total: 12.5 } }),
+      mealDay('2026-11-08'),
+    ],
+    daysInWeek: 7,
+    daysWithEntries: 3,
+    energyKcal: { recordedDays: 2, recordedEntries: 3, total: 1061.1 },
+    fatG: { recordedDays: 1, recordedEntries: 1, total: 0 },
+    loggedEntries: 5,
+    proteinG: { recordedDays: 2, recordedEntries: 2, total: 42.5 },
+    source: 'manual',
+  },
   provenance: {
     computedAt: '2026-11-20T10:00:00.000Z',
     persisted: false,
@@ -85,8 +125,8 @@ describe('weekly review contract', () => {
     expect(coverage({ manualActivities: { count: 1, withDistance: 2 } })).toBe(false);
   });
 
-  it('names the version that added TCX imports (after GPX imports)', () => {
-    expect(WEEKLY_REVIEW_VERSION).toBe('weekly-review-4');
+  it('names the version that added recorded meal nutrition (after TCX imports)', () => {
+    expect(WEEKLY_REVIEW_VERSION).toBe('weekly-review-5');
   });
 
   it('refuses an inconsistent TCX import part, and one named as GPX (ADR-0091)', () => {
@@ -160,6 +200,100 @@ describe('weekly review contract', () => {
 
     it('is part of the OpenAPI document', () => {
       expect(JSON.stringify(openApiDocument.components.schemas.WeeklyReview)).toContain('daysWithRecord');
+    });
+  });
+
+  describe('meals (ADR-0093)', () => {
+    type Meals = typeof review.meals;
+    const days = review.meals.days;
+    const accepts = (meals: Record<string, unknown>) => weeklyReviewSchema.safeParse({ ...review, meals }).success;
+    const patched = (patch: Partial<Record<keyof Meals, unknown>>) => accepts({ ...review.meals, ...patch });
+    const withDay = (index: number, day: unknown) => days.map((entry, position) => (position === index ? day : entry));
+    const dayAccepted = (day: unknown) => weeklyReviewMealDaySchema.safeParse(day).success;
+
+    it('refuses weekly counts and totals that do not match the days', () => {
+      expect(patched({})).toBe(true);
+      expect(patched({ loggedEntries: 4 })).toBe(false);
+      expect(patched({ daysWithEntries: 2 })).toBe(false);
+      expect(patched({ energyKcal: { recordedDays: 2, recordedEntries: 2, total: 1061.1 } })).toBe(false);
+      expect(patched({ energyKcal: { recordedDays: 1, recordedEntries: 3, total: 1061.1 } })).toBe(false);
+      expect(patched({ energyKcal: { recordedDays: 2, recordedEntries: 3, total: 1061.2 } })).toBe(false);
+      expect(patched({ proteinG: { recordedDays: 2, recordedEntries: 2, total: null } })).toBe(false);
+      expect(patched({ carbohydrateG: { recordedDays: 0, recordedEntries: 0, total: null } })).toBe(false);
+    });
+
+    it('keeps null (unknown) and 0 (recorded zero) apart, per day and for the week', () => {
+      expect(patched({ fatG: { recordedDays: 1, recordedEntries: 1, total: null } })).toBe(false);
+      const nulled = mealDay('2026-11-04', 1, { carbohydrateG: { recordedEntries: 1, total: null }, fatG: { recordedEntries: 1, total: 0 } });
+      expect(patched({ days: withDay(2, nulled) })).toBe(false);
+      expect(dayAccepted(mealDay('2026-11-03', 0, { energyKcal: { recordedEntries: 0, total: 0 } }))).toBe(false);
+      expect(dayAccepted(mealDay('2026-11-03', 1, { energyKcal: { recordedEntries: 1, total: 0 } }))).toBe(true);
+      // A title-only entry: logged, every metric unknown.
+      expect(dayAccepted(mealDay('2026-11-03', 1))).toBe(true);
+    });
+
+    it('keeps the null/count relationships of a week: a recorded day needs a recorded entry and the reverse', () => {
+      const titleOnly = {
+        ...review.meals,
+        carbohydrateG: { recordedDays: 0, recordedEntries: 0, total: null },
+        days: [mealDay('2026-11-02', 1), ...days.slice(1).map((entry) => mealDay(entry.localDate))],
+        daysWithEntries: 1,
+        energyKcal: { recordedDays: 0, recordedEntries: 0, total: null },
+        fatG: { recordedDays: 0, recordedEntries: 0, total: null },
+        loggedEntries: 1,
+        proteinG: { recordedDays: 0, recordedEntries: 0, total: null },
+      };
+      expect(accepts(titleOnly)).toBe(true);
+      expect(accepts({ ...titleOnly, energyKcal: { recordedDays: 1, recordedEntries: 0, total: null } })).toBe(false);
+      expect(accepts({ ...titleOnly, energyKcal: { recordedDays: 0, recordedEntries: 1, total: 0 } })).toBe(false);
+      expect(accepts({ ...titleOnly, energyKcal: { recordedDays: 2, recordedEntries: 1, total: 0 } })).toBe(false);
+    });
+
+    it('refuses a day metric recorded for more entries than were logged, or a total its entries cannot hold', () => {
+      expect(dayAccepted(mealDay('2026-11-03', 1, { proteinG: { recordedEntries: 2, total: 2 } }))).toBe(false);
+      expect(dayAccepted(mealDay('2026-11-03', 1, { energyKcal: { recordedEntries: 1, total: 20_000 } }))).toBe(true);
+      expect(dayAccepted(mealDay('2026-11-03', 1, { energyKcal: { recordedEntries: 1, total: 20_000.1 } }))).toBe(false);
+      expect(dayAccepted(mealDay('2026-11-03', 1, { fatG: { recordedEntries: 1, total: 2_000.1 } }))).toBe(false);
+      expect(dayAccepted(mealDay('2026-11-03', 1, { fatG: { recordedEntries: 1, total: 12.55 } }))).toBe(false);
+      expect(dayAccepted(mealDay('2026-11-03', 1, { fatG: { recordedEntries: 1, total: -0.1 } }))).toBe(false);
+      expect(dayAccepted(mealDay('2026-11-03', WEEKLY_REVIEW_MEAL_ENTRIES_PER_DAY_MAX))).toBe(true);
+      expect(dayAccepted(mealDay('2026-11-03', WEEKLY_REVIEW_MEAL_ENTRIES_PER_DAY_MAX + 1))).toBe(false);
+    });
+
+    it('holds weekly totals within weekly bounds exactly (seven days at the per-day bound)', () => {
+      const max = WEEKLY_REVIEW_MEAL_ENTRIES_PER_DAY_MAX;
+      const full = days.map((entry) => mealDay(entry.localDate, max, { energyKcal: { recordedEntries: max, total: max * 20_000 } }));
+      const week = {
+        ...review.meals,
+        carbohydrateG: { recordedDays: 0, recordedEntries: 0, total: null },
+        days: full,
+        daysWithEntries: 7,
+        energyKcal: { recordedDays: 7, recordedEntries: 7 * max, total: 7 * max * 20_000 },
+        fatG: { recordedDays: 0, recordedEntries: 0, total: null },
+        loggedEntries: 7 * max,
+        proteinG: { recordedDays: 0, recordedEntries: 0, total: null },
+      };
+      expect(accepts(week)).toBe(true);
+      expect(accepts({ ...week, energyKcal: { recordedDays: 7, recordedEntries: 7 * max, total: 7 * max * 20_000 + 0.1 } })).toBe(false);
+    });
+
+    it('needs the seven days of the week in order, the manual source and no extra fields', () => {
+      expect(patched({ days: days.slice(0, 6) })).toBe(false);
+      expect(patched({ days: [...days.slice(1), days[0]] })).toBe(false);
+      expect(patched({ source: 'apple_health' })).toBe(false);
+      expect(accepts({ ...review.meals, titles: ['Chicken and rice'] })).toBe(false);
+      expect(patched({ days: withDay(1, { ...days[1], title: 'x' }) })).toBe(false);
+      expect(patched({ energyKcal: { recordedDays: 2, recordedEntries: 3, target: 2000, total: 1061.1 } })).toBe(false);
+      // Days that are not the review's week are refused even when the movement days match it.
+      const nextWeek = days.map((entry, index) => ({ ...entry, localDate: `2026-11-${String(9 + index).padStart(2, '0')}` }));
+      expect(patched({ days: nextWeek })).toBe(false);
+    });
+
+    it('is part of the OpenAPI document', () => {
+      const schema = JSON.stringify(openApiDocument.components.schemas.WeeklyReview);
+      expect(schema).toContain('daysWithEntries');
+      expect(schema).toContain('recordedDays');
+      expect(JSON.stringify(openApiDocument.paths['/api/orgs/{orgId}/weekly-review'])).toContain('weekly-review-5');
     });
   });
 

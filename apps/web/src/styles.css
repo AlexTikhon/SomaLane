@@ -445,6 +445,8 @@ h1 { max-width: 11ch; margin: 0; font-size: clamp(3.1rem, 7.2vw, 6.2rem); line-h
 .review-movement__day p { margin: 0; color: #7f8a82; font-size: 0.84rem; }
 .review-movement__day--missing { border-style: dashed; }
 @media (max-width: 40rem) { .review-movement__day { grid-template-columns: 1fr; } }
+/* Recorded nutrition (ADR-0093) reuses the movement block's layout; only its empty line is its own. */
+.review-meals__none { margin: 0; color: #d6e2da; }
 
 /* Today (ADR-0082): a read-only overview of one day, one card per source. */
 .today-controls { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 0.75rem; }
