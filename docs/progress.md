@@ -5171,3 +5171,87 @@ corpus and thresholds unchanged. No Ollama call.
 
 Not run for this follow-up: `npm run verify`, Chromium and the other integration files (only the grounding regex and
 its tests changed). The report, ADR-0092 and the runbook carry a short update.
+
+### Clause classification follow-up: vessel actions keep conflicts, parenthesized labels attribute (2026-11-17)
+
+**What changed.** `meal-draft-grounding.ts`: the punctuation-only adjacency of the previous follow-up is replaced by
+`wholeVesselLabelBesideFigure`, which inspects the vessel's own clause (edges: sentence ends, line breaks, parentheses,
+brackets, `,` `:` `;` `=` and spaced dashes). Across a sentence end, a line break or a parenthesis, a whole vessel is
+related to an adjacent figure only when that clause is a label (nothing but an optional preposition and article, the
+quantified vessel and an English "of …"); a clause describing an action attributes nothing. Same-line constructions are
+back to the bounded gaps of the Amendment 6 correction. The weakened conflict controls and the original "context after
+the value" controls are restored; the "documented consequence" test that proposed 20 is removed. Contracts, prompt,
+wire, frozen datasets, corpus, thresholds and provider defaults unchanged. No Ollama call.
+
+| Text | Before | After |
+|---|---|---|
+| "Washed the whole pan. Protein 25 g. In total I ate protein 20 g." (claim 20) | proposed 20 | withheld `conflicting` |
+| "Помыла всю сковороду. Белки 25 г. Итого съела белки 20 г." / "Сварила в полной кастрюле. Белки 25 г. …" | proposed 20 | withheld `conflicting` |
+| "Soup, 900 kcal (whole pot)." / "(for the whole pot)." / "(Whole pot)\n900 kcal" / "Protein 80 g (whole pot)." | proposed | withheld `per_portion` |
+| "Protein 25 g. In total I ate protein 20 g."; "Whole pot\n900 kcal"; "Whole pot\n900 kcal. In total I ate 300 kcal."; "Cooked soup in a full pot. Lunch, 300 kcal."; "I washed the whole pan. Soup, 400 kcal. In total I ate 300 kcal." | as required | unchanged |
+| "Soup, 300 kcal\nWhole pot washed afterwards" | withheld `per_portion` | proposed 300 |
+
+| Command | Result |
+|---|---|
+| Restored controls and 6 new tests (conflicts beside vessel actions EN/RU for every field and CRLF; parenthesized labels after and before a figure EN/RU, LF/CRLF; consumed total beside a parenthesized figure; label/action pairs across `. ` LF CRLF; the five controls) against the committed grounding | **8 of 25 failed** in the spec (both defects and the restored controls) |
+| `vitest run src/meals/drafts/ src/evaluation/` after the change | **509 passed** (504 − 1 removed + 6 new); one edit had not applied at first (search text ended mid-line), so the module failed to load in 13 files; corrected |
+| `eslint apps/api/src/meals/drafts`, API `tsc --noEmit` | exit 0 / exit 0 |
+| `eval:meal-drafts -- --set safety` (unchanged corpus) | exit **0**, verifier **PASS**: 53/53, 0 of 191 forbidden, controls 21 (0 missed), 0 mismatches; **0 cases changed**; fingerprint `f26e9239…` → `94b3fd4d…` |
+| `eval:meal-drafts:check` with the saved `qwen3:8b` reports (offline) | exit 2: model gate **FAIL for evidence** (`FINGERPRINT_MISMATCH`); the reports stay stale, no current model PASS |
+| Test database identity (read-only probe, deleted; `VITEST_MAX_WORKERS` unset) | `127.0.0.1:5433/running_tracker_test`, server `172.18.0.2:5432`, runtime / owner / maintenance roles |
+| `meal-drafts-http.integration.test.ts` | **29 passed** (28 + 1 new case for both defects); the new case failed with the committed grounding swapped in (restored, hash equal) |
+| `git diff --check` | clean |
+
+Not run for this follow-up: `npm run verify`, Chromium and the other integration files. Changes are uncommitted.
+
+### Russian food qualifier in a whole-vessel label (2026-11-17)
+
+**What changed.** `meal-draft-grounding.ts`: the whole-vessel label of the clause classification follow-up accepted the
+English "of soup" but rejected the Russian genitive, so "Полная кастрюля супа\n900 ккал" proposed 900 (HEAD withheld it
+as `per_portion`), in both orders. A Russian label may now end in one dish or food noun from a closed genitive list
+(`FOOD_QUALIFIER_RU`, about 45 words); no other trailing word qualifies, so "Полная кастрюля помыта" stays an action.
+Same-line constructions, contracts, prompt, frozen datasets, corpus, thresholds and provider defaults unchanged. No
+Ollama call.
+
+| Command | Result |
+|---|---|
+| 6 new paired label/action tests in `meal-draft-grounding-container-relation.spec.ts` (reproduction and colon control; label before and after the figure across `\n` `\r\n` `. ` `.\n` `.\r\n` for energy, fat, protein, carbohydrate; parenthesized labels in both orders; consumed total beside the figure; arbitrary trailing words rejected) against the grounding before the fix | **5 of 31 failed** (every label case); the action controls passed |
+| `vitest run src/meals/drafts/ src/evaluation/` after the fix | **515 passed** (509 + 6); no existing assertion changed |
+| `eslint` (drafts, HTTP test), API `tsc --noEmit` | exit 0 / exit 0 |
+| `eval:meal-drafts -- --set safety` (unchanged corpus) | exit **0**, verifier **PASS**: 0 of 191 forbidden, controls 21/21, 0 mismatches; **0 of 53 cases changed** against the previous after-report; fingerprint `94b3fd4d…` → `729600b8…` |
+| `eval:meal-drafts:check` with the saved `qwen3:8b` reports (offline) | exit 2: model gate **FAIL for evidence** (`FINGERPRINT_MISMATCH`); the reports stay stale, no current model PASS |
+| Test database identity (read-only probe, deleted; `VITEST_MAX_WORKERS` unset) | `127.0.0.1:5433/running_tracker_test`, server `172.18.0.2:5432`, runtime / owner / maintenance roles |
+| `meal-drafts-http.integration.test.ts` | **30 passed** (29 + 1 new case, run as `userOrgA` because `userDual`'s 60 proposals per minute are spent under the fixed clock); the new case failed with the pre-fix label swapped in (restored, hash equal) |
+| `git diff --check` | clean |
+
+Remaining limits: a dish missing from the list is not a qualifier ("Полная кастрюля окрошки\n900 ккал" proposes 900);
+on the same line any one word may still follow the Russian vessel before a figure (unchanged since HEAD), so "Полная
+кастрюля помыта, 900 ккал" is withheld as a container figure. Not run: `npm run verify`, Chromium, other integration
+files. Changes are uncommitted.
+
+### Unknown qualifier after a whole vessel is unresolved, not an action (2026-11-17)
+
+**What changed.** `meal-draft-grounding.ts`: the food-qualifier follow-up treated every word missing from
+`FOOD_QUALIFIER_RU` as an action, so "Полная кастрюля окрошки\n900 ккал", "900 ккал\r\nПолная кастрюля окрошки" and
+"Полная кастрюля салата.\nБелки 80 г." proposed the figure (HEAD withheld them). A vessel clause beside a figure is now
+classified as a label (confirmed), an explicit action (closed lists of cleaning words, kitchen objects, Russian
+past-tense/infinitive cooking and handling verbs, English cooking verbs before the vessel), or unresolved. Unresolved
+withholds the figure as `per_portion` for a proposal (`VesselReading` `proposal`), while conflict detection keeps the
+figure as a whole-entry value (`conflict`), so an unresolved figure cannot clear the way for another value. No food
+names added. Contracts, reason codes, prompt, frozen datasets, corpus, thresholds and provider defaults unchanged. No
+Ollama call.
+
+| Command | Result |
+|---|---|
+| New `describe` in `meal-draft-grounding-container-relation.spec.ts` (3 regressions; unlisted dishes and synthetic qualifiers such as "зюмбры" and "Whole pot blorped" in both orders across `\n` `\r\n` `\n\n` `\r\n\r\n` `. ` `.\n` `.\r\n` and parentheses; conflict preservation; action and label controls; food adjectives after the vessel) plus 3 updated assertions ("стояла", "потом", "супа стояла" now `per_portion`), against the grounding before the fix | **6 of 38 failed**; the action, label and consumed-total controls passed |
+| `vitest run src/meals src/evaluation` after the fix | **527 passed** (19 files) |
+| `eslint` (grounding, spec, HTTP test), API `tsc --noEmit` | exit 0 / exit 0 |
+| `eval:meal-drafts -- --set safety` (unchanged corpus, report to the session scratchpad) | exit **0**, verifier **PASS**: 0 of 191 forbidden, controls 21/21, 0 mismatches; fingerprint `729600b8…` → `69ac4e55…`; saved model reports stay **stale** |
+| `meal-drafts-http.integration.test.ts` (test database identity verified by `loadIntegrationTestConfiguration`) | **31 passed** (30 + 1 new case as `userOrgA`: the 3 regressions and a synthetic qualifier withheld `per_portion`, the conflict kept, the cooking control proposed); with the old fallback simulated (`unresolved` → `action`) the new case **failed** on its first regression (900 proposed); file restored, SHA-256 equal (`a085b845…`) |
+| `git diff --check` | clean |
+
+Remaining limits: an action word missing from the list leaves an unrelated clause unresolved, which over-abstains (the
+safe direction: "Soup, 300 kcal. Whole pot went back on the shelf." withholds 300). A listed action word makes the clause
+an action even when the clause also names food ("Сварила полную кастрюлю супа\n900 ккал" proposes 900, consistent with
+the established "Cooked in a full pot" control). The rule reads wording only. Not run: `npm run verify`, Chromium, other
+integration files, any model. Changes are uncommitted.

@@ -141,7 +141,8 @@ gone. The v1
 held-out set was first run on 2026-11-14 and has been examined, so later runs of it are **regression measurements**, not
 fresh held-out evidence. A fake run is labelled as harness verification and is never quoted as model quality. Results:
 [meal-draft-container-relation-2026-11-17.md](../reports/meal-draft-container-relation-2026-11-17.md) (**current**:
-after the Amendment 6 correction and its adjacency follow-up, verifier **PASS**, 0 forbidden values, controls 21/21, no
+after the Amendment 6 correction and its adjacency, clause-classification, food-qualifier and unknown-qualifier
+follow-ups (current fingerprint `69ac4e55…`), verifier **PASS**, 0 forbidden values, controls 21/21, no
 corpus case changed; **no current model evidence**: its `qwen3:8b` 40-call reports (model PASS, marginal, outcome 34/40
 = 85.0 %) were measured at fingerprint `e410e3f0…` and are stale since the follow-up moved it to `f26e9239…`; the model
 gate FAILs for evidence until a new 40-call run),

@@ -17,6 +17,55 @@ CPU); no hosted CI run and no physical device.
 > `f26e9239…`, so **the model reports below are stale**: `--check` on them now FAILs for evidence
 > (`FINGERPRINT_MISMATCH`). **There is no current model PASS** until a new 40-call run; none was made for this fix (no
 > Ollama call). The verdict table and the rerun below describe the code as frozen before this follow-up.
+>
+> **Update, clause classification (second follow-up, 2026-11-17).** The adjacency rule above read any vessel phrase next
+> to a figure as an attribution, so a cleaning sentence hid a conflict again ("Washed the whole pan. Protein 25 g. In
+> total I ate protein 20 g." proposed 20), and parentheses were not punctuation ("Soup, 900 kcal (whole pot).",
+> "(Whole pot)\n900 kcal" proposed 900). Across a sentence end, a line break or a parenthesis, a whole vessel is now
+> related to an adjacent figure only when its own clause is a **label** (nothing but the vessel with an optional
+> preposition, article and English "of …": "Whole pot", "(for the whole pot)", "Вся кастрюля", "(на всю кастрюлю)"); a
+> clause describing an action ("Washed the whole pan.", "Whole pot washed afterwards", "Помыла всю сковороду.")
+> attributes nothing. Same-line constructions keep the bounded gaps of the correction. Both protein examples now withhold
+> 20 as `conflicting` (also in Russian); "Soup, 900 kcal (whole pot).", "Soup, 900 kcal (for the whole pot).", "(Whole
+> pot)\n900 kcal" and "Protein 80 g (whole pot)." withhold the figure; "Whole pot\n900 kcal", "Whole pot\n900 kcal. In
+> total I ate 300 kcal." (900 withheld, 300 proposed), "Cooked soup in a full pot. Lunch, 300 kcal." (proposed), "I
+> washed the whole pan. Soup, 400 kcal. In total I ate 300 kcal." (`conflicting`) and "Soup, 300 kcal\nWhole pot washed
+> afterwards" (proposed) are unchanged controls. Verifier **PASS** (0 of 191 forbidden, controls 21/21, no corpus case
+> changed); fingerprint `f26e9239…` → `94b3fd4d…`; the saved model reports stay **stale** (`--check` FAILs for evidence).
+> No Ollama call.
+>
+> **Update, Russian food qualifier (third follow-up, 2026-11-17).** The label above accepted the English "of soup" but
+> not the Russian genitive, so "Полная кастрюля супа\n900 ккал" proposed 900 (HEAD withheld it as `per_portion`), in
+> either order. A label may now end in one dish or food noun from a closed genitive list (`FOOD_QUALIFIER_RU`: "супа",
+> "борща", "плова", "каши" and about 40 others); Russian marks the qualifier by case alone and a genitive cannot be told
+> from a short participle by its ending ("салата" / "помыта"), so no other word qualifies and "Полная кастрюля помыта" stays
+> an action. The reproduction and its label-before/label-after forms across LF, CRLF, sentence ends and parentheses
+> withhold the figure (energy and macronutrients); the consumed total beside them is proposed; the paired action texts
+> keep their conflicts; "Полная кастрюля супа:\n900 ккал" stays withheld. Verifier **PASS** (0 of 191 forbidden,
+> controls 21/21, 0 of 53 cases changed); fingerprint `94b3fd4d…` → `729600b8…`; the saved model reports stay **stale**.
+> No Ollama call. Remaining limits: a dish missing from the list is not a qualifier ("Полная кастрюля окрошки\n900 ккал"
+> proposes 900, the unsafe direction); on the same line any one word may still follow the Russian vessel before a figure
+> (unchanged since HEAD), so "Полная кастрюля помыта, 900 ккал" is withheld as a container figure.
+>
+> **Update, unknown qualifier (fourth follow-up, 2026-11-17).** The third follow-up treated every word missing from
+> `FOOD_QUALIFIER_RU` as an action, so "Полная кастрюля окрошки\n900 ккал", "900 ккал\r\nПолная кастрюля окрошки" and
+> "Полная кастрюля салата.\nБелки 80 г." proposed the figure (HEAD withheld all three). A vessel clause beside a figure
+> is now a **label** (confirmed attribution), an explicit **action** (a closed list of cleaning words, kitchen objects
+> such as "lid"/"крышка", Russian past-tense or infinitive cooking and handling verbs, and English cooking verbs before
+> the vessel only), or **unresolved** (anything else). An unresolved clause withholds its figure as `per_portion` for a
+> proposal, but conflict detection still counts that figure as a whole-entry value, so "Полная кастрюля окрошки\n900
+> ккал. Итого съела 300 ккал." withholds 300 as `conflicting` instead of proposing it. All three regressions are withheld,
+> and so are unlisted dishes ("драников", "шулюма") and made-up qualifiers ("зюмбры", "Whole pot blorped"), in both
+> orders, across LF, CRLF, sentence ends and parentheses. Unchanged: the action controls ("Washed the whole pan. Protein
+> 25 g. In total I ate protein 20 g.", "Полная кастрюля помыта\n400 ккал. Итого съела 300 ккал." → `conflicting`;
+> "Cooked soup in a full pot. Lunch, 300 kcal." → 300), the known labels and the consumed total beside a confirmed
+> container figure. Three earlier assertions that an unknown word ("стояла", "потом", "супа стояла") is an action now
+> expect `per_portion`. Verifier **PASS** (0 of 191 forbidden, controls 21/21, 0 mismatches); fingerprint `729600b8…` →
+> `69ac4e55…`; the saved model reports stay **stale**. No Ollama call. Remaining limits: an action word missing from the
+> list leaves an unrelated clause unresolved, so its figure is withheld when it could have been proposed (the safe
+> direction, but over-abstention), e.g. "Soup, 300 kcal. Whole pot went back on the shelf." withholds 300. Every listed
+> action word makes its clause an action, even when the clause also names food ("Сварила полную кастрюлю супа\n900 ккал"
+> proposes 900, as "Cooked in a full pot" did before). The classification is wording only, not understanding.
 
 ## Verdict
 

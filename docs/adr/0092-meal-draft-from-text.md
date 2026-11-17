@@ -853,6 +853,12 @@ whitespace between them (sentence ends and line breaks included), in either orde
 still separates them. Verifier PASS (no corpus case changed); fingerprint `e410e3f0…` → `f26e9239…`, so the model
 evidence below is **stale** and there is no current model PASS until a new 40-call run (none made). See the report's
 update note.
+**Second follow-up the same day (clause classification):** across a sentence end, a line break or a parenthesis,
+that adjacency applies only when the vessel's own clause is a label ("Whole pot", "(for the whole pot)", "Вся
+кастрюля"); a clause describing an action ("Washed the whole pan.", "Whole pot washed afterwards") attributes nothing,
+so the values beside it keep their scope and conflicts. Parenthesized labels are recognized in both orders ("Soup, 900
+kcal (whole pot).", "(Whole pot)\n900 kcal"). Verifier PASS (no corpus case changed); fingerprint `94b3fd4d…`; the
+model evidence stays stale.
 
 **Verifier gate.** Before (HEAD `ba4ea30`, unchanged grounding) **PASS**, exit 0; after **PASS**, exit 0: 53/53
 executed, **0** of 191 forbidden values accepted, controls **21/21**, outcome mismatches **0**, and **no case changed
