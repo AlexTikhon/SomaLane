@@ -682,6 +682,34 @@ describe('ADR-0092 meal draft proposals under the runtime role', () => {
       });
     });
 
+    // Container-relation correction (2026-11-17): a whole-quantified vessel is container context only when it is related
+    // to a figure. Unrelated cooking or cleaning words neither withhold a plain value nor hide a conflicting one.
+    it('ignores unrelated whole-vessel context for acceptance and for conflicts, and keeps related container figures', async () => {
+      expect(await draftFor('Cooked soup in a full pot. Lunch, 300 kcal.', answer('Cooked soup', { energyKcal: claim('300', '300 kcal') }))).toEqual({
+        carbohydrateG: { status: 'not_stated' },
+        energyKcal: { excerpt: '300 kcal', status: 'proposed', value: 300 },
+        fatG: { status: 'not_stated' },
+        proteinG: { status: 'not_stated' },
+      });
+      expect(await draftFor('Сварила суп в полной кастрюле. Обед, 300 ккал.', answer('Сварила суп', { energyKcal: claim('300', '300 ккал') }))).toMatchObject({
+        energyKcal: { excerpt: '300 ккал', status: 'proposed', value: 300 },
+      });
+      for (const [text, title, evidence] of [
+        ['I washed the whole pan. Soup, 400 kcal. In total I ate 300 kcal.', 'Soup', '300 kcal'],
+        ['Soup, 400 kcal. In total I ate 300 kcal.', 'Soup', '300 kcal'],
+        ['Помыла всю сковороду. Суп, 400 ккал. Итого съела 300 ккал.', 'Суп', '300 ккал'],
+      ] as const) {
+        expect(await draftFor(text, answer(title, { energyKcal: claim('300', evidence) })), text).toMatchObject({
+          energyKcal: { reason: 'conflicting', status: 'withheld' },
+        });
+      }
+      const container = 'The whole pot has 900 kcal. In total I ate 300 kcal.';
+      expect(await draftFor(container, answer('pot', { energyKcal: claim('900', '900 kcal') }))).toMatchObject({ energyKcal: { reason: 'per_portion', status: 'withheld' } });
+      expect(await draftFor(container, answer('pot', { energyKcal: claim('300', '300 kcal') }))).toMatchObject({
+        energyKcal: { excerpt: '300 kcal', status: 'proposed', value: 300 },
+      });
+    });
+
     it('withholds forbidden precision and rounded claims, and accepts trailing zeros', async () => {
       expect(
         await draftFor(

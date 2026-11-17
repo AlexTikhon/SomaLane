@@ -53,8 +53,9 @@ describe('a whole-container figure is not the total eaten', () => {
       ['Chili, the whole pot has protein 80 g', 'proteinG', '80', 'protein 80 g'],
       ['Chili. The pot: 120 g carbs', 'carbohydrateG', '120', '120 g carbs'],
       ['Chili. The pot – 120 g carbs', 'carbohydrateG', '120', '120 g carbs'],
-      // A whole-quantifier needs no figure of its own (documented consequence, safe direction).
-      ['Washed the whole pan, then soup 300 kcal', 'energyKcal', '300', '300 kcal'],
+      // A whole-quantified vessel set beside a figure in its clause. (Until the 2026-11-17 correction a whole-quantifier
+      // needed no figure at all, which also withheld "Washed the whole pan, then soup 300 kcal"; that one is now a
+      // positive control below and in meal-draft-grounding-container-relation.spec.ts.)
       ['Chili; whole pot, fat 45.5 g', 'fatG', '45.5', 'fat 45.5 g'],
     ] as const) {
       expect(ground(text, field, value, evidence), JSON.stringify(text)).toEqual(withheld('per_portion'));
@@ -188,6 +189,8 @@ describe('vessel words in food names and cooking references are not container fi
       ['Chili out of the pot was 420 kcal', 'energyKcal', '420', '420 kcal', 420],
       ['Heated it in a pan. Omelette, 320 kcal', 'energyKcal', '320', '320 kcal', 320],
       ['The pot was hot. Soup, 300 kcal', 'energyKcal', '300', '300 kcal', 300],
+      // A whole-quantified vessel with no figure related to it (2026-11-17 correction).
+      ['Washed the whole pan, then soup 300 kcal', 'energyKcal', '300', '300 kcal', 300],
       ['Rice from the saucepan, protein 4.5 g', 'proteinG', '4.5', 'protein 4.5 g', 4.5],
       ['Суп из кастрюли, 300 ккал', 'energyKcal', '300', '300 ккал', 300],
       ['Курица, жаренная на сковороде, 400 ккал', 'energyKcal', '400', '400 ккал', 400],

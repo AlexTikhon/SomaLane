@@ -157,10 +157,22 @@ const CONTAINER_OR_PARTIAL = new RegExp(
 // total, it is not the amount eaten, so its presence anywhere in the text means a value's whole-entry scope must be
 // established explicitly (see `wholeEntryScoped`). Unlike the package words of `CONTAINER_OR_PARTIAL`, a vessel word on
 // its own is NOT context: food names and cooking references ("Pot roast", "Pan-fried salmon", "Soup from the pot",
-// "Суп из кастрюли", "Плов из казана", "Тушила в кастрюле 40 минут") name the vessel without giving it a figure. Only
-// these explicit constructions count, each word separated by any whitespace:
-// - a whole-quantifier on the vessel: "whole/entire/full pot", "all (of) the pot", "вся/всю/всей/целая/полная
-//   кастрюля", "весь/целый казан", "кастрюля целиком";
+// "Суп из кастрюли", "Плов из казана", "Тушила в кастрюле 40 минут") name the vessel without giving it a figure. Nor
+// is a whole-quantified vessel on its own ("Cooked soup in a full pot.", "I washed the whole pan.", "Помыла всю
+// сковороду."): it is context only when it is RELATED to a figure (2026-11-17 correction; before it, a bare
+// whole-quantifier anywhere reclassified every value of the text, which withheld unrelated values and hid unrelated
+// conflicts from `distinctStatedValues`). Only these explicit constructions count:
+// - a whole-quantified vessel ("whole/entire/full pot", "all (of) the pot", "вся/всю/всей/целая/полная кастрюля",
+//   "весь/целый казан", "кастрюля целиком") that is
+//   - the subject of a figure: "the whole pot (of chili) is/has/contains/was … 900 kcal" (at most two words before the
+//     figure, any whitespace), "вся кастрюля содержит/была/это 900 ккал";
+//   - set beside a figure with nothing but punctuation and whitespace between them, sentence ends and line breaks
+//     included: "whole pot, fat 45.5 g", "a full pot of soup: 900 kcal", "Whole pot\n900 kcal", "Full pot. 900 kcal.",
+//     "вся кастрюля 900 ккал", "полная кастрюля супа, 900 ккал"; any word between them separates them ("Cooked soup in
+//     a full pot. Lunch, 300 kcal.");
+//   - after a figure, in the same way ("900 kcal\nWhole pot", "900 ккал. Вся кастрюля."), or qualifying it on the same
+//     line through an optional "for/in/of" or "на/за/в/во/для" and an article ("900 kcal for the whole pot", "protein
+//     80 g, the whole pot", "900 ккал на всю кастрюлю", "белки 80 г, весь казан");
 // - the vessel as the subject of a figure: "the/this/that pot (of soup) is/has/contains/was … 900 kcal" (at most two
 //   words before the figure; not after "from" or "out of", which name where the food came from: "Soup from the pot is
 //   300 kcal"), "Pot: 900 kcal" at the start of a clause, "Кастрюля 900 ккал", "Кастрюля: 900 ккал", "Кастрюля
@@ -181,14 +193,35 @@ const VESSEL_RU_LOCATIVE = '(?:кастрюле|кастрюльке|сково�
 const NUTRIENT_WORD = `(?:${Object.values(METRIC).join('|')}|${ENERGY_UNIT_WORD_BEFORE})`;
 const FIGURE = `(?:\\d+(?:[.,]\\d+)?${SPACE}?(?:${ENERGY_UNIT}|${GRAM_UNIT})${NOT_LETTER_AFTER}|${NOT_LETTER_BEFORE}${NUTRIENT_WORD}${NOT_LETTER_AFTER})`;
 const FIGURE_GAP = `\\s*(?:[:=]|${MINUS_OR_DASH})?\\s*`;
+// Horizontal whitespace only (spaces, tabs, no-break spaces): a bare line break separates statements.
+const INLINE_SPACE = '[^\\S\\r\\n]';
+// Nothing but punctuation and whitespace (sentence ends, line breaks, CRLF included): a whole-quantified vessel and a
+// figure with only this between them, in either order, are related ("Whole pot\n900 kcal", "Full pot. 900 kcal.",
+// "900 kcal\nWhole pot"). Any word between them separates them ("Cooked soup in a full pot. Lunch, 300 kcal.").
+const ADJACENT_GAP = `(?:\\s|[,:;.!=]|${MINUS_OR_DASH})*`;
+// Between a figure and the whole-quantified vessel after it when a preposition or an article stands between them: the
+// same line with at most one "," ":" "=" or dash ("900 kcal for the whole pot", "protein 80 g, the whole pot").
+const AFTER_FIGURE_GAP = `${INLINE_SPACE}*(?:[,:=]|${MINUS_OR_DASH})?${INLINE_SPACE}*`;
+const WHOLE_VESSEL_EN = `${NOT_LETTER_BEFORE}(?:(?:whole|entire|full)\\s+${VESSEL_EN}|all\\s+(?:of\\s+)?(?:the|this|that|my|our)\\s+${VESSEL_EN})${NOT_LETTER_AFTER}`;
+const WHOLE_VESSEL_RU = `${NOT_LETTER_BEFORE}(?:(?:вс(?:я|ю|ей|ею|ем|его|ё|е)|весь|цел(?:ая|ую|ой|ый|ого|ом)|полн(?:ая|ую|ой|ый|ого|ом))\\s+(?:${VESSEL_RU})|(?:${VESSEL_RU})\\s+целиком)${NOT_LETTER_AFTER}`;
 const WHOLE_CONTAINER = new RegExp(
   [
-    `${NOT_LETTER_BEFORE}(?:whole|entire|full)\\s+${VESSEL_EN}${NOT_LETTER_AFTER}`,
-    `${NOT_LETTER_BEFORE}all\\s+(?:of\\s+)?(?:the|this|that|my|our)\\s+${VESSEL_EN}${NOT_LETTER_AFTER}`,
+    // A whole-quantified vessel as the subject of a figure: "the whole pot (of chili) is … 900 kcal".
+    `${WHOLE_VESSEL_EN}(?:\\s+of\\s+\\p{L}+)?\\s+(?:is|was|has|had|contains|contained|holds|held|totals|totaled|totalled|comes\\s+to|came\\s+to)\\s+(?:\\p{L}+\\s+){0,2}${FIGURE}`,
+    // Beside a figure, only punctuation or whitespace between: "whole pot, fat 45.5 g", "a full pot of soup: 900 kcal",
+    // "Whole pot\n900 kcal", "Full pot. 900 kcal.".
+    `${WHOLE_VESSEL_EN}(?:\\s+of\\s+\\p{L}+)?${ADJACENT_GAP}${FIGURE}`,
+    // Russian, beside or as the subject: "вся кастрюля 900 ккал", "Вся кастрюля\n900 ккал", "полная кастрюля супа, 900
+    // ккал", "целая кастрюля — это 900 ккал", "вся кастрюля содержит 900 ккал" (one word may follow the vessel on its line).
+    `${WHOLE_VESSEL_RU}(?:${INLINE_SPACE}+\\p{L}+)?${ADJACENT_GAP}(?:(?:это|содерж\\p{L}*|был[аио]?|составля\\p{L}*)${INLINE_SPACE}*(?:[:=]|${MINUS_OR_DASH})?${INLINE_SPACE}*)?${FIGURE}`,
+    // A figure followed by the whole-quantified vessel, only punctuation or whitespace between: "900 kcal\nWhole pot",
+    // "900 ккал. Вся кастрюля."; or on the same line through a preposition or an article: "900 kcal for the whole pot",
+    // "900 ккал на всю кастрюлю".
+    `${FIGURE}${ADJACENT_GAP}(?:${WHOLE_VESSEL_EN}|${WHOLE_VESSEL_RU})`,
+    `${FIGURE}${AFTER_FIGURE_GAP}(?:(?:for|in|of)\\s+)?(?:(?:a|an|the|this|that|my|our)\\s+)?${WHOLE_VESSEL_EN}`,
+    `${FIGURE}${AFTER_FIGURE_GAP}(?:(?:на|за|в|во|для)\\s+)?${WHOLE_VESSEL_RU}`,
     `${NOT_LETTER_BEFORE}(?<!${NOT_LETTER_BEFORE}(?:from|out\\s+of)\\s+)(?:the|this|that|my|our)\\s+${VESSEL_EN}(?:\\s+of\\s+\\p{L}+)?\\s+(?:is|was|has|had|contains|contained|holds|held|totals|totaled|totalled|comes\\s+to|came\\s+to)\\s+(?:\\p{L}+\\s+){0,2}${FIGURE}`,
     `(?:(?:^|[\\r\\n.;!?,(])\\s*(?:(?:the|this|that|my|our)\\s+)?|${NOT_LETTER_BEFORE}in\\s+(?:the|this|that|my|our)\\s+)${VESSEL_EN}\\s*(?:[:=]|${MINUS_OR_DASH})\\s*${FIGURE}`,
-    `${NOT_LETTER_BEFORE}(?:вс(?:я|ю|ей|ею|ем|его|ё|е)|весь|цел(?:ая|ую|ой|ый|ого|ом)|полн(?:ая|ую|ой|ый|ого|ом))\\s+(?:${VESSEL_RU})${NOT_LETTER_AFTER}`,
-    `${NOT_LETTER_BEFORE}(?:${VESSEL_RU})\\s+целиком${NOT_LETTER_AFTER}`,
     `${NOT_LETTER_BEFORE}${VESSEL_RU_NOMINATIVE}(?:\\s+(?:содерж\\p{L}*|был[аио]?|это))?${FIGURE_GAP}${FIGURE}`,
     `${NOT_LETTER_BEFORE}в\\s+(?:(?:этой|этом|той|том|моей|моём|моем)\\s+)?${VESSEL_RU_LOCATIVE}${FIGURE_GAP}${FIGURE}`,
   ].join('|'),
