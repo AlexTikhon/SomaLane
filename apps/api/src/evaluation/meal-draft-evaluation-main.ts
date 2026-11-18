@@ -18,6 +18,11 @@ import { runMealDraftEvaluationCli } from './meal-draft-evaluation-cli.js';
 //   npm run eval:meal-drafts -- --set development --provider ollama --dry-run
 //   npm run eval:meal-drafts -- --set heldout --provider ollama --max-calls 20 --out docs/reports/artifacts/x/heldout.json
 //   npm run eval:meal-drafts:check -- --model dev.json --model heldout.json --out gates.json
+//   npm run eval:meal-drafts -- --set development --provider ollama --dataset-version v2 --dry-run
+//   npm run eval:meal-drafts:check -- --dataset-version v2 --model dev-v2.json --model heldout-v2.json --out gates-v2.json
+//
+// --dataset-version selects the development and held-out sets (v1 by default, so every earlier command keeps its
+// meaning); a check judges reports of exactly that version and refuses any other.
 //
 // Exit codes: 0 PASS or a finished measurement, 1 an error that prevented a run or a verdict, 2 FAIL, 3 NOT_RUN.
 

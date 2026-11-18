@@ -5,6 +5,7 @@ import {
   MEAL_DRAFT_CLARIFICATION_REASONS,
   MEAL_DRAFT_UNSUPPORTED_REASONS,
   MEAL_NUTRITION_FIELDS,
+  mealDraftProposalRequestSchema,
   mealTypeSchema,
   type MealNutritionField,
 } from '@running-tracker/contracts';
@@ -19,7 +20,7 @@ import type { ReproducibilityMetadata } from './meal-draft-metadata.js';
 import type { MealDraftExecutionProfile, ProfileCheck } from './meal-draft-profile.js';
 
 // The evaluation of "Draft from text" (ADR-0092; docs/runbooks/meal-drafts.md). Two FROZEN synthetic sets, development
-// and held-out, English and Russian. A run makes at most one provider call per case, never retries, and goes through the
+// and held-out, English and Russian, in explicit dataset versions (a pinned registry below; version 1 by default). A run makes at most one provider call per case, never retries, and goes through the
 // same prompt, wire schema and grounding as the service, so what is measured is what a person would be shown. Extraction
 // quality, incorrectly accepted fields, abstentions and latency are reported separately. A run with the fake provider
 // verifies this harness and nothing else: it is never evidence about a model.
@@ -33,13 +34,61 @@ export const MEAL_DRAFT_EVALUATION_SETS = ['development', 'heldout'] as const;
 export type MealDraftEvaluationSet = (typeof MEAL_DRAFT_EVALUATION_SETS)[number];
 
 /**
- * The digests of the frozen sets (SHA-256 of their parsed, re-serialised JSON, so line endings do not matter). A set
- * whose content changed is refused: a new set is a new version with a new file.
+ * The dataset versions an evaluation can be asked for, by `--dataset-version v1|v2`. Version 1 (2026-11-14) is the
+ * default and keeps its files, digests and meaning; it has been examined, so runs of it are regression measurements.
+ * Version 2 (2026-11-18) is a NEW pair of synthetic sets written and frozen before any call was made on them; they are
+ * authored and examined by the same engineer, so they are not independent blind held-out evidence either.
  */
-export const MEAL_DRAFT_DATASET_DIGESTS: Readonly<Record<MealDraftEvaluationSet, string>> = {
-  development: '7081d147294698185b8ba87c3ef98f4770c51a9aa72e2ecf22ff98f0cf9e2951',
-  heldout: 'be55bcaf7c6b1707818a1137eddc7f0d160bc077c5ede7842a3c952e04863b85',
-};
+export const MEAL_DRAFT_DATASET_VERSIONS = ['1', '2'] as const;
+export type MealDraftDatasetVersion = (typeof MEAL_DRAFT_DATASET_VERSIONS)[number];
+export const MEAL_DRAFT_DEFAULT_DATASET_VERSION: MealDraftDatasetVersion = '1';
+
+export interface PinnedMealDraftDataset {
+  caseCount: number;
+  /** SHA-256 of the parsed, re-serialised JSON (so line endings do not matter). */
+  digest: string;
+  /** File name in apps/api/evaluation/. */
+  file: string;
+}
+
+/**
+ * The pinned registry: every set of every version, with its file, digest and case count. A set whose content changed
+ * is refused; a new set is a new version with a new file, never an edit of a pinned one.
+ */
+export const MEAL_DRAFT_DATASET_REGISTRY: Readonly<Record<MealDraftDatasetVersion, Readonly<Record<MealDraftEvaluationSet, PinnedMealDraftDataset>>>> = Object.freeze({
+  '1': Object.freeze({
+    development: Object.freeze({ caseCount: 20, digest: '7081d147294698185b8ba87c3ef98f4770c51a9aa72e2ecf22ff98f0cf9e2951', file: 'meal-draft.development.v1.json' }),
+    heldout: Object.freeze({ caseCount: 20, digest: 'be55bcaf7c6b1707818a1137eddc7f0d160bc077c5ede7842a3c952e04863b85', file: 'meal-draft.heldout.v1.json' }),
+  }),
+  '2': Object.freeze({
+    // Frozen 2026-11-18 before any inference call on version 2.
+    development: Object.freeze({ caseCount: 20, digest: 'ecfb74b45fba8870d509f72b6650154a27de31aff5406343013e20613c2c7559', file: 'meal-draft.development.v2.json' }),
+    heldout: Object.freeze({ caseCount: 20, digest: '7248ab7f5c2694818b6f7dcca7becb08fc72870b786b344b1838bac54dfd14c0', file: 'meal-draft.heldout.v2.json' }),
+  }),
+});
+
+/** The digests of one version's sets (version 1 by default). */
+export function mealDraftDatasetDigests(version: MealDraftDatasetVersion = MEAL_DRAFT_DEFAULT_DATASET_VERSION): Readonly<Record<MealDraftEvaluationSet, string>> {
+  const pinned = MEAL_DRAFT_DATASET_REGISTRY[version];
+  return { development: pinned.development.digest, heldout: pinned.heldout.digest };
+}
+
+/** The version 1 digests, under their historical name. */
+export const MEAL_DRAFT_DATASET_DIGESTS: Readonly<Record<MealDraftEvaluationSet, string>> = mealDraftDatasetDigests('1');
+
+/**
+ * Reads `v1`/`v2` (the command-line spelling) into a registered version; refuses anything else. Undefined means the
+ * default, version 1, so every earlier command keeps its meaning.
+ */
+export function parseMealDraftDatasetVersion(value: string | undefined): MealDraftDatasetVersion {
+  if (value === undefined) return MEAL_DRAFT_DEFAULT_DATASET_VERSION;
+  const match = /^v(\d+)$/u.exec(value);
+  const version = match?.[1];
+  if (version === undefined || !(MEAL_DRAFT_DATASET_VERSIONS as readonly string[]).includes(version)) {
+    throw new Error(`--dataset-version must be ${MEAL_DRAFT_DATASET_VERSIONS.map((entry) => `v${entry}`).join(' or ')} (got ${value.slice(0, 20)})`);
+  }
+  return version as MealDraftDatasetVersion;
+}
 
 const nutritionExpectation = z.number().finite().nonnegative().nullable();
 
@@ -59,7 +108,11 @@ export const mealDraftEvaluationCaseSchema = z.strictObject({
   expected: expectedSchema,
   id: z.string().regex(/^[a-z][a-z0-9-]{2,60}$/u),
   language: z.enum(['en', 'ru']),
-  text: z.string().min(1).max(500),
+  /** The documented rule the expectation follows (version 2 onwards); never read by scoring. */
+  rationale: z.string().min(1).max(400).optional(),
+  // Exactly what the public request contract accepts (code points, no control characters, well-formed), so a case can
+  // never measure a text the product would refuse.
+  text: mealDraftProposalRequestSchema.shape.text,
 });
 
 export const mealDraftEvaluationDatasetSchema = z.strictObject({
@@ -76,20 +129,55 @@ export function mealDraftDatasetDigest(dataset: MealDraftEvaluationDataset): str
   return createHash('sha256').update(JSON.stringify(dataset), 'utf8').digest('hex');
 }
 
-const datasetUrl = (set: MealDraftEvaluationSet) => new URL(`../../evaluation/meal-draft.${set}.v1.json`, import.meta.url);
+const datasetUrl = (file: string) => new URL(`../../evaluation/${file}`, import.meta.url);
 
-/** Reads a frozen set and refuses it if its content is not the pinned one (or `digests` says otherwise, for tests). */
+/**
+ * Checks a parsed set against its registry entry: the set and version it claims, the pinned digest and case count, and
+ * unique ids and texts. Throws with the reason; never repairs.
+ */
+export function verifyMealDraftDataset(
+  dataset: MealDraftEvaluationDataset,
+  set: MealDraftEvaluationSet,
+  version: MealDraftDatasetVersion,
+  pinned: Pick<PinnedMealDraftDataset, 'caseCount' | 'digest'>,
+): string {
+  const label = `The v${version} ${set}`;
+  if (dataset.set !== set) throw new Error(`${label} file holds the ${dataset.set} set`);
+  if (dataset.datasetVersion !== version) throw new Error(`${label} file holds dataset version ${dataset.datasetVersion}`);
+  const digest = mealDraftDatasetDigest(dataset);
+  if (digest !== pinned.digest) throw new Error(`${label} set is not the frozen one (digest ${digest.slice(0, 12)}…)`);
+  if (dataset.cases.length !== pinned.caseCount) throw new Error(`${label} set has ${dataset.cases.length} cases, ${pinned.caseCount} are pinned`);
+  if (new Set(dataset.cases.map((entry) => entry.id)).size !== dataset.cases.length) throw new Error(`${label} set has duplicate case ids`);
+  if (new Set(dataset.cases.map((entry) => entry.text)).size !== dataset.cases.length) throw new Error(`${label} set has duplicate texts`);
+  return digest;
+}
+
+/**
+ * Reads a frozen set of one version (version 1 by default) and refuses it if its content is not the pinned one.
+ * `digests` replaces the pinned digests, for tests only.
+ */
 export function loadMealDraftDataset(
   set: MealDraftEvaluationSet,
-  digests: Readonly<Record<MealDraftEvaluationSet, string>> = MEAL_DRAFT_DATASET_DIGESTS,
-): { dataset: MealDraftEvaluationDataset; digest: string } {
-  const dataset = mealDraftEvaluationDatasetSchema.parse(JSON.parse(readFileSync(datasetUrl(set), 'utf8')));
-  if (dataset.set !== set) throw new Error(`The ${set} file holds the ${dataset.set} set`);
-  const digest = mealDraftDatasetDigest(dataset);
-  if (digest !== digests[set]) throw new Error(`The ${set} set is not the frozen one (digest ${digest.slice(0, 12)}…)`);
-  const ids = new Set(dataset.cases.map((entry) => entry.id));
-  if (ids.size !== dataset.cases.length) throw new Error(`The ${set} set has duplicate case ids`);
-  return { dataset, digest };
+  version: MealDraftDatasetVersion = MEAL_DRAFT_DEFAULT_DATASET_VERSION,
+  digests: Readonly<Record<MealDraftEvaluationSet, string>> = mealDraftDatasetDigests(version),
+): { dataset: MealDraftEvaluationDataset; digest: string; version: MealDraftDatasetVersion } {
+  const pinned = MEAL_DRAFT_DATASET_REGISTRY[version]?.[set];
+  if (pinned === undefined) throw new Error(`No dataset version ${String(version)} is registered for the ${set} set`);
+  const dataset = mealDraftEvaluationDatasetSchema.parse(JSON.parse(readFileSync(datasetUrl(pinned.file), 'utf8')));
+  const digest = verifyMealDraftDataset(dataset, set, version, { caseCount: pinned.caseCount, digest: digests[set] });
+  return { dataset, digest, version };
+}
+
+/** Both sets of one version, loaded and verified together, or an error. */
+export function loadMealDraftDatasets(
+  version: MealDraftDatasetVersion = MEAL_DRAFT_DEFAULT_DATASET_VERSION,
+): Record<MealDraftEvaluationSet, { dataset: MealDraftEvaluationDataset; digest: string; version: MealDraftDatasetVersion }> {
+  const loaded = { development: loadMealDraftDataset('development', version), heldout: loadMealDraftDataset('heldout', version) };
+  const texts = new Set(loaded.development.dataset.cases.map((entry) => entry.text));
+  if (loaded.heldout.dataset.cases.some((entry) => texts.has(entry.text))) throw new Error(`The v${version} sets share a text`);
+  const ids = new Set(loaded.development.dataset.cases.map((entry) => entry.id));
+  if (loaded.heldout.dataset.cases.some((entry) => ids.has(entry.id))) throw new Error(`The v${version} sets share a case id`);
+  return loaded;
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -445,6 +533,8 @@ export interface MealDraftEvaluationReport {
 
 /** Written instead of a report when no inference could be made (the runtime or the model was not available). */
 export interface MealDraftNotRunReport {
+  /** The dataset version the run was asked for (absent in reports written before versions were selectable: 1). */
+  datasetVersion: MealDraftDatasetVersion;
   executionProfile: MealDraftExecutionProfile | null;
   kind: 'real-model';
   metadata: ReproducibilityMetadata | null;

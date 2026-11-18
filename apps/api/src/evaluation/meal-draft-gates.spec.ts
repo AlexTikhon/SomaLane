@@ -14,8 +14,11 @@ import { runMealDraftEvaluationCli, parseMealDraftCliArguments, type MealDraftCl
 import {
   buildMealDraftReport,
   loadMealDraftDataset,
+  loadMealDraftDatasets,
+  MEAL_DRAFT_DATASET_REGISTRY,
   scoreMealDraftResults,
   type MealDraftCaseResult,
+  type MealDraftDatasetVersion,
   type MealDraftEvaluationCase,
   type MealDraftEvaluationReport,
   type MealDraftEvaluationSet,
@@ -63,8 +66,10 @@ function expectedClaims(entry: MealDraftSafetyCase): VerifiedClaims {
 const perfectSafety = (): SafetyCaseResult[] => corpus.cases.map((entry) => judgeSafetyCase(entry, expectedClaims(entry)));
 
 const datasets = { development: loadMealDraftDataset('development'), heldout: loadMealDraftDataset('heldout') };
+const datasetsV2 = loadMealDraftDatasets('2');
 const current = currentVerifierDigests();
 const context: ModelGateContext = { current, datasets };
+const contextV2: ModelGateContext = { current, datasetVersion: '2', datasets: datasetsV2 };
 const modelDigest = 'b'.repeat(64);
 const baseProfile = buildExecutionProfile({ maxOutputTokens: 600, maxResponseBytes: 32_768, model: 'qwen3:8b', modelDigest, ollamaVersion: '0.40.16', timeoutMs: 45_000 });
 
@@ -104,9 +109,11 @@ function report(
     provider?: 'fake' | 'ollama';
     stopped?: MealDraftEvaluationReport['stopped'];
     tamper?: (raw: Json & { metadata: Json }) => void;
+    /** The dataset version measured (version 1 by default, as before versions were selectable). */
+    version?: MealDraftDatasetVersion;
   } = {},
 ): Json {
-  const { dataset, digest } = datasets[set];
+  const { dataset, digest } = (options.version === '2' ? datasetsV2 : datasets)[set];
   const results = (options.edit ?? ((value) => value))(dataset.cases.map(perfectResult));
   const fake = options.provider === 'fake';
   const profile = fake ? null : (options.profile ?? baseProfile);
@@ -780,6 +787,140 @@ describe('model gate', () => {
   });
 });
 
+describe('model gate: dataset versions', () => {
+  const both = (version: MealDraftDatasetVersion) => [report('development', { version }), report('heldout', { version })];
+
+  it('judges version 1 by default and version 2 only when asked, each against its own pinned sets', () => {
+    const v1 = evaluateModelGate(both('1'), context);
+    expect(v1).toMatchObject({ datasetVersion: '1', evidenceValid: true, status: 'PASS' });
+    const v2 = evaluateModelGate(both('2'), contextV2);
+    expect(v2.reasons).toEqual([]);
+    expect(v2).toMatchObject({ datasetVersion: '2', evidenceValid: true, status: 'PASS' });
+    expect(v2.metrics).toMatchObject({ cases: 40, extractionPrecision: 1, extractionRecall: 1, incorrectAccepted: 0, outcomeAccuracy: 1 });
+    expect(datasetsV2.development.digest).toBe(MEAL_DRAFT_DATASET_REGISTRY['2'].development.digest);
+  });
+
+  it('never accepts version 1 evidence as a version 2 measurement, nor the reverse; such reports are not counted', () => {
+    const v1AsV2 = evaluateModelGate(both('1'), contextV2);
+    expect(v1AsV2.status).toBe('FAIL');
+    expect(v1AsV2.evidenceValid).toBe(false);
+    expect(v1AsV2.metrics).toBeNull();
+    expect(codes(v1AsV2)).toEqual(['DATASET_VERSION_MISMATCH', 'DATASET_VERSION_MISMATCH', 'SET_INCOMPLETE', 'SET_INCOMPLETE']);
+    expect(messages(v1AsV2, 'evidence')[0]).toBe('Report 1 (development) was measured on dataset v1, not on the v2 sets judged here (--dataset-version v2); it is not counted.');
+    const v2AsDefault = evaluateModelGate(both('2'), context);
+    expect(v2AsDefault.status).toBe('FAIL');
+    expect(codes(v2AsDefault).filter((code) => code === 'DATASET_VERSION_MISMATCH')).toHaveLength(2);
+  });
+
+  it('refuses mixed versions, a report without a version, and a report relabelled to another version', () => {
+    const mixed = evaluateModelGate([report('development', { version: '1' }), report('heldout', { version: '2' })], contextV2);
+    expect(mixed.status).toBe('FAIL');
+    expect(codes(mixed)).toEqual(['DATASET_VERSION_MISMATCH', 'DATASET_VERSION_MIXED', 'SET_INCOMPLETE']);
+    expect(mixed.sets).toEqual({ development: { detail: 'no report', state: 'not_run' }, heldout: { detail: '20/20 cases, 20 calls', state: 'complete' } });
+
+    const unversioned = evaluateModelGate([report('development', { tamper: (raw) => delete raw['datasetVersion'], version: '2' }), report('heldout', { version: '2' })], contextV2);
+    expect(codes(unversioned)).toContain('DATASET_VERSION_MISMATCH');
+    expect(messages(unversioned, 'evidence')[0]).toMatch(/records no dataset version/u);
+
+    // A version 1 run whose label says "2": its digest and case ids are version 1's, so it is refused and incomplete.
+    const relabelled = evaluateModelGate([report('development', { tamper: (raw) => (raw['datasetVersion'] = '2') }), report('heldout', { version: '2' })], contextV2);
+    expect(relabelled.status).toBe('FAIL');
+    expect(codes(relabelled)).toEqual(['DATASET_MISMATCH', 'SET_INCOMPLETE']);
+    expect(relabelled.sets.development.state).toBe('partial');
+  });
+
+  it('refuses a NOT_RUN report of another version instead of reading it as this version not run', () => {
+    const notRun = (version?: string) => ({ ...(version === undefined ? {} : { datasetVersion: version }), reason: 'unreachable', reportVersion: 3, set: 'development', status: 'NOT_RUN' });
+    expect(evaluateModelGate([notRun('2'), notRun('2')], contextV2).status).toBe('NOT_RUN');
+    // Written before versions were selectable: version 1.
+    expect(evaluateModelGate([notRun()], context).status).toBe('NOT_RUN');
+    const other = evaluateModelGate([notRun()], contextV2);
+    expect(other.status).toBe('FAIL');
+    expect(codes(other)).toContain('DATASET_VERSION_MISMATCH');
+  });
+
+  it('applies the completeness, duplicate, fingerprint and profile rules to version 2 evidence', () => {
+    const partial = evaluateModelGate([report('development', { edit: (results) => results.slice(0, 19), version: '2' }), report('heldout', { version: '2' })], contextV2);
+    expect(codes(partial)).toEqual(['SET_INCOMPLETE']);
+    const duplicate = evaluateModelGate([...both('2'), report('heldout', { version: '2' })], contextV2);
+    expect(codes(duplicate)).toEqual(['DUPLICATE_REPORT']);
+    const stale = evaluateModelGate(both('2'), { ...contextV2, current: { ...current, fingerprint: { ...current.fingerprint, digest: 'f'.repeat(64) } } });
+    expect(codes(stale)).toEqual(['FINGERPRINT_MISMATCH', 'FINGERPRINT_MISMATCH']);
+    expect(stale.qualityThresholdsMet).toBe(true);
+    const otherProfile = evaluateModelGate([report('development', { version: '2' }), report('heldout', { profile: { ...baseProfile, timeoutMs: 55_000 }, version: '2' })], contextV2);
+    expect(codes(otherProfile)).toEqual(['PROFILE_MISMATCH']);
+    const stopped = evaluateModelGate([report('development', { stopped: { afterCases: 20, reason: 'timeout' }, version: '2' }), report('heldout', { version: '2' })], contextV2);
+    expect(codes(stopped)).toEqual(['SET_INCOMPLETE']);
+  });
+
+  it('keeps fake-provider evidence ineligible for the real-model gate on version 2', () => {
+    const fakeOnly = evaluateModelGate([report('development', { provider: 'fake', version: '2' }), report('heldout', { provider: 'fake', version: '2' })], contextV2);
+    expect(fakeOnly.status).toBe('NOT_RUN');
+    expect(fakeOnly.evidenceValid).toBe(false);
+    expect(fakeOnly.reasons.filter((entry) => entry.code === 'FAKE_IGNORED')).toHaveLength(2);
+    // A fake report of the right version never completes a set the real model left out.
+    const fakeFillsGap = evaluateModelGate([report('development', { version: '2' }), report('heldout', { provider: 'fake', version: '2' })], contextV2);
+    expect(fakeFillsGap.status).toBe('FAIL');
+    expect(codes(fakeFillsGap)).toEqual(['SET_INCOMPLETE']);
+  });
+
+  it('scores a wrong acceptance, a missed extraction, an abstention and a technical failure on version 2 cases', () => {
+    const edit = (results: MealDraftCaseResult[]) =>
+      results.map((result): MealDraftCaseResult => {
+        const { proposal } = result;
+        const id = result.case.id;
+        if (id === 'en-dev2-saucepan-then-consumed' && proposal?.outcome === 'draft') {
+          // The vessel figure accepted instead of the consumed total, and the protein not claimed by the model.
+          return {
+            ...result,
+            audit: { fields: { carbohydrateG: 'not_stated', energyKcal: 'proposed', fatG: 'not_stated', proteinG: 'model_abstained' }, multipleMealsOverride: false },
+            proposal: { ...proposal, nutrition: { ...proposal.nutrition, energyKcal: { excerpt: '1500 kcal', status: 'proposed', value: 1500 }, proteinG: { reason: 'ambiguous', status: 'withheld' } } },
+          };
+        }
+        if (id === 'ru-dev2-bound-ne-bolshe' && proposal?.outcome === 'draft') {
+          // The model claimed the expected protein and the grounding withheld it: missed by the server.
+          return {
+            ...result,
+            audit: { fields: { carbohydrateG: 'not_stated', energyKcal: 'not_stated', fatG: 'not_stated', proteinG: 'server_withheld' }, multipleMealsOverride: false },
+            proposal: { ...proposal, nutrition: { ...proposal.nutrition, proteinG: { reason: 'ambiguous', status: 'withheld' } } },
+          };
+        }
+        if (id === 'en-dev2-range-to' && proposal?.outcome === 'draft') {
+          // A wrong claim (the range's endpoint) that the grounding stopped: verifier evidence, not model restraint.
+          return {
+            ...result,
+            audit: { fields: { carbohydrateG: 'proposed', energyKcal: 'server_withheld', fatG: 'not_stated', proteinG: 'not_stated' }, multipleMealsOverride: false },
+            proposal: { ...proposal, nutrition: { ...proposal.nutrition, energyKcal: { reason: 'ambiguous', status: 'withheld' } } },
+          };
+        }
+        if (id === 'en-dev2-grounded-semicolon') return { ...result, audit: null, failure: 'timeout', proposal: null };
+        if (id === 'ru-dev2-grounded-genitive') return { ...result, audit: { fields: null, multipleMealsOverride: false }, proposal: { outcome: 'clarify', reason: 'multiple_meals' } };
+        return result;
+      });
+    const development = (report('development', { edit, version: '2' }) as unknown as MealDraftEvaluationReport).score;
+    expect(development.fields).toEqual({
+      correctAccepted: 30 - 1 - 1 - 1 - 4 - 4,
+      correctNull: development.fields.correctNull,
+      expectedValues: 30,
+      incorrectAccepted: 1,
+      missedByModel: 1,
+      missedByOutcome: 8,
+      missedByServer: 1,
+      stoppedByServer: 1,
+    });
+    expect(development.incorrectAccepted).toEqual([{ actual: 1500, expected: 375, field: 'energyKcal', id: 'en-dev2-saucepan-then-consumed' }]);
+    expect(development.nullExpectations).toMatchObject({ accepted: 0, verifierWithheld: 1 });
+    expect(development.failures).toEqual({ byReason: { timeout: 1 }, total: 1 });
+    expect(development.outcome).toEqual({ correct: 18, total: 20 });
+
+    const gate = evaluateModelGate([report('development', { edit, version: '2' }), report('heldout', { version: '2' })], contextV2);
+    expect(gate.evidenceValid).toBe(true);
+    expect(gate.status).toBe('FAIL');
+    expect(codes(gate)).toEqual(['INCORRECT_ACCEPTED', 'EXTRACTION_RECALL']);
+    expect(gate.metrics).toMatchObject({ extractionPrecision: 0.979, extractionRecall: 0.81, incorrectAccepted: 1, outcomeAccuracy: 0.95, technicalFailureRate: 0.025, technicalFailures: 1 });
+  });
+});
+
 describe('overall status and exit codes', () => {
   it('lets FAIL win over NOT_RUN and NOT_RUN over PASS', () => {
     expect(overallStatus(['PASS', 'PASS'])).toBe('PASS');
@@ -980,5 +1121,74 @@ describe('evaluation command line', () => {
     const { deps } = harness();
     await expect(runMealDraftEvaluationCli(['--set', 'development', '--provider', 'ollama', '--max-calls', '41'], deps)).rejects.toThrow(/--max-calls/u);
     await expect(runMealDraftEvaluationCli(['--set', 'development'], deps)).rejects.toThrow(/--provider must be fake or ollama/u);
+  });
+
+  // --- Dataset versions -----------------------------------------------------------------------------------------
+
+  it('parses --dataset-version once, and refuses unknown versions and the flag where it selects nothing', async () => {
+    expect(parseMealDraftCliArguments(['--set', 'heldout', '--dataset-version', 'v2']).datasetVersion).toBe('v2');
+    expect(parseMealDraftCliArguments(['--set', 'heldout']).datasetVersion).toBeUndefined();
+    expect(() => parseMealDraftCliArguments(['--dataset-version'])).toThrow(/--dataset-version needs a value/u);
+    expect(() => parseMealDraftCliArguments(['--dataset-version', 'v1', '--dataset-version', 'v2'])).toThrow(/may be given once/u);
+    const { deps, inferences } = harness();
+    for (const unknown of ['v3', '2', 'V2', 'latest', 'v']) {
+      await expect(runMealDraftEvaluationCli(['--set', 'development', '--provider', 'fake', '--dataset-version', unknown], deps)).rejects.toThrow(/--dataset-version must be v1 or v2/u);
+      await expect(runMealDraftEvaluationCli(['--check', '--dataset-version', unknown], deps)).rejects.toThrow(/--dataset-version must be v1 or v2/u);
+    }
+    await expect(runMealDraftEvaluationCli(['--set', 'safety', '--dataset-version', 'v1'], deps)).rejects.toThrow(/own frozen version/u);
+    await expect(runMealDraftEvaluationCli(['--set', 'challenge', '--dataset-version', 'v2'], deps)).rejects.toThrow(/own frozen version/u);
+    await expect(runMealDraftEvaluationCli(['--check', '--dry-run'], deps)).rejects.toThrow(/--check takes only/u);
+    expect(inferences()).toBe(0);
+  });
+
+  it('keeps every version 1 command as it was: no flag means v1 for runs, dry runs and checks', async () => {
+    const run = harness();
+    expect(await runMealDraftEvaluationCli(['--set', 'development', '--provider', 'fake', '--out', 'f.json'], run.deps)).toBe(0);
+    expect(JSON.parse(run.written.get('f.json')!)).toMatchObject({ datasetDigest: MEAL_DRAFT_DATASET_REGISTRY['1'].development.digest, datasetVersion: '1', kind: 'fake-harness-verification' });
+    expect(await runMealDraftEvaluationCli(['--set', 'heldout', '--provider', 'ollama', '--dry-run'], run.deps)).toBe(0);
+    expect(run.lines.join('\n')).toMatch(/Set: heldout v1 \(20 cases; digest be55bcaf7c6b…\)/u);
+    expect(await runMealDraftEvaluationCli(['--check', '--model', 'dev.json', '--model', 'heldout.json', '--out', 'g.json'], run.deps)).toBe(0);
+    expect(JSON.parse(run.written.get('g.json')!)).toMatchObject({ model: { datasetVersion: '1', status: 'PASS' }, overall: 'PASS' });
+    expect(await runMealDraftEvaluationCli(['--check', '--dataset-version', 'v1', '--model', 'dev.json', '--model', 'heldout.json'], run.deps)).toBe(0);
+  });
+
+  it('selects version 2 consistently for a dry run, a real run and its NOT_RUN report', async () => {
+    const dry = harness();
+    expect(await runMealDraftEvaluationCli(['--set', 'development', '--provider', 'ollama', '--dataset-version', 'v2', '--dry-run'], dry.deps)).toBe(0);
+    expect(dry.inferences()).toBe(0);
+    expect(dry.lines.join('\n')).toMatch(/Set: development v2 \(20 cases; digest ecfb74b45fba…\)/u);
+
+    const run = harness();
+    expect(await runMealDraftEvaluationCli(['--set', 'heldout', '--provider', 'ollama', '--dataset-version', 'v2', '--max-calls', '2', '--out', 'h.json'], run.deps)).toBe(0);
+    expect(run.inferences()).toBe(2);
+    const written = JSON.parse(run.written.get('h.json')!) as MealDraftEvaluationReport;
+    expect(written).toMatchObject({ caseCount: 20, datasetDigest: MEAL_DRAFT_DATASET_REGISTRY['2'].heldout.digest, datasetVersion: '2', kind: 'real-model', partial: true });
+    expect(written.metadata).toMatchObject({ datasetDigest: MEAL_DRAFT_DATASET_REGISTRY['2'].heldout.digest });
+    expect(written.cases.map((entry) => entry.id)).toEqual(datasetsV2.heldout.dataset.cases.slice(0, 2).map((entry) => entry.id));
+
+    const unreachable = harness({ fetchOllamaJson: () => Promise.reject(new Error('connect ECONNREFUSED 127.0.0.1:11434')) });
+    expect(await runMealDraftEvaluationCli(['--set', 'heldout', '--provider', 'ollama', '--dataset-version', 'v2', '--out', 'n.json'], unreachable.deps)).toBe(3);
+    expect(JSON.parse(unreachable.written.get('n.json')!)).toMatchObject({ datasetVersion: '2', set: 'heldout', status: 'NOT_RUN' });
+  });
+
+  it('refuses a set whose loaded version is not the one asked for', async () => {
+    const { deps } = harness({ loadDataset: (set) => loadMealDraftDataset(set, '1') });
+    await expect(runMealDraftEvaluationCli(['--set', 'development', '--provider', 'fake', '--dataset-version', 'v2'], deps)).rejects.toThrow(/loaded for v2 is version 1/u);
+  });
+
+  it('--check --dataset-version v2 judges version 2 reports and refuses version 1 evidence offered for it', async () => {
+    const run = harness();
+    run.files.set('dev-v2.json', report('development', { version: '2' }));
+    run.files.set('heldout-v2.json', report('heldout', { version: '2' }));
+    expect(await runMealDraftEvaluationCli(['--check', '--dataset-version', 'v2', '--model', 'dev-v2.json', '--model', 'heldout-v2.json', '--out', 'g2.json'], run.deps)).toBe(0);
+    expect(JSON.parse(run.written.get('g2.json')!)).toMatchObject({ model: { datasetVersion: '2', evidenceValid: true, status: 'PASS' }, overall: 'PASS' });
+    expect(run.lines.join('\n')).toMatch(/MODEL GATE: PASS \(real model on the frozen v2 development and held-out sets/u);
+
+    expect(await runMealDraftEvaluationCli(['--check', '--dataset-version', 'v2', '--model', 'dev.json', '--model', 'heldout.json'], run.deps)).toBe(2);
+    expect(run.lines.join('\n')).toMatch(/\[evidence DATASET_VERSION_MISMATCH\] Report 1 \(development\) was measured on dataset v1/u);
+    // Version 2 evidence offered without the flag is judged as version 1 and refused, never silently re-labelled.
+    expect(await runMealDraftEvaluationCli(['--check', '--model', 'dev-v2.json', '--model', 'heldout-v2.json'], run.deps)).toBe(2);
+    expect(await runMealDraftEvaluationCli(['--check', '--dataset-version', 'v2', '--model', 'dev.json', '--model', 'heldout-v2.json'], run.deps)).toBe(2);
+    expect([run.runtimeReads(), run.inferences()]).toEqual([0, 0]);
   });
 });

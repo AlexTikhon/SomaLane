@@ -6,8 +6,16 @@ import {
   buildMealDraftReport,
   formatMealDraftReport,
   loadMealDraftDataset,
+  loadMealDraftDatasets,
   MEAL_DRAFT_DATASET_DIGESTS,
+  MEAL_DRAFT_DATASET_REGISTRY,
+  MEAL_DRAFT_DEFAULT_DATASET_VERSION,
+  mealDraftDatasetDigest,
+  mealDraftDatasetDigests,
+  mealDraftEvaluationCaseSchema,
+  parseMealDraftDatasetVersion,
   runMealDraftEvaluation,
+  verifyMealDraftDataset,
   scoreMealDraftResults,
   type MealDraftCaseResult,
   type MealDraftEvaluationCase,
@@ -27,7 +35,98 @@ describe('meal draft evaluation sets (frozen)', () => {
     }
     const texts = new Set(development.dataset.cases.map((entry) => entry.text));
     expect(heldout.dataset.cases.some((entry) => texts.has(entry.text))).toBe(false);
-    expect(() => loadMealDraftDataset('heldout', { ...MEAL_DRAFT_DATASET_DIGESTS, heldout: '0'.repeat(64) })).toThrow(/not the frozen one/u);
+    expect(() => loadMealDraftDataset('heldout', '1', { ...MEAL_DRAFT_DATASET_DIGESTS, heldout: '0'.repeat(64) })).toThrow(/not the frozen one/u);
+  });
+});
+
+describe('meal draft dataset versions (pinned registry)', () => {
+  it('defaults to version 1 and keeps its historical files and digests', () => {
+    expect(MEAL_DRAFT_DEFAULT_DATASET_VERSION).toBe('1');
+    expect(parseMealDraftDatasetVersion(undefined)).toBe('1');
+    expect(parseMealDraftDatasetVersion('v1')).toBe('1');
+    expect(parseMealDraftDatasetVersion('v2')).toBe('2');
+    // The literal digests recorded on 2026-11-14: version 1 must never move.
+    expect(MEAL_DRAFT_DATASET_REGISTRY['1']).toEqual({
+      development: { caseCount: 20, digest: '7081d147294698185b8ba87c3ef98f4770c51a9aa72e2ecf22ff98f0cf9e2951', file: 'meal-draft.development.v1.json' },
+      heldout: { caseCount: 20, digest: 'be55bcaf7c6b1707818a1137eddc7f0d160bc077c5ede7842a3c952e04863b85', file: 'meal-draft.heldout.v1.json' },
+    });
+    expect(MEAL_DRAFT_DATASET_DIGESTS).toEqual(mealDraftDatasetDigests('1'));
+    expect(loadMealDraftDataset('development')).toMatchObject({ digest: MEAL_DRAFT_DATASET_DIGESTS.development, version: '1' });
+    expect(Object.isFrozen(MEAL_DRAFT_DATASET_REGISTRY)).toBe(true);
+    expect(Object.isFrozen(MEAL_DRAFT_DATASET_REGISTRY['2'].heldout)).toBe(true);
+  });
+
+  it.each(['v3', 'v0', '2', 'V2', 'v2.0', 'latest', ''])('refuses the unknown version %j', (value) => {
+    expect(() => parseMealDraftDatasetVersion(value)).toThrow(/--dataset-version must be v1 or v2/u);
+  });
+
+  it('loads version 2 only with its pinned digests: 20 cases per set, 10 English and 10 Russian, distinct from each other and from version 1', () => {
+    const v2 = loadMealDraftDatasets('2');
+    const v1 = loadMealDraftDatasets('1');
+    const v1Texts = new Set([...v1.development.dataset.cases, ...v1.heldout.dataset.cases].map((entry) => entry.text.toLocaleLowerCase('ru')));
+    for (const set of ['development', 'heldout'] as const) {
+      const { dataset, digest, version } = v2[set];
+      expect(version).toBe('2');
+      expect(dataset.datasetVersion).toBe('2');
+      expect(digest).toBe(MEAL_DRAFT_DATASET_REGISTRY['2'][set].digest);
+      expect(dataset.cases).toHaveLength(20);
+      expect(dataset.cases.filter((entry) => entry.language === 'en')).toHaveLength(10);
+      expect(dataset.cases.filter((entry) => entry.language === 'ru')).toHaveLength(10);
+      expect(dataset.cases.some((entry) => v1Texts.has(entry.text.toLocaleLowerCase('ru')))).toBe(false);
+      expect(dataset.description).toMatch(/not independent blind held-out evidence/u);
+      // Every expectation names the documented rule it follows.
+      expect(dataset.cases.every((entry) => (entry.rationale ?? '').length > 20)).toBe(true);
+    }
+  });
+
+  it('has enough positive extraction in each set and language for precision and recall to mean something', () => {
+    const v2 = loadMealDraftDatasets('2');
+    const categories = new Set<string>();
+    for (const set of ['development', 'heldout'] as const) {
+      for (const language of ['en', 'ru'] as const) {
+        const cases = v2[set].dataset.cases.filter((entry) => entry.language === language);
+        const values = cases.flatMap((entry) => (entry.expected.outcome === 'draft' ? Object.values(entry.expected.nutrition).filter((value) => value !== null) : []));
+        const mustNotShow = cases.flatMap((entry) => (entry.expected.outcome === 'draft' ? Object.values(entry.expected.nutrition).filter((value) => value === null) : []));
+        expect(values.length).toBeGreaterThanOrEqual(12);
+        expect(mustNotShow.length).toBeGreaterThanOrEqual(12);
+        expect(values.some((value) => !Number.isInteger(value))).toBe(true);
+      }
+      // A recorded zero in every set.
+      expect(v2[set].dataset.cases.some((entry) => entry.expected.outcome === 'draft' && Object.values(entry.expected.nutrition).includes(0))).toBe(true);
+      for (const entry of v2[set].dataset.cases) categories.add(entry.category);
+    }
+    for (const category of ['grounded', 'title-only', 'zero', 'decimal', 'multiline', 'reordered', 'container-consumed', 'batch-unresolved', 'conflicting', 'competing-construction', 'per-portion', 'bound', 'range', 'unit', 'food-quantity', 'instruction', 'estimate-request']) {
+      expect(categories).toContain(category);
+    }
+  });
+
+  it('refuses a set whose digest, version, set, size, ids or texts are not the pinned ones', () => {
+    const { dataset } = loadMealDraftDataset('development', '2');
+    const pinned = MEAL_DRAFT_DATASET_REGISTRY['2'].development;
+    expect(verifyMealDraftDataset(dataset, 'development', '2', pinned)).toBe(pinned.digest);
+    expect(() => loadMealDraftDataset('development', '2', { ...mealDraftDatasetDigests('2'), development: '0'.repeat(64) })).toThrow(/The v2 development set is not the frozen one/u);
+    // Version 1 digests are never accepted for version 2 files, nor the reverse.
+    expect(() => loadMealDraftDataset('heldout', '2', mealDraftDatasetDigests('1'))).toThrow(/not the frozen one/u);
+    expect(() => verifyMealDraftDataset(dataset, 'development', '1', pinned)).toThrow(/holds dataset version 2/u);
+    expect(() => verifyMealDraftDataset(dataset, 'heldout', '2', pinned)).toThrow(/holds the development set/u);
+    const edited = { ...dataset, cases: dataset.cases.map((entry, index) => (index === 0 ? { ...entry, expected: { outcome: 'clarify' as const, reason: 'multiple_meals' as const } } : entry)) };
+    expect(() => verifyMealDraftDataset(edited, 'development', '2', pinned)).toThrow(/not the frozen one/u);
+    const truncated = { ...dataset, cases: dataset.cases.slice(1) };
+    expect(() => verifyMealDraftDataset(truncated, 'development', '2', { ...pinned, digest: mealDraftDatasetDigest(truncated) })).toThrow(/19 cases, 20 are pinned/u);
+    const duplicateId = { ...dataset, cases: dataset.cases.map((entry, index) => (index === 1 ? { ...entry, id: dataset.cases[0]!.id } : entry)) };
+    expect(() => verifyMealDraftDataset(duplicateId, 'development', '2', { ...pinned, digest: mealDraftDatasetDigest(duplicateId) })).toThrow(/duplicate case ids/u);
+    const duplicateText = { ...dataset, cases: dataset.cases.map((entry, index) => (index === 1 ? { ...entry, text: dataset.cases[0]!.text } : entry)) };
+    expect(() => verifyMealDraftDataset(duplicateText, 'development', '2', { ...pinned, digest: mealDraftDatasetDigest(duplicateText) })).toThrow(/duplicate texts/u);
+  });
+
+  it('keeps every case text within the public input contract', () => {
+    const valid = { category: 'grounded', expected: { outcome: 'clarify', reason: 'no_food_named' }, id: 'en-x', language: 'en' };
+    expect(mealDraftEvaluationCaseSchema.safeParse({ ...valid, text: 'Soup\nprotein 4 g' }).success).toBe(true);
+    expect(mealDraftEvaluationCaseSchema.safeParse({ ...valid, text: 'ё'.repeat(500) }).success).toBe(true);
+    expect(mealDraftEvaluationCaseSchema.safeParse({ ...valid, text: 'ё'.repeat(501) }).success).toBe(false);
+    expect(mealDraftEvaluationCaseSchema.safeParse({ ...valid, text: 'Soup\u0007' }).success).toBe(false);
+    expect(mealDraftEvaluationCaseSchema.safeParse({ ...valid, text: '   ' }).success).toBe(false);
+    expect(mealDraftEvaluationCaseSchema.safeParse({ ...valid, text: 'Soup', unknown: true }).success).toBe(false);
   });
 });
 
@@ -117,5 +216,16 @@ describe('meal draft evaluation runner', () => {
     expect(report.score.fields.incorrectAccepted).toBe(0);
     expect(report.score.fields.stoppedByServer).toBeGreaterThan(0);
     expect(formatMealDraftReport(report)).toContain('FAKE PROVIDER: harness verification only. This is NOT evidence about any model.');
+  });
+
+  // The same harness check on version 2: it proves the runner, the grounding and the scoring run over the new sets and
+  // label the result; its numbers are recorded in the report as harness output, never as model quality.
+  it.each(['development', 'heldout'] as const)('runs the version 2 %s set end to end with the fake provider, labelled as harness verification', async (set) => {
+    const { dataset, digest } = loadMealDraftDataset(set, '2');
+    const run = await runMealDraftEvaluation({ cases: dataset.cases, clock, maxCalls: 20, maxOutputTokens: 600, provider: new FakeMealDraftProvider(), timeoutMs: 5_000 });
+    const report = buildMealDraftReport({ dataset, digest, generation: {}, model: 'fake', provider: 'fake', run, runtimeVersion: null, timeoutMs: 5_000 });
+    expect(report).toMatchObject({ calls: 20, datasetDigest: MEAL_DRAFT_DATASET_REGISTRY['2'][set].digest, datasetVersion: '2', executedCount: 20, kind: 'fake-harness-verification', partial: false });
+    expect(report.score.fields.expectedValues).toBe(set === 'development' ? 30 : 28);
+    expect(formatMealDraftReport(report)).toMatch(/^FAKE PROVIDER: harness verification only\. This is NOT evidence about any model\.\nSet: \S+ v2 /u);
   });
 });

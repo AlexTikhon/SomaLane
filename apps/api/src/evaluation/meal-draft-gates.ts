@@ -9,7 +9,8 @@ import { z } from 'zod';
 
 import type { GroundedProposal, GroundingAudit } from '../meals/drafts/meal-draft-grounding.js';
 import {
-  MEAL_DRAFT_DATASET_DIGESTS,
+  MEAL_DRAFT_DATASET_REGISTRY,
+  MEAL_DRAFT_DEFAULT_DATASET_VERSION,
   MEAL_DRAFT_EVALUATION_SETS,
   MEAL_DRAFT_REPORT_VERSION,
   scoreMealDraftByCategory,
@@ -17,6 +18,7 @@ import {
   type CaseFailure,
   type CategoryScore,
   type MealDraftCaseResult,
+  type MealDraftDatasetVersion,
   type MealDraftEvaluationDataset,
   type MealDraftEvaluationSet,
 } from './meal-draft-evaluation.js';
@@ -35,7 +37,8 @@ import {
 //
 // - VERIFIER (deterministic): the frozen safety corpus of supplied claims through the production wire schema, grounding
 //   and response contract. PASS needs every case run, no forbidden value accepted and every positive control proposed.
-// - MODEL (real model): complete real-model runs of the frozen v1 development and held-out sets, re-scored here from
+// - MODEL (real model): complete real-model runs of the frozen development and held-out sets of ONE dataset version
+//   (`--dataset-version`, v1 by default; reports of another version are refused, never counted), re-scored here from
 //   their per-case results against the pinned datasets, measured with the CURRENT verifier fingerprint (grounding,
 //   wire, prompt, adapter and the built contracts they import) and prompt, and with ONE validated execution profile for
 //   both sets. Fake providers, missing or partial runs, an unavailable runtime, legacy or inconsistent provenance and an
@@ -195,6 +198,8 @@ const reportCoreSchema = z.object({
     z.object({ audit: auditSchema.nullable().optional(), durationMs: z.number().nonnegative(), failure: failureSchema.nullable(), id: z.string(), proposal: proposalSchema.nullable() }),
   ),
   datasetDigest: z.string(),
+  /** Always written by the runner (every recorded report says "1"); a report without it is refused as evidence. */
+  datasetVersion: z.string().optional(),
   executedCount: z.number().int().nonnegative(),
   kind: z.enum(['fake-harness-verification', 'real-model']),
   model: z.string(),
@@ -249,6 +254,8 @@ const evidenceSchema = z.object({
 });
 
 const notRunReportSchema = z.object({
+  /** Absent in NOT_RUN reports written before dataset versions were selectable, which were all version 1. */
+  datasetVersion: z.string().optional(),
   reason: z.string(),
   reportVersion: z.number().int().positive(),
   set: z.enum(MEAL_DRAFT_EVALUATION_SETS),
@@ -264,6 +271,8 @@ type ReportCore = z.infer<typeof reportCoreSchema>;
 export interface GateReason {
   code:
     | 'DATASET_MISMATCH'
+    | 'DATASET_VERSION_MISMATCH'
+    | 'DATASET_VERSION_MIXED'
     | 'DUPLICATE_REPORT'
     | 'EXTRACTION_RECALL'
     | 'FAILURE_RATE'
@@ -304,6 +313,8 @@ export interface ModelGateMetrics {
 }
 
 export interface ModelGate {
+  /** The dataset version judged; every report must have been measured on it. */
+  datasetVersion: MealDraftDatasetVersion;
   /** True only when every real-model report carries current, complete and consistent provenance. */
   evidenceValid: boolean;
   fingerprint: { current: string; reports: Partial<Record<MealDraftEvaluationSet, string | null>> };
@@ -444,6 +455,8 @@ function judgeProvenance(set: MealDraftEvaluationSet, report: ReportCore, raw: u
 
 export interface ModelGateContext {
   current: Pick<VerifierDigests, 'fingerprint' | 'promptDigest'>;
+  /** The version judged (version 1 when absent); `datasets` must be that version's pinned sets. */
+  datasetVersion?: MealDraftDatasetVersion;
   datasets: Readonly<Record<MealDraftEvaluationSet, { dataset: MealDraftEvaluationDataset; digest: string }>>;
 }
 
@@ -455,12 +468,33 @@ export interface ModelGateContext {
  */
 export function evaluateModelGate(reports: readonly unknown[], context: ModelGateContext): ModelGate {
   const reasons: GateReason[] = [];
+  const version = context.datasetVersion ?? MEAL_DRAFT_DEFAULT_DATASET_VERSION;
+  const pinned = MEAL_DRAFT_DATASET_REGISTRY[version];
   const sets = Object.fromEntries(MEAL_DRAFT_EVALUATION_SETS.map((set) => [set, { detail: 'no report', state: 'not_run' }])) as Record<MealDraftEvaluationSet, SetState>;
   const executed = new Map<MealDraftEvaluationSet, { core: ReportCore; raw: unknown }>();
+  /** The dataset versions the real-model and NOT_RUN reports given say they measured. */
+  const versionsSeen = new Set<string>();
+  /** A report of another version is refused and never counted: v1 evidence is never a v2 measurement, nor the reverse. */
+  const otherVersion = (index: number, set: string, recorded: string | undefined): boolean => {
+    versionsSeen.add(recorded ?? 'none');
+    if (recorded === version) return false;
+    reasons.push(
+      reason(
+        'DATASET_VERSION_MISMATCH',
+        'evidence',
+        recorded === undefined
+          ? `Report ${index + 1} (${set}) records no dataset version, so it cannot be judged as a v${version} measurement.`
+          : `Report ${index + 1} (${set}) was measured on dataset v${recorded}, not on the v${version} sets judged here (--dataset-version v${version}); it is not counted.`,
+      ),
+    );
+    return true;
+  };
 
   reports.forEach((raw, index) => {
     const notRun = notRunReportSchema.safeParse(raw);
     if (notRun.success) {
+      // NOT_RUN reports written before versions were selectable were all version 1.
+      if (otherVersion(index, notRun.data.set, notRun.data.datasetVersion ?? '1')) return;
       if (!executed.has(notRun.data.set)) sets[notRun.data.set] = { detail: `NOT_RUN: ${notRun.data.reason}`, state: 'not_run' };
       return;
     }
@@ -474,6 +508,7 @@ export function evaluateModelGate(reports: readonly unknown[], context: ModelGat
       reasons.push(reason('FAKE_IGNORED', 'note', `Report ${index + 1} (${core.set}) comes from the ${core.provider} provider: harness verification is not model evidence and is ignored.`));
       return;
     }
+    if (otherVersion(index, core.set, core.datasetVersion)) return;
     if (executed.has(core.set)) {
       reasons.push(reason('DUPLICATE_REPORT', 'completeness', `More than one real-model report for the ${core.set} set; the selection is ambiguous.`));
       return;
@@ -484,19 +519,24 @@ export function evaluateModelGate(reports: readonly unknown[], context: ModelGat
   const profiles = new Map<MealDraftEvaluationSet, MealDraftExecutionProfile>();
   const fingerprints: Partial<Record<MealDraftEvaluationSet, string | null>> = {};
   const pooled: MealDraftCaseResult[] = [];
+  if (versionsSeen.size > 1) {
+    const listed = [...versionsSeen].sort().map((entry) => (entry === 'none' ? 'none recorded' : `v${entry}`));
+    reasons.push(reason('DATASET_VERSION_MIXED', 'evidence', `The reports given mix dataset versions (${listed.join(', ')}); one gate judges one version.`));
+  }
+
   for (const [set, { core, raw }] of executed) {
     const { dataset, digest } = context.datasets[set];
-    if (core.datasetDigest !== digest || digest !== MEAL_DRAFT_DATASET_DIGESTS[set]) {
-      reasons.push(reason('DATASET_MISMATCH', 'evidence', `The ${set} report was measured on another dataset than the frozen one.`));
+    if (core.datasetDigest !== digest || digest !== pinned[set].digest || dataset.datasetVersion !== version) {
+      reasons.push(reason('DATASET_MISMATCH', 'evidence', `The ${set} report was measured on another dataset than the frozen v${version} one.`));
     }
-    const version = core.reportVersion ?? 1;
-    if (version !== MEAL_DRAFT_REPORT_VERSION) {
+    const reportVersion = core.reportVersion ?? 1;
+    if (reportVersion !== MEAL_DRAFT_REPORT_VERSION) {
       fingerprints[set] = null;
       reasons.push(
         reason(
           'LEGACY_REPORT',
           'evidence',
-          `The ${set} report is report version ${version}: no verifier fingerprint over contracts and adapter, no execution profile; not judgeable as current evidence (its numbers stand as recorded). ${RERUN}`,
+          `The ${set} report is report version ${reportVersion}: no verifier fingerprint over contracts and adapter, no execution profile; not judgeable as current evidence (its numbers stand as recorded). ${RERUN}`,
         ),
       );
     } else {
@@ -556,6 +596,7 @@ export function evaluateModelGate(reports: readonly unknown[], context: ModelGat
   const deciding = () => reasons.filter((entry) => entry.kind !== 'note');
   const evidenceValid = executed.size > 0 && deciding().every((entry) => entry.kind !== 'evidence');
   const base = {
+    datasetVersion: version,
     evidenceValid,
     fingerprint: { current: context.current.fingerprint.digest, reports: fingerprints },
     gate: 'model' as const,
@@ -587,7 +628,7 @@ function valueAt(value: unknown, path: string): unknown {
 const pct = (value: number | null) => (value === null ? 'undefined' : `${(value * 100).toFixed(1)}%`);
 
 export function formatModelGate(gate: ModelGate): string {
-  const lines = [`MODEL GATE: ${gate.status} (real model on the frozen v1 development and held-out sets; thresholds frozen ${gate.thresholds.frozenOn})`];
+  const lines = [`MODEL GATE: ${gate.status} (real model on the frozen v${gate.datasetVersion} development and held-out sets; thresholds frozen ${gate.thresholds.frozenOn})`];
   lines.push(`  evidence: ${gate.evidenceValid ? 'valid (current fingerprint, one consistent execution profile)' : 'NOT VALID for this gate (see the evidence reasons)'}`);
   if (gate.profile !== null) {
     const { generation } = gate.profile;

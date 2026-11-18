@@ -12,7 +12,9 @@ import {
   MEAL_DRAFT_EVALUATION_MAX_CALLS,
   MEAL_DRAFT_EVALUATION_SETS,
   MEAL_DRAFT_REPORT_VERSION,
+  parseMealDraftDatasetVersion,
   runMealDraftEvaluation,
+  type MealDraftDatasetVersion,
   type MealDraftEvaluationDataset,
   type MealDraftEvaluationSet,
   type MealDraftNotRunReport,
@@ -45,8 +47,10 @@ import { loadMealDraftSafetyCorpus, runMealDraftSafety, type MealDraftSafetyCorp
 //   --set safety [--out F]                                   deterministic verifier safety corpus (no model)
 //   --set challenge [--out F]                                vessel-scope engineering challenge set (no model; not held-out
 //                                                            evidence, not a gate input, reported separately)
-//   --set development|heldout --provider fake|ollama [--max-calls N] [--dry-run] [--out F]
-//   --check [--model F]... [--out F]                         both gates: the verifier live, the model from reports
+//   --set development|heldout --provider fake|ollama [--dataset-version v1|v2] [--max-calls N] [--dry-run] [--out F]
+//   --check [--dataset-version v1|v2] [--model F]... [--out F]
+//                                                            both gates: the verifier live, the model from reports of
+//                                                            ONE dataset version (default v1; another version is refused)
 //
 // Exit codes: 0 PASS (or a measurement that finished), 1 an error that prevented a run or a verdict, 2 FAIL,
 // 3 NOT_RUN (no inference possible, or a gate without evidence). A report is written before the exit code is decided.
@@ -63,7 +67,7 @@ export interface MealDraftCliDependencies {
   info: (line: string) => void;
   /** The network under the profile guard (default: the global fetch); tests replace it. */
   networkFetch?: typeof fetch;
-  loadDataset?: (set: MealDraftEvaluationSet) => { dataset: MealDraftEvaluationDataset; digest: string };
+  loadDataset?: (set: MealDraftEvaluationSet, version: MealDraftDatasetVersion) => { dataset: MealDraftEvaluationDataset; digest: string };
   now: () => Date;
   readJson: (path: string) => unknown;
   runSafety?: () => { corpus: MealDraftSafetyCorpus; digest: string; results: SafetyCaseResult[] };
@@ -73,6 +77,8 @@ export interface MealDraftCliDependencies {
 
 export interface MealDraftCliArguments {
   check: boolean;
+  /** As typed (`v1`, `v2`); undefined means the default, version 1. */
+  datasetVersion: string | undefined;
   dryRun: boolean;
   maxCalls: string | undefined;
   models: string[];
@@ -82,7 +88,7 @@ export interface MealDraftCliArguments {
 }
 
 export function parseMealDraftCliArguments(argv: readonly string[]): MealDraftCliArguments {
-  const parsed: MealDraftCliArguments = { check: false, dryRun: false, maxCalls: undefined, models: [], out: undefined, provider: undefined, set: undefined };
+  const parsed: MealDraftCliArguments = { check: false, datasetVersion: undefined, dryRun: false, maxCalls: undefined, models: [], out: undefined, provider: undefined, set: undefined };
   for (let index = 0; index < argv.length; index += 1) {
     const name = argv[index];
     const value = () => {
@@ -94,6 +100,10 @@ export function parseMealDraftCliArguments(argv: readonly string[]): MealDraftCl
     switch (name) {
       case '--check':
         parsed.check = true;
+        break;
+      case '--dataset-version':
+        if (parsed.datasetVersion !== undefined) throw new Error('--dataset-version may be given once');
+        parsed.datasetVersion = value();
         break;
       case '--dry-run':
         parsed.dryRun = true;
@@ -147,22 +157,26 @@ function write(deps: MealDraftCliDependencies, out: string | undefined, value: u
 /** Runs one command and returns its exit code. Throws only for a usage or configuration error (exit 1 by the caller). */
 export async function runMealDraftEvaluationCli(argv: readonly string[], deps: MealDraftCliDependencies): Promise<number> {
   const args = parseMealDraftCliArguments(argv);
-  const loadDataset = deps.loadDataset ?? ((set: MealDraftEvaluationSet) => loadMealDraftDataset(set));
+  // One version for the whole command: the sets a run measures, a dry run validates and a check judges against.
+  const datasetVersion = parseMealDraftDatasetVersion(args.datasetVersion);
+  const loadDataset = deps.loadDataset ?? ((set: MealDraftEvaluationSet, version: MealDraftDatasetVersion) => loadMealDraftDataset(set, version));
   const runSafety = deps.runSafety ?? defaultRunSafety;
   const metadataFor = (input: Omit<Parameters<typeof collectReproducibilityMetadata>[0], 'git' | 'now'>): ReproducibilityMetadata =>
     collectReproducibilityMetadata({ ...input, ...(deps.git === undefined ? {} : { git: deps.git }), now: deps.now() });
 
   if (args.check) {
-    if (args.set !== undefined || args.provider !== undefined) throw new Error('--check takes only --model and --out');
+    if (args.set !== undefined || args.provider !== undefined || args.dryRun || args.maxCalls !== undefined) {
+      throw new Error('--check takes only --dataset-version, --model and --out');
+    }
     const safety = runSafety();
     const verifier = evaluateVerifierGate(safety);
     const reports = args.models.map((path) => deps.readJson(path));
-    const datasets = Object.fromEntries(MEAL_DRAFT_EVALUATION_SETS.map((set) => [set, loadDataset(set)])) as Record<
+    const datasets = Object.fromEntries(MEAL_DRAFT_EVALUATION_SETS.map((set) => [set, loadDataset(set, datasetVersion)])) as Record<
       MealDraftEvaluationSet,
       { dataset: MealDraftEvaluationDataset; digest: string }
     >;
     // Offline: the reports and the source tree only; the runtime is never contacted by a check.
-    const model = evaluateModelGate(reports, { current: currentVerifierDigests(), datasets });
+    const model = evaluateModelGate(reports, { current: currentVerifierDigests(), datasetVersion, datasets });
     const judged = model.profile;
     const metadata = metadataFor({
       datasetDigest: null,
@@ -178,6 +192,10 @@ export async function runMealDraftEvaluationCli(argv: readonly string[], deps: M
     deps.info(`OVERALL: ${report.overall}. ${MEAL_DRAFT_GATE_PERMITS}`);
     write(deps, args.out, report);
     return report.exitCode;
+  }
+
+  if ((args.set === 'safety' || args.set === 'challenge') && args.datasetVersion !== undefined) {
+    throw new Error(`--set ${args.set} has its own frozen version; --dataset-version selects the development and held-out sets only`);
   }
 
   if (args.set === 'safety') {
@@ -213,7 +231,8 @@ export async function runMealDraftEvaluationCli(argv: readonly string[], deps: M
   if (set === undefined || !MEAL_DRAFT_EVALUATION_SETS.includes(set)) throw new Error(`--set must be safety, challenge, ${MEAL_DRAFT_EVALUATION_SETS.join(' or ')}`);
   const providerName = args.provider;
   if (providerName !== 'fake' && providerName !== 'ollama') throw new Error('--provider must be fake or ollama (stated explicitly, never inferred)');
-  const { dataset, digest } = loadDataset(set);
+  const { dataset, digest } = loadDataset(set, datasetVersion);
+  if (dataset.datasetVersion !== datasetVersion) throw new Error(`The ${set} set loaded for v${datasetVersion} is version ${dataset.datasetVersion}`);
   const maxCalls = Number(args.maxCalls ?? String(Math.min(dataset.cases.length, MEAL_DRAFT_EVALUATION_MAX_CALLS)));
   if (!Number.isInteger(maxCalls) || maxCalls < 1 || maxCalls > MEAL_DRAFT_EVALUATION_MAX_CALLS) {
     throw new Error(`--max-calls must be an integer from 1 to ${MEAL_DRAFT_EVALUATION_MAX_CALLS}`);
@@ -233,6 +252,7 @@ export async function runMealDraftEvaluationCli(argv: readonly string[], deps: M
     let modelDigest: string | null = null;
     const notRun = (reason: string): number => {
       const report: MealDraftNotRunReport = {
+        datasetVersion,
         executionProfile: null,
         kind: 'real-model',
         metadata: metadataFor({ datasetDigest: digest, generation: null, model, modelDigest, ollamaVersion, timeoutMs: settings.MEAL_DRAFTS_TIMEOUT_MS }),
