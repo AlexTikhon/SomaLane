@@ -29,12 +29,22 @@ import {
 } from './meal-draft-gates.js';
 import { collectReproducibilityMetadata, currentVerifierDigests, type GitRunner, type ReproducibilityMetadata } from './meal-draft-metadata.js';
 import { buildExecutionProfile, createProfileGuard, type MealDraftExecutionProfile } from './meal-draft-profile.js';
+import {
+  formatChallengeScore,
+  loadMealDraftChallengeSet,
+  runMealDraftChallenge,
+  scoreMealDraftChallenge,
+  type ChallengeCaseResult,
+  type MealDraftChallengeSet,
+} from './meal-draft-challenge.js';
 import { loadMealDraftSafetyCorpus, runMealDraftSafety, type MealDraftSafetyCorpus, type SafetyCaseResult } from './meal-draft-safety.js';
 
 // The command line of the meal draft evaluation (docs/runbooks/meal-drafts.md), separated from its entry point so that
 // its exit codes are tested. Never part of `npm test`, `npm run verify` or CI.
 //
 //   --set safety [--out F]                                   deterministic verifier safety corpus (no model)
+//   --set challenge [--out F]                                vessel-scope engineering challenge set (no model; not held-out
+//                                                            evidence, not a gate input, reported separately)
 //   --set development|heldout --provider fake|ollama [--max-calls N] [--dry-run] [--out F]
 //   --check [--model F]... [--out F]                         both gates: the verifier live, the model from reports
 //
@@ -57,6 +67,7 @@ export interface MealDraftCliDependencies {
   now: () => Date;
   readJson: (path: string) => unknown;
   runSafety?: () => { corpus: MealDraftSafetyCorpus; digest: string; results: SafetyCaseResult[] };
+  runChallenge?: () => { digest: string; results: ChallengeCaseResult[]; set: MealDraftChallengeSet };
   writeText: (path: string, text: string) => void;
 }
 
@@ -122,6 +133,11 @@ const defaultRunSafety = () => {
   return { corpus, digest, results: runMealDraftSafety(corpus.cases) };
 };
 
+const defaultRunChallenge = () => {
+  const { digest, set } = loadMealDraftChallengeSet();
+  return { digest, results: runMealDraftChallenge(set.cases), set };
+};
+
 function write(deps: MealDraftCliDependencies, out: string | undefined, value: unknown): void {
   if (out === undefined) return;
   deps.writeText(out, `${JSON.stringify(value, null, 2)}\n`);
@@ -173,8 +189,28 @@ export async function runMealDraftEvaluationCli(argv: readonly string[], deps: M
     return gateExitCode(report.gate.status);
   }
 
+  if (args.set === 'challenge') {
+    if (args.provider !== undefined) throw new Error('--set challenge calls no provider; leave out --provider');
+    const challenge = (deps.runChallenge ?? defaultRunChallenge)();
+    const score = scoreMealDraftChallenge(challenge.results);
+    const report = {
+      caseCount: challenge.set.cases.length,
+      challengeDigest: challenge.digest,
+      challengeVersion: challenge.set.challengeVersion,
+      kind: 'deterministic-vessel-scope-challenge',
+      metadata: metadataFor({ datasetDigest: challenge.digest, generation: null, model: null, modelDigest: null, ollamaVersion: null, timeoutMs: null }),
+      results: challenge.results,
+      score,
+      set: 'challenge',
+      statement: 'Engineering challenge and regression set with supplied claims and no model: a statement about the verifier only, not held-out evidence and not a gate input.',
+    };
+    deps.info(formatChallengeScore(score, challenge.set.challengeVersion));
+    write(deps, args.out, report);
+    return score.status === 'PASS' ? 0 : 2;
+  }
+
   const set = args.set as MealDraftEvaluationSet | undefined;
-  if (set === undefined || !MEAL_DRAFT_EVALUATION_SETS.includes(set)) throw new Error(`--set must be safety, ${MEAL_DRAFT_EVALUATION_SETS.join(' or ')}`);
+  if (set === undefined || !MEAL_DRAFT_EVALUATION_SETS.includes(set)) throw new Error(`--set must be safety, challenge, ${MEAL_DRAFT_EVALUATION_SETS.join(' or ')}`);
   const providerName = args.provider;
   if (providerName !== 'fake' && providerName !== 'ollama') throw new Error('--provider must be fake or ollama (stated explicitly, never inferred)');
   const { dataset, digest } = loadDataset(set);

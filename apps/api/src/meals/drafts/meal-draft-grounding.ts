@@ -19,6 +19,30 @@ import {
 } from '@running-tracker/contracts';
 import type { z } from 'zod';
 
+import {
+  ENERGY_UNIT,
+  ENERGY_UNIT_WORD_BEFORE,
+  GRAM_UNIT,
+  METRIC,
+  MINUS_OR_DASH,
+  NOT_LETTER_AFTER,
+  NOT_LETTER_BEFORE,
+  OTHER_UNIT,
+  SPACE,
+  word,
+} from './meal-draft-lexicon.js';
+import {
+  checkMention,
+  clauseAround,
+  exactDecimal,
+  numberTokens,
+  parseToken,
+  sameDecimal,
+  sentences,
+  type ExactDecimal,
+  type NumberToken,
+} from './meal-draft-mentions.js';
+import { analyzeVesselScope, attributionOf, sentenceHasVesselScope, type VesselScopeAnalysis } from './meal-draft-vessel-scope.js';
 import type { MealDraftAbstention, MealDraftWireAnswer, NutrientClaim } from './meal-draft-wire.js';
 
 // The grounding step of "Draft from text" (ADR-0092): deterministic code that decides what of a model's answer may be
@@ -38,6 +62,11 @@ import type { MealDraftAbstention, MealDraftWireAnswer, NutrientClaim } from './
 //
 // The rules are deliberately conservative. A false abstention costs the person one field to type; a false acceptance
 // puts a number in their diary that they did not mean. When in doubt, the field is withheld.
+//
+// Modules: the shared vocabulary is `meal-draft-lexicon.ts`; number tokens, exact decimals, mentions, lists, clauses and
+// sentences are `meal-draft-mentions.ts`; whether a mention belongs to a whole cooking vessel or batch is decided ONCE per
+// text by `meal-draft-vessel-scope.ts` (docs/meal-draft-vessel-scope-policy.md), and both the proposal check
+// (`scopeReason`) and the conflict scan (`distinctStatedValues`) read that same analysis.
 
 export class UngroundedOutputError extends Error {
   public constructor() {
@@ -65,26 +94,6 @@ export interface GroundingResult {
   proposal: GroundedProposal;
 }
 
-// ---------------------------------------------------------------------------------------------------------------
-// Vocabulary. English and Russian, matched case-insensitively and never inside a longer word.
-
-const NOT_LETTER_BEFORE = '(?<![\\p{L}])';
-const NOT_LETTER_AFTER = '(?![\\p{L}])';
-const SPACE = '[ \\u00A0\\u202F]';
-
-// Longest alternatives first: a regular expression alternation takes the first that matches.
-const ENERGY_UNIT = '(?:kilocalories|kilocalorie|kcals|kcal|calories|calorie|cals|cal|килокалорий|килокалории|килокалория|ккал|калорий|калории|калория|кал)';
-const GRAM_UNIT = '(?:grammes|gramme|grams|gram|gr|g|граммов|грамма|грамм|гр|г)';
-const OTHER_UNIT = '(?:kj|кдж|mcg|мкг|mg|мг|kg|кг|oz|lbs|lb|ml|мл|l|л|%)';
-// Words that name food energy as a unit when they come BEFORE the number ("Calories: 650", "ккал 650").
-const ENERGY_UNIT_WORD_BEFORE = '(?:kcal|calories|калорий|калории|калорийность|ккал)';
-
-const METRIC: Readonly<Record<Exclude<MealNutritionField, 'energyKcal'>, string>> = {
-  carbohydrateG: '(?:carbohydrates|carbohydrate|carbs|carb|углеводов|углеводы|углевода|углевод)',
-  fatG: '(?:fats|fat|жиров|жиры|жира|жир)',
-  proteinG: '(?:proteins|protein|белков|белка|белки|белке|белком|белок|протеина|протеин)',
-};
-
 const MEAL_TYPE_WORDS: Readonly<Record<Exclude<MealType, 'other'>, string>> = {
   breakfast: '(?:breakfast\\p{L}*|позавтрака\\p{L}*|завтрак\\p{L}*)',
   dinner: '(?:dinner\\p{L}*|supper\\p{L}*|поужина\\p{L}*|ужин\\p{L}*)',
@@ -92,13 +101,6 @@ const MEAL_TYPE_WORDS: Readonly<Record<Exclude<MealType, 'other'>, string>> = {
   snack: '(?:snack\\p{L}*|перекуси\\p{L}*|перекус\\p{L}*|полдник\\p{L}*)',
 };
 
-const word = (alternatives: string) => new RegExp(`${NOT_LETTER_BEFORE}${alternatives}${NOT_LETTER_AFTER}`, 'iu');
-
-// Minus signs. ASCII hyphen-minus, the Unicode minus and their hyphen-like variants are a sign whenever they stand before
-// a number that does not follow another number (that is a range). The en dash is a sign only directly before the digits;
-// spaced, it is the usual separator ("Soup – 300 kcal"), as the em dash always is ("Белки — 35 г").
-const MINUS = /[-‐‑‒−﹣－]/u;
-const MINUS_OR_DASH = '[\\u002D\\u2010-\\u2014\\u2212\\uFE63\\uFF0D]';
 
 // A per-portion qualifier: a value per something, or one that needs a multiplication to become a total. It can stand
 // before or after the values it governs, in another clause, in a heading above a list or in a later sentence, so its
@@ -152,220 +154,6 @@ const CONTAINER_OR_PARTIAL = new RegExp(
   ].join('|'),
   'iu',
 );
-
-// A figure for a whole cooking vessel or batch ("the whole pot is 900 kcal", "вся кастрюля 900 ккал"): like a package
-// total, it is not the amount eaten, so its presence anywhere in the text means a value's whole-entry scope must be
-// established explicitly (see `wholeEntryScoped`). Unlike the package words of `CONTAINER_OR_PARTIAL`, a vessel word on
-// its own is NOT context: food names and cooking references ("Pot roast", "Pan-fried salmon", "Soup from the pot",
-// "Суп из кастрюли", "Плов из казана", "Тушила в кастрюле 40 минут") name the vessel without giving it a figure. Nor
-// is a whole-quantified vessel on its own ("Cooked soup in a full pot.", "I washed the whole pan.", "Помыла всю
-// сковороду."): it is context only when it is RELATED to a figure (2026-11-17 correction; before it, a bare
-// whole-quantifier anywhere reclassified every value of the text, which withheld unrelated values and hid unrelated
-// conflicts from `distinctStatedValues`). Only these explicit constructions count:
-// - a whole-quantified vessel ("whole/entire/full pot", "all (of) the pot", "вся/всю/всей/целая/полная кастрюля",
-//   "весь/целый казан", "кастрюля целиком") that is
-//   - the subject of a figure: "the whole pot (of chili) is/has/contains/was … 900 kcal" (at most two words before the
-//     figure, any whitespace), "вся кастрюля содержит/была/это 900 ккал";
-//   - set beside a figure in the same statement: on the same line with at most one "," ":" "=" or dash between them, or
-//     a line break after ":" "=" or a dash ("whole pot, fat 45.5 g", "a full pot of soup: 900 kcal", "вся кастрюля 900
-//     ккал", "полная кастрюля супа, 900 ккал");
-//   - qualifying a figure before it on the same line through an optional "for/in/of" or "на/за/в/во/для" and an article
-//     ("900 kcal for the whole pot", "protein 80 g, the whole pot", "900 ккал на всю кастрюлю");
-//   - a LABEL (its clause is nothing but the vessel reference) next to a figure with only punctuation and whitespace
-//     between them, in either order, across sentence ends, line breaks and parentheses ("Whole pot\n900 kcal", "Full
-//     pot. 900 kcal.", "900 kcal\nWhole pot", "Soup, 900 kcal (for the whole pot).", "(Whole pot)\n900 kcal", "Белки 80 г
-//     (вся кастрюля)."; see `wholeVesselLabelBesideFigure`). A clause that describes an action ("Washed the whole pan.",
-//     "Whole pot washed afterwards", "Помыла всю сковороду.") attributes nothing, so the values beside it keep their
-//     scope and conflicts; any word between the vessel and a figure separates them ("Cooked soup in a full pot. Lunch,
-//     300 kcal.");
-// - the vessel as the subject of a figure: "the/this/that pot (of soup) is/has/contains/was … 900 kcal" (at most two
-//   words before the figure; not after "from" or "out of", which name where the food came from: "Soup from the pot is
-//   300 kcal"), "Pot: 900 kcal" at the start of a clause, "Кастрюля 900 ккал", "Кастрюля: 900 ккал", "Кастрюля
-//   содержит 900 ккал" (the nominative only: "Суп из кастрюли 300 ккал" is a source);
-// - a figure located in the vessel: "в (этой) кастрюле 900 ккал", "in the pot: 900 kcal".
-// A figure is a number with an energy or gram unit, or a nutrient or energy word that opens a statement. Nothing is
-// inferred from these constructions: not how much of the vessel was eaten, and never a fraction of a value.
-const VESSEL_EN = '(?:saucepans|saucepan|skillets|skillet|batches|batch|pots|pot|pans|pan)';
-const VESSEL_RU = [
-  'кастрюл(?:я|и|ю|е|ей|ею|ь|ям|ями|ях)',
-  'кастрюльк(?:а|и|у|е|ой|ою)',
-  'сковород(?:а|ы|у|е|ой|ою)',
-  'сковородк(?:а|и|у|е|ой|ою)',
-  'казан(?:а|у|ом|е|ы|ов)?',
-].join('|');
-const VESSEL_RU_NOMINATIVE = '(?:кастрюля|кастрюлька|сковорода|сковородка|казан)';
-const VESSEL_RU_LOCATIVE = '(?:кастрюле|кастрюльке|сковороде|сковородке|казане)';
-const NUTRIENT_WORD = `(?:${Object.values(METRIC).join('|')}|${ENERGY_UNIT_WORD_BEFORE})`;
-const FIGURE = `(?:\\d+(?:[.,]\\d+)?${SPACE}?(?:${ENERGY_UNIT}|${GRAM_UNIT})${NOT_LETTER_AFTER}|${NOT_LETTER_BEFORE}${NUTRIENT_WORD}${NOT_LETTER_AFTER})`;
-const FIGURE_GAP = `\\s*(?:[:=]|${MINUS_OR_DASH})?\\s*`;
-// Horizontal whitespace only (spaces, tabs, no-break spaces): a bare line break separates statements.
-const INLINE_SPACE = '[^\\S\\r\\n]';
-// Between a whole-quantified vessel and a figure beside it in the same statement: the same line with at most one "," ":"
-// "=" or dash, or a line break only after an explicit ":" "=" or dash. Wider adjacency (sentence ends, bare line breaks,
-// parentheses) is decided by `wholeVesselLabelBesideFigure`, which also looks at the vessel's own clause.
-const BESIDE_GAP = `(?:${INLINE_SPACE}*(?:[,:=]|${MINUS_OR_DASH})?${INLINE_SPACE}*|${INLINE_SPACE}*(?:[:=]|${MINUS_OR_DASH})\\s*)`;
-// Between a figure and the whole-quantified vessel after it when a preposition or an article stands between them: the
-// same line with at most one "," ":" "=" or dash ("900 kcal for the whole pot", "protein 80 g, the whole pot").
-const AFTER_FIGURE_GAP = `${INLINE_SPACE}*(?:[,:=]|${MINUS_OR_DASH})?${INLINE_SPACE}*`;
-const WHOLE_VESSEL_EN = `${NOT_LETTER_BEFORE}(?:(?:whole|entire|full)\\s+${VESSEL_EN}|all\\s+(?:of\\s+)?(?:the|this|that|my|our)\\s+${VESSEL_EN})${NOT_LETTER_AFTER}`;
-const WHOLE_VESSEL_RU = `${NOT_LETTER_BEFORE}(?:(?:вс(?:я|ю|ей|ею|ем|его|ё|е)|весь|цел(?:ая|ую|ой|ый|ого|ом)|полн(?:ая|ую|ой|ый|ого|ом))\\s+(?:${VESSEL_RU})|(?:${VESSEL_RU})\\s+целиком)${NOT_LETTER_AFTER}`;
-const WHOLE_CONTAINER = new RegExp(
-  [
-    // A whole-quantified vessel as the subject of a figure: "the whole pot (of chili) is … 900 kcal".
-    `${WHOLE_VESSEL_EN}(?:\\s+of\\s+\\p{L}+)?\\s+(?:is|was|has|had|contains|contained|holds|held|totals|totaled|totalled|comes\\s+to|came\\s+to)\\s+(?:\\p{L}+\\s+){0,2}${FIGURE}`,
-    // Beside a figure in the same statement: "whole pot, fat 45.5 g", "a full pot of soup: 900 kcal", "Whole pot:\n900 kcal".
-    `${WHOLE_VESSEL_EN}(?:\\s+of\\s+\\p{L}+)?${BESIDE_GAP}${FIGURE}`,
-    // Russian, beside or as the subject: "вся кастрюля 900 ккал", "полная кастрюля супа, 900 ккал", "целая кастрюля —
-    // это 900 ккал", "вся кастрюля содержит 900 ккал" (one word may follow the vessel on its line).
-    `${WHOLE_VESSEL_RU}(?:${INLINE_SPACE}+\\p{L}+)?${BESIDE_GAP}(?:(?:это|содерж\\p{L}*|был[аио]?|составля\\p{L}*)${INLINE_SPACE}*(?:[:=]|${MINUS_OR_DASH})?${INLINE_SPACE}*)?${FIGURE}`,
-    // A figure qualified by the whole-quantified vessel after it on the same line: "900 kcal for the whole pot", "900 ккал
-    // на всю кастрюлю".
-    `${FIGURE}${AFTER_FIGURE_GAP}(?:(?:for|in|of)\\s+)?(?:(?:a|an|the|this|that|my|our)\\s+)?${WHOLE_VESSEL_EN}`,
-    `${FIGURE}${AFTER_FIGURE_GAP}(?:(?:на|за|в|во|для)\\s+)?${WHOLE_VESSEL_RU}`,
-    `${NOT_LETTER_BEFORE}(?<!${NOT_LETTER_BEFORE}(?:from|out\\s+of)\\s+)(?:the|this|that|my|our)\\s+${VESSEL_EN}(?:\\s+of\\s+\\p{L}+)?\\s+(?:is|was|has|had|contains|contained|holds|held|totals|totaled|totalled|comes\\s+to|came\\s+to)\\s+(?:\\p{L}+\\s+){0,2}${FIGURE}`,
-    `(?:(?:^|[\\r\\n.;!?,(])\\s*(?:(?:the|this|that|my|our)\\s+)?|${NOT_LETTER_BEFORE}in\\s+(?:the|this|that|my|our)\\s+)${VESSEL_EN}\\s*(?:[:=]|${MINUS_OR_DASH})\\s*${FIGURE}`,
-    `${NOT_LETTER_BEFORE}${VESSEL_RU_NOMINATIVE}(?:\\s+(?:содерж\\p{L}*|был[аио]?|это))?${FIGURE_GAP}${FIGURE}`,
-    `${NOT_LETTER_BEFORE}в\\s+(?:(?:этой|этом|той|том|моей|моём|моем)\\s+)?${VESSEL_RU_LOCATIVE}${FIGURE_GAP}${FIGURE}`,
-  ].join('|'),
-  'iu',
-);
-
-// A Russian food qualifier after a whole vessel in a label: a dish or food noun in the genitive ("Полная кастрюля супа",
-// "весь казан плова"), the Russian counterpart of the English "of soup". Russian marks it by case alone, and a genitive
-// noun cannot be told from a short participle by its ending ("супа", "салата", "бульона" against "помыта", "налита",
-// "убрана"), so only the words listed here CONFIRM a label. Another trailing word does not make the clause an action:
-// unless it is an explicit action word (`VESSEL_ACTION`), the attribution is unresolved ("Полная кастрюля окрошки"), and
-// unresolved is treated conservatively (see `vesselClauseBesideFigure`). The list only spares known dishes that
-// abstention; it is not what keeps unknown ones safe.
-const FOOD_QUALIFIER_RU = [
-  'суп(?:а|ов)',
-  'супчика',
-  'борщ(?:а|ей)',
-  'щей',
-  'бульон(?:а|ов)',
-  'солянки',
-  'рассольника',
-  'ухи',
-  'харчо',
-  'лагмана',
-  'шурпы',
-  'плова',
-  'каши',
-  'гречки',
-  'риса',
-  'рагу',
-  'гуляша',
-  'жаркого',
-  'чили',
-  'лапши',
-  'макарон',
-  'пасты',
-  'картошки',
-  'картофеля',
-  'пюре',
-  'овощей',
-  'мяса',
-  'курицы',
-  'фарша',
-  'тушенки',
-  'тушёнки',
-  'котлет',
-  'пельменей',
-  'вареников',
-  'голубцов',
-  'омлета',
-  'яичницы',
-  'компота',
-  'киселя',
-  'соуса',
-  'фасоли',
-  'чечевицы',
-  'капусты',
-].join('|');
-
-// A whole-vessel LABEL (a confirmed attribution): a clause that is nothing but the vessel reference, with an optional
-// preposition and article and an English "of …" or a Russian food qualifier ("Whole pot", "(whole pot)", "(for the whole
-// pot)", "The entire pan", "Вся кастрюля", "(на всю кастрюлю)", "Казан целиком", "Полная кастрюля супа").
-const WHOLE_VESSEL_LABEL = new RegExp(
-  `^\\s*(?:(?:(?:for|in|of)\\s+)?(?:(?:a|an|the|this|that|my|our)\\s+)?${WHOLE_VESSEL_EN}(?:\\s+of\\s+\\p{L}+)?|(?:(?:на|за|в|во|для)\\s+)?${WHOLE_VESSEL_RU}(?:\\s+(?:${FOOD_QUALIFIER_RU})${NOT_LETTER_AFTER})?)\\s*$`,
-  'iu',
-);
-const WHOLE_VESSEL_ANYWHERE = new RegExp(`${WHOLE_VESSEL_EN}|${WHOLE_VESSEL_RU}`, 'giu');
-
-// An explicit ACTION in a vessel clause: something done with the vessel as an object, so the clause attributes no
-// nutrition to it ("Washed the whole pan", "Whole pot washed afterwards", "For the whole pot I used a lid", "Помыла всю
-// сковороду", "Полная кастрюля помыта", "Всю кастрюлю помыла потом", "На всю кастрюлю ушла крышка", "Сварила в полной
-// кастрюле"). Anywhere in the clause: cleaning words and kitchen objects other than food, which never describe a dish, and
-// Russian finite cooking or handling verbs (past tense or infinitive only, never a participle or adjective such as
-// "жареной", "вареников", "тушенки", which name the food). English cooking and handling verbs count only BEFORE the vessel
-// ("Cooked in a full pot", "Made a full pot"), because after it they describe the food ("Full pan of fried rice"). Only
-// listed words count: a clause with neither a label nor one of these is unresolved, never an action by default.
-const VESSEL_ACTION_ANYWHERE = new RegExp(
-  [
-    `${NOT_LETTER_BEFORE}(?:wash\\p{L}*|scrub\\p{L}*|clean\\p{L}*|rins\\p{L}*|soak\\p{L}*|dishwasher\\p{L}*|sinks?|lids?)${NOT_LETTER_AFTER}`,
-    `${NOT_LETTER_BEFORE}(?:(?:по|вы|от|с|про|об|за)?мы(?:л|т|в)\\p{L}*|(?:по|вы|о|от)чист\\p{L}*|чист(?:ая|ую|ил\\p{L}*|ить)|(?:с|о|про)?полосн\\p{L}*|замоч\\p{L}*|крышк\\p{L}*|посудомо\\p{L}*|раковин\\p{L}*)${NOT_LETTER_AFTER}`,
-    `${NOT_LETTER_BEFORE}(?:(?:с|за|на|у|при|до|по|пере)?вари(?:л|ть)\\p{L}*|(?:по|за|об|из|под|пере)?жари(?:л|ть)\\p{L}*|(?:за|по|при|пере)?туши(?:л|ть)\\p{L}*|приготови(?:л|ть)\\p{L}*|постави(?:л|ть)\\p{L}*|убра(?:л|ть)\\p{L}*|накры(?:л|ть)\\p{L}*|использова(?:л|ть)\\p{L}*)${NOT_LETTER_AFTER}`,
-  ].join('|'),
-  'iu',
-);
-const VESSEL_ACTION_BEFORE_EN = new RegExp(
-  `${NOT_LETTER_BEFORE}(?:cook(?:ed|ing|s)?|made|make|making|boiled|boiling|simmered|simmering|stewed|stewing|fried|frying|baked|baking|roasted|roasting|prepared|preparing|used|put|stored|covered)${NOT_LETTER_AFTER}`,
-  'iu',
-);
-
-type VesselClause = 'action' | 'label' | 'unresolved';
-
-/** What a clause holding a whole-vessel reference (starting at `vesselStart` within it) says about the vessel. */
-function classifyVesselClause(clause: string, vesselStart: number): VesselClause {
-  if (WHOLE_VESSEL_LABEL.test(clause)) return 'label';
-  if (VESSEL_ACTION_ANYWHERE.test(clause) || VESSEL_ACTION_BEFORE_EN.test(clause.slice(0, vesselStart))) return 'action';
-  return 'unresolved';
-}
-// Clause edges for a vessel reference: sentence ends, line breaks, parentheses, brackets, commas, colons, semicolons, an
-// equals sign and spaced dashes.
-const VESSEL_CLAUSE_EDGE = /[.;!?,:=()[\]\r\n–—]/u;
-// Only punctuation and whitespace between a label and a figure (parentheses and line breaks included).
-const LABEL_GAP = `(?:\\s|[,:;.!=()[\\]]|${MINUS_OR_DASH})*`;
-const FIGURE_AFTER_LABEL = new RegExp(`^${LABEL_GAP}${FIGURE}`, 'iu');
-const FIGURE_BEFORE_LABEL = new RegExp(`${FIGURE}${LABEL_GAP}$`, 'iu');
-
-/**
- * How the vessel scope of a value is read. `proposal`: an unresolved vessel clause beside a figure counts as container
- * context, so the value is withheld rather than taken as the amount eaten. `conflict`: it does not, so the figure stays
- * a whole-entry value for conflict detection and can never be dropped to clear the way for another value. Only a
- * confirmed attribution (a label, a `WHOLE_CONTAINER` construction, a package or partial amount) removes a value from the
- * conflict scan.
- */
-type VesselReading = 'conflict' | 'proposal';
-
-/**
- * Whether a whole-vessel clause stands next to a figure with only punctuation and whitespace between them, in either
- * order, across sentence ends, line breaks and parentheses ("Whole pot\n900 kcal", "Full pot. 900 kcal.", "900
- * kcal\nWhole pot", "Soup, 900 kcal (for the whole pot).", "(Whole pot)\n900 kcal", "Белки 80 г (вся кастрюля)."), and
- * attributes it to the vessel under `reading`. The vessel's own clause decides (`classifyVesselClause`): a label
- * attributes the figure; an explicit action ("Washed the whole pan. Protein 25 g.", "Полная кастрюля помыта\n400 ккал")
- * does not, so the values beside it keep their whole-entry scope and their conflicts; anything else ("Полная кастрюля
- * окрошки\n900 ккал") is unresolved, which withholds the figure for a proposal but keeps it in the conflict scan.
- */
-function vesselClauseBesideFigure(fragment: string, reading: VesselReading): boolean {
-  for (const match of fragment.matchAll(WHOLE_VESSEL_ANYWHERE)) {
-    let left = match.index;
-    while (left > 0 && !VESSEL_CLAUSE_EDGE.test(fragment[left - 1] ?? '')) left -= 1;
-    let right = match.index + match[0].length;
-    while (right < fragment.length && !VESSEL_CLAUSE_EDGE.test(fragment[right] ?? '')) right += 1;
-    if (!FIGURE_AFTER_LABEL.test(fragment.slice(right)) && !FIGURE_BEFORE_LABEL.test(fragment.slice(0, left))) continue;
-    const kind = classifyVesselClause(fragment.slice(left, right), match.index - left);
-    if (kind === 'label' || (kind === 'unresolved' && reading === 'proposal')) return true;
-  }
-  return false;
-}
-
-/**
- * A container, product or partial amount (`CONTAINER_OR_PARTIAL`), a whole-vessel figure (`WHOLE_CONTAINER`), or a
- * whole-vessel clause beside a figure that `reading` attributes to the vessel (`vesselClauseBesideFigure`).
- */
-const hasContainerContext = (fragment: string, reading: VesselReading): boolean =>
-  CONTAINER_OR_PARTIAL.test(fragment) || WHOLE_CONTAINER.test(fragment) || vesselClauseBesideFigure(fragment, reading);
 
 // An assertion that something was eaten or drunk, by the person: a past or perfect consumption verb. In English "had"
 // counts only with a first-person subject ("I had", "we've had"), because "the package had" is not consumption. Third
@@ -481,83 +269,6 @@ const BETWEEN_UPPER = new RegExp(
   'iu',
 );
 
-// A number as people write it: digits, optionally one decimal separator and more digits. Never directly after a letter
-// or a digit (B12, x2), never after a separator that follows a digit (the tail of 1.5).
-const NUMBER = /(?<![\p{L}\p{N}_])(?<!\d[.,])\d+(?:[.,]\d+)?(?!\p{N})/gu;
-
-// ---------------------------------------------------------------------------------------------------------------
-// Tokens and mentions.
-
-interface NumberToken {
-  end: number;
-  start: number;
-  text: string;
-}
-
-function numberTokens(text: string, from = 0, to = text.length): NumberToken[] {
-  const tokens: NumberToken[] = [];
-  for (const match of text.matchAll(NUMBER)) {
-    const start = match.index;
-    const end = start + match[0].length;
-    if (start >= from && end <= to) tokens.push({ end, start, text: match[0] });
-  }
-  return tokens;
-}
-
-/**
- * A decimal exactly as written, normalised without any arithmetic: no leading zeros in the integer part (except a lone
- * 0) and no trailing zeros in the fraction. "12.50", "12,5" and "012.5" are one value; "12.5000000000000001" is not 12.5.
- */
-interface ExactDecimal {
-  fraction: string;
-  integer: string;
-}
-
-function exactDecimal(digits: string): ExactDecimal {
-  const [integer = '0', fraction = ''] = digits.split(/[.,]/u);
-  return { fraction: fraction.replace(/0+$/u, ''), integer: integer.replace(/^0+(?=\d)/u, '') };
-}
-
-const sameDecimal = (left: ExactDecimal, right: ExactDecimal): boolean => left.integer === right.integer && left.fraction === right.fraction;
-
-type ParsedNumber = { kind: 'ambiguous' } | { kind: 'negative' } | { decimal: ExactDecimal; kind: 'value' };
-
-type SignBefore = 'ambiguous' | 'negative' | 'none';
-
-/**
- * What stands before the number in the ORIGINAL text, whatever the excerpt includes: a minus sign directly before it
- * (negative), a minus sign separated from it by whitespace (ordinary, no-break, narrow no-break or any other space: it may
- * be a sign or a stray dash, so it is ambiguous), or nothing. A minus that follows another number is the dash of a range,
- * which the clause check refuses on its own.
- */
-function signBefore(text: string, start: number): SignBefore {
-  let index = start;
-  while (index > 0 && /\s/u.test(text[index - 1]!)) index -= 1;
-  const spaced = index < start;
-  const sign = text[index - 1] ?? '';
-  const enDash = sign === '–';
-  if (!MINUS.test(sign) && !enDash) return 'none';
-  let before = index - 1;
-  while (before > 0 && /\s/u.test(text[before - 1]!)) before -= 1;
-  if (/\d/u.test(text[before - 1] ?? '')) return 'none';
-  if (enDash) return spaced ? 'none' : 'negative';
-  return spaced ? 'ambiguous' : 'negative';
-}
-
-/** The number a token denotes, exactly, or why it does not denote exactly one non-negative number. */
-function parseToken(text: string, token: NumberToken): ParsedNumber {
-  const separator = /[.,]/u.exec(token.text);
-  // 1,200 or 1.200: a thousands separator in one convention, a decimal in another. Never guessed.
-  if (separator !== null && token.text.length - separator.index - 1 === 3) return { kind: 'ambiguous' };
-  // 1 200 (space-grouped thousands) seen from either side.
-  if (new RegExp(`\\d${SPACE}$`, 'u').test(text.slice(Math.max(0, token.start - 2), token.start))) return { kind: 'ambiguous' };
-  if (new RegExp(`^${SPACE}\\d{3}(?!\\d)`, 'u').test(text.slice(token.end, token.end + 5))) return { kind: 'ambiguous' };
-  const sign = signBefore(text, token.start);
-  if (sign === 'negative') return { kind: 'negative' };
-  if (sign === 'ambiguous') return { kind: 'ambiguous' };
-  return { decimal: exactDecimal(token.text), kind: 'value' };
-}
-
 /** The model's value as an exact decimal, or null when it is anything else ("about 600", "-30", "6e2", "650 kcal"). */
 function parseClaimedValue(value: string): ExactDecimal | null {
   const trimmed = value.trim();
@@ -581,78 +292,6 @@ function contractValue(decimal: ExactDecimal, field: MealNutritionField): number
   return accepted.success ? accepted.data : null;
 }
 
-type MentionCheck =
-  | { kind: 'mention'; end: number; start: number }
-  | { kind: 'no_unit' }
-  | { kind: 'other_unit' }
-  | { kind: 'not_attached' };
-
-/**
- * Whether the number token is a statement of `field`: followed by the field's unit (energy may name its unit before the
- * number instead), and for a macronutrient attached to its name on either side ("protein 40 g", "40 g of protein",
- * "белок 40 г", "40 г белка"). A grams figure next to anything else is a food quantity, never a nutrient.
- */
-function checkMention(text: string, token: NumberToken, field: MealNutritionField): MentionCheck {
-  const after = text.slice(token.end);
-  const before = text.slice(0, token.start);
-  if (new RegExp(`^${SPACE}?${OTHER_UNIT}${NOT_LETTER_AFTER}`, 'iu').test(after)) return { kind: 'other_unit' };
-
-  if (field === 'energyKcal') {
-    const unit = new RegExp(`^${SPACE}?${ENERGY_UNIT}${NOT_LETTER_AFTER}`, 'iu').exec(after);
-    if (unit !== null) return { end: token.end + unit[0].length, kind: 'mention', start: token.start };
-    const unitBefore = new RegExp(`${NOT_LETTER_BEFORE}${ENERGY_UNIT_WORD_BEFORE}${SPACE}*[:=\\-–—]?${SPACE}*$`, 'iu').exec(before);
-    if (unitBefore !== null && !new RegExp(`^${SPACE}?${GRAM_UNIT}${NOT_LETTER_AFTER}`, 'iu').test(after)) {
-      return { end: token.end, kind: 'mention', start: unitBefore.index };
-    }
-    return { kind: 'no_unit' };
-  }
-
-  const unit = new RegExp(`^${SPACE}?${GRAM_UNIT}${NOT_LETTER_AFTER}`, 'iu').exec(after);
-  if (unit === null) return { kind: 'no_unit' };
-  const unitEnd = token.end + unit[0].length;
-  const metric = METRIC[field];
-  const metricBefore = new RegExp(`${NOT_LETTER_BEFORE}${metric}${SPACE}*[:=\\-–—]?${SPACE}*$`, 'iu').exec(before);
-  if (metricBefore !== null) return { end: unitEnd, kind: 'mention', start: metricBefore.index };
-  const metricAfter = new RegExp(`^${SPACE}*(?:of${SPACE}+)?${metric}${NOT_LETTER_AFTER}`, 'iu').exec(text.slice(unitEnd));
-  if (metricAfter !== null) return { end: unitEnd + metricAfter[0].length, kind: 'mention', start: token.start };
-  return { kind: 'not_attached' };
-}
-
-/** The clause around [start, end): up to the nearest ; ! ? | line break, or a . or , that is not between two digits. */
-function clauseAround(text: string, start: number, end: number): { closer: string; text: string } {
-  const isBoundary = (index: number): boolean => {
-    const character = text[index] ?? '';
-    if (/[;!?|\n\r]/u.test(character)) return true;
-    if (character === '.' || character === ',') {
-      return !(/\d/u.test(text[index - 1] ?? '') && /\d/u.test(text[index + 1] ?? ''));
-    }
-    return false;
-  };
-  let left = start;
-  while (left > 0 && !isBoundary(left - 1)) left -= 1;
-  let right = end;
-  while (right < text.length && !isBoundary(right)) right += 1;
-  return { closer: text[right] ?? '', text: text.slice(left, right) };
-}
-
-/**
- * The sentences of the text: split at ; ! ? or a full stop that is not a decimal point. Commas, colons and line breaks do
- * NOT end a sentence, so a heading and the list below it, or a list and the qualifier after it, stay together.
- */
-function sentences(text: string): Array<{ end: number; start: number; text: string }> {
-  const found: Array<{ end: number; start: number; text: string }> = [];
-  let start = 0;
-  for (let index = 0; index <= text.length; index += 1) {
-    const character = text[index] ?? '';
-    const boundary =
-      index === text.length || /[;!?]/u.test(character) || (character === '.' && !(/\d/u.test(text[index - 1] ?? '') && /\d/u.test(text[index + 1] ?? '')));
-    if (boundary) {
-      found.push({ end: index, start, text: text.slice(start, index) });
-      start = index + 1;
-    }
-  }
-  return found;
-}
 
 const hasPortionQualifier = (fragment: string): boolean => PER_PORTION.test(fragment) || NUTRITION_LABEL.test(fragment);
 
@@ -677,7 +316,8 @@ function statesFoodQuantity(text: string, start: number, end: number): boolean {
 
 /**
  * Whether the value at [start, end) is a total for the whole entry. With no per-portion qualifier, nutrition label,
- * container, product or partial amount (`CONTAINER_OR_PARTIAL`) anywhere in the text, it is. Otherwise that context stays
+ * container, product or partial amount (`CONTAINER_OR_PARTIAL`) anywhere in the text, and, when `vessel` is given, no
+ * confirmed or unresolved vessel context either (`VesselScopeAnalysis.hasVesselContext`), it is. Otherwise that context stays
  * in force across commas, lists, sentences, line breaks and the model's excerpt until the person resolves it for this
  * value, which takes ALL of:
  *
@@ -688,20 +328,25 @@ function statesFoodQuantity(text: string, start: number, end: number): boolean {
  *   total I ate 120 kcal, protein 8 g"). A summing phrase alone ("In total the package has 4 g protein", "Итого 240
  *   ккал") does not say the value was eaten, and a consumption verb in another sentence ("I ate half the yogurt.")
  *   authorizes nothing;
- * - that sentence carries no qualifier, label, container, product or partial amount itself, and states no amount of food
- *   ("I ate 200 g in total, protein 8 g": the phrase may sum the food, and the 8 g may still be per 100 g);
+ * - that sentence carries no qualifier, label, container, product or partial amount itself, no vessel context or
+ *   vessel-attributed mention (when `vessel` is given), and states no amount of food ("I ate 200 g in total, protein 8
+ *   g": the phrase may sum the food, and the 8 g may still be per 100 g);
  * - no qualifier in the text floats free of values (a value-less sentence such as "Values are per 100 g." may refer to
  *   any sentence).
  *
  * Sentences end only at . ; ! ? (not at commas, colons or line breaks), so a heading and the lines below it stay one
  * sentence and keep their qualifier. Nothing is multiplied or inferred either way: not that a whole package was eaten,
  * and never a fraction of a value.
+ *
+ * `vessel` is the vessel-scope analysis for a proposal, or null for the conflict scan, which applies vessel context per
+ * mention instead (docs/meal-draft-vessel-scope-policy.md, sections 5 and 6).
  */
-function wholeEntryScoped(text: string, start: number, end: number, reading: VesselReading): boolean {
-  if (!hasPortionQualifier(text) && !hasContainerContext(text, reading)) return true;
+function wholeEntryScoped(text: string, start: number, end: number, vessel: VesselScopeAnalysis | null): boolean {
+  if (!hasPortionQualifier(text) && !CONTAINER_OR_PARTIAL.test(text) && vessel?.hasVesselContext !== true) return true;
   const all = sentences(text);
   const own = all.find((sentence) => start >= sentence.start && end <= sentence.end);
-  if (own === undefined || hasPortionQualifier(own.text) || hasContainerContext(own.text, reading) || !ENTRY_SUM.test(own.text)) return false;
+  if (own === undefined || hasPortionQualifier(own.text) || CONTAINER_OR_PARTIAL.test(own.text) || !ENTRY_SUM.test(own.text)) return false;
+  if (vessel !== null && sentenceHasVesselScope(vessel, own)) return false;
   if (statesFoodQuantity(text, own.start, own.end) || !boundToConsumption(text, own, start)) return false;
   return all.every((sentence) => !hasPortionQualifier(sentence.text) || statesAnyNutrient(text, sentence.start, sentence.end));
 }
@@ -909,33 +554,47 @@ function inInstruction(text: string, start: number): boolean {
 
 /**
  * Why the value at [start, end) (the number `token` with its unit and nutrient) cannot be proposed as stated, or null:
- * its clause, a range or qualifier around its statement in the original text, a hedge anywhere, then its scope.
+ * its clause, a range or qualifier around its statement in the original text, a hedge anywhere, then its scope, read from
+ * the text's vessel-scope analysis `vessel`.
  */
-function scopeReason(text: string, start: number, end: number, token: NumberToken, field: MealNutritionField): MealDraftWithheldReason | null {
+function scopeReason(
+  text: string,
+  start: number,
+  end: number,
+  token: NumberToken,
+  field: MealNutritionField,
+  vessel: VesselScopeAnalysis,
+): MealDraftWithheldReason | null {
   const clause = clauseAround(text, start, end);
   if (hasPortionQualifier(clause.text)) return 'per_portion';
   const qualifier = qualifierAround(text, token, start, end);
   if (AMBIGUOUS.test(clause.text) || clause.closer === '?' || inRange(text, token, start, end, field) || qualifier === 'ambiguous') return 'ambiguous';
   if (NEGATED.test(clause.text) || qualifier === 'negated') return 'negated';
   if (HEDGE.test(text)) return 'ambiguous';
-  if (!wholeEntryScoped(text, start, end, 'proposal')) return 'per_portion';
+  // Vessel scope (docs/meal-draft-vessel-scope-policy.md, section 5): a mention attributed to a vessel, confirmed or
+  // unresolved, is never proposed; any vessel context makes the global consumed-total rule apply.
+  if (attributionOf(vessel, field, { end, start }) !== 'none') return 'per_portion';
+  if (!wholeEntryScoped(text, start, end, vessel)) return 'per_portion';
   return null;
 }
 
 /**
- * Every value the text states for `field` with whole-entry scope (the same rule as for a proposal); more than one is a
- * conflict. A mention whose sign or notation is not one plain number counts as a value of its own, so "500 kcal" next to
- * "-500 kcal" or "1,200 kcal" is a conflict, never a quiet choice.
+ * Every value the text states for `field` that takes part in conflict detection (docs/meal-draft-vessel-scope-policy.md,
+ * section 6); more than one is a conflict. A mention is left out only when its clause carries a per-portion qualifier,
+ * when the global per-portion/package rule excludes it (`wholeEntryScoped` with vessel context ignored), or when it is
+ * itself attributed to a CONFIRMED vessel. Unresolved mentions and mentions without attribution always take part, so a
+ * vessel statement elsewhere can never remove a value from the scan. A mention whose sign or notation is not one plain
+ * number counts as a value of its own, so "500 kcal" next to "-500 kcal" or "1,200 kcal" is a conflict, never a quiet
+ * choice.
  */
-function distinctStatedValues(text: string, field: MealNutritionField): Set<string> {
+function distinctStatedValues(text: string, field: MealNutritionField, vessel: VesselScopeAnalysis): Set<string> {
   const values = new Set<string>();
-  for (const token of numberTokens(text)) {
-    const mention = checkMention(text, token, field);
-    if (mention.kind !== 'mention') continue;
-    // The `conflict` reading: an unresolved vessel attribution keeps its figure in the scan (see `VesselReading`).
-    if (hasPortionQualifier(clauseAround(text, mention.start, mention.end).text) || !wholeEntryScoped(text, mention.start, mention.end, 'conflict')) continue;
-    const parsed = parseToken(text, token);
-    values.add(parsed.kind === 'value' ? `${parsed.decimal.integer}.${parsed.decimal.fraction}` : `${parsed.kind}@${token.start}`);
+  for (const mention of vessel.mentions) {
+    if (mention.field !== field) continue;
+    if (hasPortionQualifier(clauseAround(text, mention.start, mention.end).text) || !wholeEntryScoped(text, mention.start, mention.end, null)) continue;
+    if (vessel.attribution[mention.list] === 'confirmed') continue;
+    const parsed = parseToken(text, mention.token);
+    values.add(parsed.kind === 'value' ? `${parsed.decimal.integer}.${parsed.decimal.fraction}` : `${parsed.kind}@${mention.token.start}`);
   }
   return values;
 }
@@ -1023,9 +682,12 @@ export function groundNutrient(text: string, field: MealNutritionField, claim: N
   // A value inside an instruction addressed to a model or system is not the person's record.
   if (inInstruction(text, chosen.start)) return withheld('unverified');
 
-  const scope = scopeReason(text, chosen.start, chosen.end, chosen.token, field);
+  // One vessel-scope analysis of the text, read by both the proposal check and the conflict scan (and kept only for this
+  // call: nothing of the person's text outlives it).
+  const vessel = analyzeVesselScope(text);
+  const scope = scopeReason(text, chosen.start, chosen.end, chosen.token, field, vessel);
   if (scope !== null) return withheld(scope);
-  if (distinctStatedValues(text, field).size > 1) return withheld('conflicting');
+  if (distinctStatedValues(text, field, vessel).size > 1) return withheld('conflicting');
 
   // The contract's precision and bounds on the exact digits; only then the public number.
   const value = contractValue(chosen.decimal, field);

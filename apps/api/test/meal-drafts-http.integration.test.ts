@@ -794,6 +794,112 @@ describe('ADR-0092 meal draft proposals under the runtime role', () => {
       ).toMatchObject({ energyKcal: { status: 'proposed', value: 300 } });
     });
 
+    // Per-mention vessel attribution and batch preparation (2026-11-17): a confirmed vessel statement elsewhere must not
+    // take an unresolved figure out of the conflict scan, and a prepared batch ("cooked a full pot of soup") does not
+    // establish a consumed amount, unlike the vessel used for cooking or washed.
+    it('keeps unresolved figures in conflict detection beside confirmed vessel statements and withholds prepared batches', async () => {
+      // ids.userOrgA again: 13 proposals in the two tests above and 8 here stay well inside its 60 per minute.
+      const draftFor = async (text: string, value: unknown) => {
+        provider.behaviour = () => Promise.resolve({ value });
+        const parsed = mealDraftProposalResponseSchema.parse((await propose(ids.userOrgA, ids.orgA, { text }).expect(200)).body);
+        if (parsed.outcome !== 'draft') throw new Error('expected a draft');
+        return parsed.nutrition;
+      };
+      for (const text of [
+        'Whole pot blorped\n900 kcal. In total I ate 300 kcal.',
+        'Whole pot blorped\n900 kcal. The whole pan has protein 80 g. In total I ate 300 kcal.',
+        'The whole pan has 1200 kcal.\r\nWhole pot blorped\r\n900 kcal. In total I ate 300 kcal.',
+      ]) {
+        expect(await draftFor(text, answer('Whole pot blorped', { energyKcal: claim('300', '300 kcal') })), text).toMatchObject({
+          energyKcal: { reason: 'conflicting', status: 'withheld' },
+        });
+      }
+      for (const [text, title, evidence] of [
+        ['I cooked a full pot of soup.\n900 kcal', 'I cooked a full pot of soup', '900 kcal'],
+        ['Сварила полную кастрюлю супа\n900 ккал', 'Сварила полную кастрюлю супа', '900 ккал'],
+      ] as const) {
+        expect(await draftFor(text, answer(title, { energyKcal: claim('900', evidence) })), text).toMatchObject({
+          energyKcal: { reason: 'per_portion', status: 'withheld' },
+        });
+      }
+      expect(
+        await draftFor('The whole pot has 900 kcal. In total I ate 300 kcal.', answer('The whole pot', { energyKcal: claim('300', '300 kcal') })),
+      ).toMatchObject({ energyKcal: { status: 'proposed', value: 300 } });
+      expect(
+        await draftFor('Washed the whole pan. Protein 25 g. In total I ate protein 20 g.', answer('Washed the whole pan', { proteinG: claim('20', 'protein 20 g') })),
+      ).toMatchObject({ proteinG: { reason: 'conflicting', status: 'withheld' } });
+      expect(
+        await draftFor('Cooked soup in a full pot. Lunch, 300 kcal.', answer('Cooked soup', { energyKcal: claim('300', '300 kcal') })),
+      ).toMatchObject({ energyKcal: { status: 'proposed', value: 300 } });
+    });
+
+    // Vessel-scope analysis (docs/meal-draft-vessel-scope-policy.md): attribution is per nutrient LIST. Every member of an
+    // unresolved list stays in the conflict scan whatever its position, a confirmed vessel's coordinated list stays the
+    // vessel's, and the public result carries the same evidence as the claim.
+    it('keeps every member of an unresolved list in conflict detection and a confirmed list distinct from consumed totals', async () => {
+      // ids.userOrgA again: 21 proposals in the three tests above and 7 here stay well inside its 60 per minute.
+      const draftFor = async (text: string, value: unknown) => {
+        provider.behaviour = () => Promise.resolve({ value });
+        const parsed = mealDraftProposalResponseSchema.parse((await propose(ids.userOrgA, ids.orgA, { text }).expect(200)).body);
+        if (parsed.outcome !== 'draft') throw new Error('expected a draft');
+        return parsed.nutrition;
+      };
+      for (const text of [
+        'Whole pot blorped\n900 kcal, protein 80 g, the whole pan has 1200 kcal. In total I ate protein 20 g.',
+        'Whole pot blorped\nProtein 80 g, 900 kcal, the whole pan has 1200 kcal. In total I ate protein 20 g.',
+        'Whole pot blorped\r\n900 kcal, fat 45 g, carbs 120 g, protein 80 g, the whole pan has 1200 kcal. In total I ate protein 20 g.',
+      ]) {
+        expect(await draftFor(text, answer('Whole pot blorped', { proteinG: claim('20', 'protein 20 g') })), text).toMatchObject({
+          proteinG: { reason: 'conflicting', status: 'withheld' },
+        });
+      }
+      expect(
+        await draftFor(
+          'Полная кастрюля окрошки\n900 ккал, белки 80 г, жиры 45 г, вся сковорода содержит 1200 ккал. Итого съела жиры 15 г.',
+          answer('Полная кастрюля окрошки', { fatG: claim('15', 'жиры 15 г') }),
+        ),
+      ).toMatchObject({ fatG: { reason: 'conflicting', status: 'withheld' } });
+      // A confirmed vessel's coordinated list against a consumed list: the container figures withheld, the totals proposed.
+      const confirmed = 'The whole pot is 900 kcal, protein 80 g. In total I ate 300 kcal, protein 20 g.';
+      expect(
+        await draftFor(confirmed, answer('The whole pot', { energyKcal: claim('300', '300 kcal'), proteinG: claim('20', 'protein 20 g') })),
+      ).toMatchObject({ energyKcal: { excerpt: '300 kcal', status: 'proposed', value: 300 }, proteinG: { excerpt: 'protein 20 g', status: 'proposed', value: 20 } });
+      expect(
+        await draftFor(confirmed, answer('The whole pot', { energyKcal: claim('900', '900 kcal'), proteinG: claim('80', 'protein 80 g') })),
+      ).toMatchObject({ energyKcal: { reason: 'per_portion', status: 'withheld' }, proteinG: { reason: 'per_portion', status: 'withheld' } });
+      // A label with figures on both sides labels neither with certainty: both stay in the conflict scan.
+      expect(
+        await draftFor('Soup 400 kcal\nWhole pot\n900 kcal. In total I ate 300 kcal.', answer('Soup', { energyKcal: claim('300', '300 kcal') })),
+      ).toMatchObject({ energyKcal: { reason: 'conflicting', status: 'withheld' } });
+    });
+
+    // Overlapping constructions (2026-11-18): "300 kcal, the whole pot" and "the whole pot has 900 kcal" share one vessel
+    // reference, so which list is the vessel's is undecided and neither leaves the conflict scan. The evidence names the
+    // final consumed occurrence ("ate 900 kcal"), not the earlier "900 kcal" of the vessel statement.
+    it('keeps both lists of competing vessel constructions in conflict detection', async () => {
+      // ids.userOrgA again: 28 proposals in the four tests above and 4 here stay well inside its 60 per minute.
+      const draftFor = async (text: string, value: unknown) => {
+        provider.behaviour = () => Promise.resolve({ value });
+        const parsed = mealDraftProposalResponseSchema.parse((await propose(ids.userOrgA, ids.orgA, { text }).expect(200)).body);
+        if (parsed.outcome !== 'draft') throw new Error('expected a draft');
+        return parsed.nutrition;
+      };
+      for (const [text, title, evidence] of [
+        ['Soup, 300 kcal, the whole pot has 900 kcal. In total I ate 900 kcal.', 'Soup', 'ate 900 kcal'],
+        ['Суп, 300 ккал, вся кастрюля содержит 900 ккал.\r\nИтого съела 900 ккал.', 'Суп', 'съела 900 ккал'],
+      ] as const) {
+        expect(await draftFor(text, answer(title, { energyKcal: claim('900', evidence) })), text).toMatchObject({
+          energyKcal: { reason: 'conflicting', status: 'withheld' },
+        });
+      }
+      // Equivalent readings of one list are one reading: the vessel figure stays confirmed and the consumed total proposed.
+      for (const text of ['900 kcal for the whole pot. In total I ate 300 kcal.', 'The whole pot has 900 kcal. In total I ate 300 kcal.']) {
+        expect(await draftFor(text, answer('the whole pot', { energyKcal: claim('300', '300 kcal') })), text).toMatchObject({
+          energyKcal: { excerpt: '300 kcal', status: 'proposed', value: 300 },
+        });
+      }
+    });
+
     it('withholds forbidden precision and rounded claims, and accepts trailing zeros', async () => {
       expect(
         await draftFor(

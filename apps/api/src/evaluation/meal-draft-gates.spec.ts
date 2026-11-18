@@ -9,6 +9,7 @@ import type { LlmProvider } from '../insights/llm-provider.js';
 import { OllamaProvider } from '../insights/ollama-provider.js';
 import { FakeMealDraftProvider } from '../meals/drafts/fake-meal-draft-provider.js';
 import type { FieldDisposition, GroundedProposal } from '../meals/drafts/meal-draft-grounding.js';
+import { loadMealDraftChallengeSet, runMealDraftChallenge } from './meal-draft-challenge.js';
 import { runMealDraftEvaluationCli, parseMealDraftCliArguments, type MealDraftCliDependencies } from './meal-draft-evaluation-cli.js';
 import {
   buildMealDraftReport,
@@ -249,6 +250,9 @@ describe('verifier fingerprint (isolated copies of the effective files)', () => 
     expect(paths).toEqual([...paths].sort());
     for (const path of [
       'apps/api/src/meals/drafts/meal-draft-grounding.ts',
+      'apps/api/src/meals/drafts/meal-draft-lexicon.ts',
+      'apps/api/src/meals/drafts/meal-draft-mentions.ts',
+      'apps/api/src/meals/drafts/meal-draft-vessel-scope.ts',
       'apps/api/src/meals/drafts/meal-draft-wire.ts',
       'apps/api/src/meals/drafts/meal-draft-prompt.ts',
       'apps/api/src/insights/ollama-provider.ts',
@@ -279,6 +283,12 @@ describe('verifier fingerprint (isolated copies of the effective files)', () => 
     ['the excerpt bound of the response contract', 'packages/contracts/dist/meal-draft.js', 'MEAL_DRAFT_EXCERPT_MAX = 160', 'MEAL_DRAFT_EXCERPT_MAX = 400'],
     ['a shared primitive', 'packages/contracts/dist/primitives.js', /export /u, 'export /* changed */ '],
     ['the grounding', 'apps/api/src/meals/drafts/meal-draft-grounding.ts', 'When in doubt, the field is withheld.', 'When in doubt, propose.'],
+    // The vessel-scope analysis and the helpers it is built from are runtime grounding modules: a change to any of them
+    // (here: precedence, list continuation, a unit, the action vocabulary) invalidates evidence measured before.
+    ['the vessel-scope precedence', 'apps/api/src/meals/drafts/meal-draft-vessel-scope.ts', "if (context.kind === 'unresolved') attribution[list] = 'unresolved';", "if (context.kind === 'unresolved') attribution[list] = 'none';"],
+    ['the vessel action vocabulary', 'apps/api/src/meals/drafts/meal-draft-vessel-scope.ts', 'sinks?|lids?', 'sinks?|lids?|stood'],
+    ['the list continuation', 'apps/api/src/meals/drafts/meal-draft-mentions.ts', '(?:and|plus|и|плюс)', '(?:and|plus|и|плюс|then)'],
+    ['a unit of the shared vocabulary', 'apps/api/src/meals/drafts/meal-draft-lexicon.ts', "'(?:kj|кдж|", "'(?:kj|кдж|cal_x|"],
     ['the wire schema', 'apps/api/src/meals/drafts/meal-draft-wire.ts', 'z.string().max(600)', 'z.string().max(6000)'],
     ['the adapter', 'apps/api/src/insights/ollama-provider.ts', 'stream: false,', 'stream: true,'],
     ['the bounded fetch', 'apps/api/src/runs/interpretation/bounded-fetch.ts', /export /u, 'export /* changed */ '],
@@ -903,6 +913,21 @@ describe('evaluation command line', () => {
     const failing = harness({ runSafety: () => ({ corpus, digest: corpusDigest, results: perfectSafety().slice(2) }) });
     expect(await runMealDraftEvaluationCli(['--set', 'safety', '--out', 's.json'], failing.deps)).toBe(2);
     await expect(runMealDraftEvaluationCli(['--set', 'safety', '--provider', 'ollama'], passing.deps)).rejects.toThrow(/calls no provider/u);
+  });
+
+  it('--set challenge runs the frozen vessel-scope challenge set, labelled as not held-out evidence, and exits 2 on FAIL', async () => {
+    const passing = harness();
+    expect(await runMealDraftEvaluationCli(['--set', 'challenge', '--out', 'c.json'], passing.deps)).toBe(0);
+    const written = JSON.parse(passing.written.get('c.json')!) as { kind: string; score: { status: string; unsafeAcceptances: number }; statement: string };
+    expect(written).toMatchObject({ kind: 'deterministic-vessel-scope-challenge', score: { status: 'PASS', unsafeAcceptances: 0 } });
+    expect(written.statement).toContain('not held-out evidence');
+    expect(passing.inferences()).toBe(0);
+    const { digest, set } = loadMealDraftChallengeSet();
+    const results = runMealDraftChallenge(set.cases);
+    const broken = results.map((result, index) => (index === 0 ? { ...result, unclaimedMismatches: ['fatG' as const] } : result));
+    const failing = harness({ runChallenge: () => ({ digest, results: broken, set }) });
+    expect(await runMealDraftEvaluationCli(['--set', 'challenge'], failing.deps)).toBe(2);
+    await expect(runMealDraftEvaluationCli(['--set', 'challenge', '--provider', 'fake'], passing.deps)).rejects.toThrow(/calls no provider/u);
   });
 
   it('writes a NOT_RUN report and exits 3 when the runtime is unreachable, the model is not installed or its digest is unknown', async () => {
