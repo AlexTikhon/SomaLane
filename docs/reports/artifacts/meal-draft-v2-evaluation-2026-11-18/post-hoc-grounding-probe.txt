@@ -1,0 +1,57 @@
+Post-hoc deterministic grounding probe, 2026-11-18, after the 40 calls. Supplied claims through the production wire schema and groundMealDraft; no model, no inference, not a gate input, nothing changed. Purpose: tell apart 'the verifier refuses a correct claim' from 'the model's claim was not an excerpt' for the values and titles the real model missed. The real model's words are not recorded in the reports, so this does not say which claim the model actually made.
+
+en-ho2-batch protein "9 g protein": draft title="Tomato soup" {"energyKcal":300,"proteinG":9,"carbohydrateG":"not_stated","fatG":"not_stated"}
+en-ho2-batch protein "300 kcal and 9 g protein": draft title="Tomato soup" {"energyKcal":300,"proteinG":9,"carbohydrateG":"not_stated","fatG":"not_stated"}
+en-ho2-batch protein "protein 9 g" (not an excerpt): draft title="Tomato soup" {"energyKcal":300,"proteinG":"withheld:unverified","carbohydrateG":"not_stated","fatG":"not_stated"}
+en-dev2-food-weights title "cottage cheese (150 g) with walnuts (30 g)": draft title="cottage cheese (150 g) with walnuts (30 g)" {"energyKcal":360,"proteinG":25,"carbohydrateG":"not_stated","fatG":"not_stated"}
+en-dev2-food-weights title "cottage cheese (150 g) with walnuts": draft title="cottage cheese (150 g) with walnuts" {"energyKcal":360,"proteinG":25,"carbohydrateG":"not_stated","fatG":"not_stated"}
+en-dev2-food-weights title "cottage cheese": draft title="cottage cheese" {"energyKcal":360,"proteinG":25,"carbohydrateG":"not_stated","fatG":"not_stated"}
+en-dev2-food-weights title "cottage cheese with walnuts": UngroundedOutputError The model answer is not grounded in the text
+ru-dev2-decimal title "ряженку": draft title="ряженку" {"energyKcal":134.4,"proteinG":6.1,"carbohydrateG":"not_stated","fatG":"not_stated"}
+ru-dev2-decimal title "Ряженка": UngroundedOutputError The model answer is not grounded in the text
+ru-dev2-decimal title "ряженка": UngroundedOutputError The model answer is not grounded in the text
+ru-ho2-food-weights title "200 г тушёной говядины и 150 г булгура": draft title="200 г тушёной говядины и 150 г булгура" {"energyKcal":560,"proteinG":48,"carbohydrateG":"not_stated","fatG":"not_stated"}
+ru-ho2-food-weights title "тушёной говядины и 150 г булгура": draft title="тушёной говядины и 150 г булгура" {"energyKcal":560,"proteinG":48,"carbohydrateG":"not_stated","fatG":"not_stated"}
+ru-ho2-food-weights title "тушёной говядины": draft title="тушёной говядины" {"energyKcal":560,"proteinG":48,"carbohydrateG":"not_stated","fatG":"not_stated"}
+ru-ho2-food-weights title "тушёная говядина и булгур": UngroundedOutputError The model answer is not grounded in the text
+ru-ho2-food-weights title "тушёной говядины и булгура": UngroundedOutputError The model answer is not grounded in the text
+
+--- probe script ---
+// Post-hoc deterministic probe (supplied claims, no model): does the production grounding accept a CORRECT claim for
+// the values and titles the real model missed? Not a gate input; changes nothing.
+import { resolve } from 'node:path';
+const api = process.cwd();
+const imp = (p) => import(new URL(`file:///${resolve(api, p).replaceAll('\\', '/')}`).href);
+const { groundMealDraft } = await imp('src/meals/drafts/meal-draft-grounding.ts');
+const { mealDraftWireSchema } = await imp('src/meals/drafts/meal-draft-wire.ts');
+
+const ns = { value: null, evidence: null, abstain: 'not_stated' };
+const claim = (value, evidence) => ({ value, evidence, abstain: null });
+const probe = (label, text, answer) => {
+  const wire = mealDraftWireSchema.parse({ outcome: 'draft', mealType: null, mealTypeEvidence: null, energyKcal: ns, proteinG: ns, carbohydrateG: ns, fatG: ns, ...answer });
+  try {
+    const { proposal } = groundMealDraft(text, wire);
+    const n = Object.fromEntries(Object.entries(proposal.nutrition ?? {}).map(([k, v]) => [k, v.status === 'proposed' ? v.value : v.status === 'withheld' ? `withheld:${v.reason}` : v.status]));
+    console.log(`${label}: ${proposal.outcome} title=${JSON.stringify(proposal.title)} ${JSON.stringify(n)}`);
+  } catch (error) {
+    console.log(`${label}: ${error.constructor.name} ${error.message?.slice(0, 120) ?? ''}`);
+  }
+};
+
+const soup = 'Tomato soup; the whole batch is 1200 kcal.\nIn total I ate 300 kcal and 9 g protein.';
+probe('en-ho2-batch protein "9 g protein"', soup, { title: 'Tomato soup', energyKcal: claim('300', 'ate 300 kcal'), proteinG: claim('9', '9 g protein') });
+probe('en-ho2-batch protein "300 kcal and 9 g protein"', soup, { title: 'Tomato soup', energyKcal: claim('300', '300 kcal'), proteinG: claim('9', '300 kcal and 9 g protein') });
+probe('en-ho2-batch protein "protein 9 g" (not an excerpt)', soup, { title: 'Tomato soup', energyKcal: claim('300', '300 kcal'), proteinG: claim('9', 'protein 9 g') });
+
+const cottage = 'For breakfast I had cottage cheese (150 g) with walnuts (30 g): 360 kcal and protein 25 g.';
+for (const title of ['cottage cheese (150 g) with walnuts (30 g)', 'cottage cheese (150 g) with walnuts', 'cottage cheese', 'cottage cheese with walnuts']) {
+  probe(`en-dev2-food-weights title ${JSON.stringify(title)}`, cottage, { title, mealType: 'breakfast', mealTypeEvidence: 'breakfast', energyKcal: claim('360', '360 kcal'), proteinG: claim('25', 'protein 25 g') });
+}
+const ryazhenka = 'Выпила ряженку: 134,4 ккал, жиры 5,25 г и белки 6,1 г';
+for (const title of ['ряженку', 'Ряженка', 'ряженка']) {
+  probe(`ru-dev2-decimal title ${JSON.stringify(title)}`, ryazhenka, { title, energyKcal: claim('134,4', '134,4 ккал'), proteinG: claim('6,1', 'белки 6,1 г') });
+}
+const beef = 'На ужин 200 г тушёной говядины и 150 г булгура. Всё вместе 560 ккал, белки 48 г.';
+for (const title of ['200 г тушёной говядины и 150 г булгура', 'тушёной говядины и 150 г булгура', 'тушёной говядины', 'тушёная говядина и булгур', 'тушёной говядины и булгура']) {
+  probe(`ru-ho2-food-weights title ${JSON.stringify(title)}`, beef, { title, mealType: 'dinner', mealTypeEvidence: 'ужин', energyKcal: claim('560', '560 ккал'), proteinG: claim('48', 'белки 48 г') });
+}

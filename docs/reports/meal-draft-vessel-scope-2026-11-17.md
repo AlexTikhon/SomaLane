@@ -3,7 +3,9 @@
 **Current and authoritative** for the vessel scope of "Draft from text" ([ADR-0092](../adr/0092-meal-draft-from-text.md),
 Amendment 7), with the follow-up of 2026-11-18 (overlapping constructions, at the end). **The model evidence below is
 stale** since that follow-up changed a fingerprinted file (`eb22d827…` → `9a069010…`); the model gate FAILs with
-`FINGERPRINT_MISMATCH` until a new 40-call run. The policy is [docs/meal-draft-vessel-scope-policy.md](../meal-draft-vessel-scope-policy.md); the
+`FINGERPRINT_MISMATCH` until a new 40-call run. (2026-11-18: the current model evidence is the first run of the new v2
+sets at the current fingerprint, [meal-draft-v2-evaluation-2026-11-18.md](meal-draft-v2-evaluation-2026-11-18.md); the
+v1 reports below were not re-run.) The policy is [docs/meal-draft-vessel-scope-policy.md](../meal-draft-vessel-scope-policy.md); the
 machine-readable acceptance matrix is
 [`apps/api/evaluation/meal-draft.challenge.v1.json`](../../apps/api/evaluation/meal-draft.challenge.v1.json). It
 supersedes the vessel parts of [meal-draft-container-relation-2026-11-17.md](meal-draft-container-relation-2026-11-17.md)

@@ -5366,3 +5366,30 @@ handling only caused abstention is corrected, and its follow-up section records 
 | `git diff --check` | clean |
 
 Not run: the full integration suite, the browser suites, any model. Changes are uncommitted.
+
+## Draft from text: version 2 evaluation sets and a fresh model measurement (ADR-0092) (2026-11-18)
+
+**What changed (evaluation only).** `--dataset-version v1|v2` for runs, dry runs and `--check`, through a pinned
+registry in `meal-draft-evaluation.ts` (file, digest, case count). The default is v1, with its files, digests and
+meaning unchanged. Case texts must pass the public request contract. The model gate refuses reports of another version
+(`DATASET_VERSION_MISMATCH`), of mixed versions (`DATASET_VERSION_MIXED`) or without a version. New v2 sets:
+`meal-draft.development.v2.json` and `meal-draft.heldout.v2.json`, 20 cases each, 10 EN / 10 RU, 30 + 28 expected
+values. They were written from the policy, each case with a rationale, and frozen by digest before any call; they are
+not independent blind held-out evidence. Production files are byte-identical to HEAD and the verifier fingerprint stays
+`9a069010…`. Report: `docs/reports/meal-draft-v2-evaluation-2026-11-18.md`; artifacts in
+`docs/reports/artifacts/meal-draft-v2-evaluation-2026-11-18/`.
+
+| Check | Result |
+|---|---|
+| Focused evaluation specs | 5 files, **141 passed** (new: version selection, registry integrity, digest/version/set/size/id/text refusal, contract bounds, mixed, unversioned and relabelled reports, partial, stopped, duplicate, stale and profile-mismatched v2 evidence, fake reports ineligible, scoring of a wrong acceptance, a missed extraction, an abstention and a technical failure on v2 cases, CLI flag, v1 command compatibility, labelled fake harness on v2) |
+| `npm run verify` | exit **0**: scripts 115, API **2,435**, web 1,334, contracts 311, fixtures 14, simulator 3 |
+| `--set safety` / `--set challenge` (unchanged) | PASS / PASS (0 of 191, controls 21/21; 0 unsafe, controls 23/23) |
+| Fake-provider harness on v2 | runs end to end, labelled harness verification; `--check --dataset-version v2` on it: `NOT_RUN` (exit 3) |
+| Real model, `qwen3:8b`, Ollama 0.40.16, product defaults | **40 of 40 calls** (20 + 20), sequential, no retries, no warm-up, nothing pulled; `/api/ps` empty before the first call |
+| `--check --dataset-version v2` | exit **2**: verifier PASS; **model FAIL** (quality, valid evidence): 0 incorrectly accepted, outcome 87.5 %, recall 81.0 % < 85 %, precision 100 %, failures 10.0 % |
+| Hashes after the runs | identical to the freeze (fingerprint, prompt, datasets, corpus, challenge set, evaluator code) |
+| `git diff --check` | clean |
+
+Findings, not fixed: title and evidence copying cost 7 of the 11 missed values, and the same pattern appears in every
+recorded run. The cold first call timed out at 45 s again. The failure rate sits exactly at the limit. v1 was not re-run
+and its evidence stays stale. The feature stays off by default. Changes are uncommitted.

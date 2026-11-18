@@ -84,7 +84,7 @@ each `PASS`, `FAIL` or `NOT_RUN`:
 | Gate | Evidence | PASS needs |
 |---|---|---|
 | **Verifier** (deterministic) | `apps/api/evaluation/meal-draft.safety.v1.json`: frozen synthetic EN/RU cases, each with an explicit model answer (supplied claims), run through the production wire schema, `groundMealDraft` and the public response contract. No model. | Every case judged; **no forbidden value accepted**; every positive control (zero, valid decimals, whole-entry totals, an exact field beside a bounded one, cross-field association) proposed exactly; every refused answer refused |
-| **Model** (real model) | Complete real-model runs of the frozen v1 development and held-out sets (`meal-draft.development.v1.json`, `meal-draft.heldout.v1.json`), re-scored from their per-case results against the pinned sets | Both sets complete (no partial or stopped run, one call per case); report version 3 with the **current** verifier fingerprint and prompt digest; **one execution profile** for both sets, consistent with every duplicated report field and checked on every request; 0 incorrectly accepted values; outcome accuracy ≥ 85 %; extraction recall ≥ 85 %; precision defined; failures (any reason) ≤ 10 % |
+| **Model** (real model) | Complete real-model runs of the frozen development and held-out sets of **one dataset version** (`--dataset-version v1`, the default: `meal-draft.development.v1.json`, `meal-draft.heldout.v1.json`; `--dataset-version v2`: `meal-draft.development.v2.json`, `meal-draft.heldout.v2.json`), re-scored from their per-case results against the pinned sets of that version | Both sets complete (no partial or stopped run, one call per case); report version 3 with the **current** verifier fingerprint and prompt digest; **one execution profile** for both sets, consistent with every duplicated report field and checked on every request; 0 incorrectly accepted values; outcome accuracy ≥ 85 %; extraction recall ≥ 85 %; precision defined; failures (any reason) ≤ 10 % |
 
 The model thresholds were frozen on 2026-11-16 before the first call of the baseline (`MEAL_DRAFT_MODEL_GATE` in
 `meal-draft-gates.ts`). A fake provider, a missing or partial run, an unreachable runtime, a model that is not installed
@@ -103,7 +103,28 @@ npm run eval:meal-drafts -- --set development --provider ollama --dry-run
 npm run eval:meal-drafts -- --set development --provider ollama --max-calls 20 --out .local/eval/dev.json
 npm run eval:meal-drafts -- --set heldout --provider ollama --max-calls 20 --out .local/eval/heldout.json
 npm run eval:meal-drafts:check -- --model .local/eval/dev.json --model .local/eval/heldout.json --out .local/eval/gates.json
+
+# The same against the version 2 sets: the flag selects the sets for runs, dry runs and the check alike.
+npm run eval:meal-drafts -- --set development --provider ollama --dataset-version v2 --dry-run
+npm run eval:meal-drafts -- --set development --provider ollama --dataset-version v2 --max-calls 20 --out .local/eval/dev-v2.json
+npm run eval:meal-drafts -- --set heldout --provider ollama --dataset-version v2 --max-calls 20 --out .local/eval/heldout-v2.json
+npm run eval:meal-drafts:check -- --dataset-version v2 --model .local/eval/dev-v2.json --model .local/eval/heldout-v2.json --out .local/eval/gates-v2.json
 ```
+
+**Dataset versions.** `--dataset-version v1|v2` (default `v1`, so every earlier command keeps its meaning) selects the
+development and held-out sets through a small pinned registry (`MEAL_DRAFT_DATASET_REGISTRY` in
+`meal-draft-evaluation.ts`: file, SHA-256 digest of the parsed JSON, case count). A set is loaded only if its file holds
+that set and version, its digest and case count are the pinned ones, and its ids and texts are unique; every case text
+must pass the public request contract. Every report records `datasetVersion` and `datasetDigest`. `--check` judges
+reports of exactly the version it is given: a report of another version (`DATASET_VERSION_MISMATCH`) or reports of
+several versions (`DATASET_VERSION_MIXED`) are evidence errors and are never counted, so **v1 evidence is never a v2
+measurement** (nor the reverse), and a v2 report offered without the flag is refused, not re-labelled. Everything else
+(fingerprint, prompt, one execution profile, complete sets, duplicates, fake reports ignored, frozen thresholds) applies
+to every version alike. `--set safety` and `--set challenge` have their own frozen versions and refuse the flag. Version
+2 (2026-11-18): 20 + 20 new synthetic cases, 10 English and 10 Russian per set, each expectation with a `rationale`
+naming the documented rule; written and frozen before any call on them, but authored and examined by the implementing
+engineer, so they are **new synthetic evaluation sets, not independent blind held-out evidence**. A new set is always a
+new version in a new file; a pinned file is never edited.
 
 Exit codes: `0` PASS (or a model measurement that finished; its verdict comes from `--check`), `2` FAIL, `3` NOT_RUN
 (the runtime is unreachable or the model is not installed, in which case a `NOT_RUN` report with the reason is written,
@@ -144,7 +165,11 @@ fresh held-out evidence. A fake run is labelled as harness verification and is n
 vessel-scope **challenge set** (`--set challenge`, `apps/api/evaluation/meal-draft.challenge.v1.json`) is an engineering
 challenge and regression set written with the policy ([docs/meal-draft-vessel-scope-policy.md](../meal-draft-vessel-scope-policy.md));
 it fixes reason codes as well as values, is reported separately, never feeds a gate and is not held-out evidence. Results:
-[meal-draft-vessel-scope-2026-11-17.md](../reports/meal-draft-vessel-scope-2026-11-17.md) (**current**: ADR-0092
+[meal-draft-v2-evaluation-2026-11-18.md](../reports/meal-draft-v2-evaluation-2026-11-18.md) (**current model evidence**:
+the first run of the v2 sets at fingerprint `9a069010…`, 40 calls, `qwen3:8b`; verifier **PASS**; challenge set PASS;
+**model gate FAIL on quality** with valid evidence: 0 incorrectly accepted, outcome 35/40 = 87.5 %, recall 47/58 =
+81.0 % below 85 %, failures 4/40 = 10.0 %; the v2 sets are now examined, so later runs of them are regression
+measurements), [meal-draft-vessel-scope-2026-11-17.md](../reports/meal-draft-vessel-scope-2026-11-17.md) (ADR-0092
 Amendment 7, one vessel-scope analysis, with the 2026-11-18 overlapping-constructions follow-up; fingerprint
 `9a069010…`; verifier **PASS**, 0 of 191, controls 21/21; challenge set PASS; **model gate FAIL, evidence stale**
 (`FINGERPRINT_MISMATCH`): its 40-call `qwen3:8b` v1 regression run, a marginal PASS at outcome 34/40 = 85.0 %, was
@@ -155,11 +180,11 @@ Amendment 6 correction and its follow-ups; its model reports were measured at fi
 model reports are stale since the correction, fingerprint `c1d44a46…`),
 [meal-draft-evaluation-2026-11-16.md](../reports/meal-draft-evaluation-2026-11-16.md) (the checkpoint after the four
 grounding amendments, and Amendment 5) and
-[meal-draft-model-evaluation-2026-11-14.md](../reports/meal-draft-model-evaluation-2026-11-14.md) (historical). No
-current model evidence exists: the last model PASS (fingerprint `eb22d827…`) was regression evidence on the examined v1
-sets, not fresh held-out evidence, and is stale since the 2026-11-18 follow-up. The model gate FAILs until a new 40-call
-run at the current fingerprint, and **the feature stays off by default**. Any later change to a fingerprinted file makes
-model reports stale again in the same way.
+[meal-draft-model-evaluation-2026-11-14.md](../reports/meal-draft-model-evaluation-2026-11-14.md) (historical). The
+last v1 model PASS (fingerprint `eb22d827…`) was regression evidence on the examined v1 sets and is stale since the
+2026-11-18 follow-up; v1 was not re-run. The current evidence is the v2 run above, judged with `--check
+--dataset-version v2`: a measured FAIL, so **the feature stays off by default**. Any later change to a fingerprinted
+file makes model reports stale again in the same way.
 
 ## Troubleshooting
 

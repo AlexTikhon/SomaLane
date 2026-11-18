@@ -1,0 +1,413 @@
+{
+  "exitCode": 3,
+  "kind": "meal-draft-gates",
+  "metadata": {
+    "fingerprint": {
+      "contracts": {
+        "bindings": [
+          {
+            "local": "MEAL_DRAFT_CLARIFICATION_REASONS",
+            "module": "packages/contracts/dist/meal-draft.js",
+            "name": "MEAL_DRAFT_CLARIFICATION_REASONS"
+          },
+          {
+            "local": "MEAL_DRAFT_EXCERPT_MAX",
+            "module": "packages/contracts/dist/meal-draft.js",
+            "name": "MEAL_DRAFT_EXCERPT_MAX"
+          },
+          {
+            "local": "MEAL_DRAFT_UNSUPPORTED_REASONS",
+            "module": "packages/contracts/dist/meal-draft.js",
+            "name": "MEAL_DRAFT_UNSUPPORTED_REASONS"
+          },
+          {
+            "local": "MEAL_NUTRITION_FIELDS",
+            "module": "packages/contracts/dist/meals.js",
+            "name": "MEAL_NUTRITION_FIELDS"
+          },
+          {
+            "local": "MEAL_NUTRITION_MAX",
+            "module": "packages/contracts/dist/meals.js",
+            "name": "MEAL_NUTRITION_MAX"
+          },
+          {
+            "local": "MEAL_VALUE_DECIMALS",
+            "module": "packages/contracts/dist/meals.js",
+            "name": "MEAL_VALUE_DECIMALS"
+          },
+          {
+            "local": "mealCarbohydrateGSchema",
+            "module": "packages/contracts/dist/meals.js",
+            "name": "mealCarbohydrateGSchema"
+          },
+          {
+            "local": "mealEnergyKcalSchema",
+            "module": "packages/contracts/dist/meals.js",
+            "name": "mealEnergyKcalSchema"
+          },
+          {
+            "local": "mealFatGSchema",
+            "module": "packages/contracts/dist/meals.js",
+            "name": "mealFatGSchema"
+          },
+          {
+            "local": "mealProteinGSchema",
+            "module": "packages/contracts/dist/meals.js",
+            "name": "mealProteinGSchema"
+          },
+          {
+            "local": "mealTitleSchema",
+            "module": "packages/contracts/dist/meals.js",
+            "name": "mealTitleSchema"
+          }
+        ],
+        "conditionPath": [
+          ".",
+          "default"
+        ],
+        "entry": "packages/contracts/dist/index.js",
+        "manifest": "packages/contracts/package.json",
+        "package": "@running-tracker/contracts"
+      },
+      "digest": "9a069010b327175794849b31abde00d1155dc9450b5ab363b1c31b367efcd5ad",
+      "files": [
+        {
+          "path": "apps/api/src/insights/llm-provider.ts",
+          "sha256": "582461a6beb4a1d6e5fc3ab6df6da71c6a9be7369a17d77f22b4f491179eb7f8"
+        },
+        {
+          "path": "apps/api/src/insights/ollama-provider.ts",
+          "sha256": "7b8c6f972ae9f0aa8a8da482f901fdef2c769784fb473e18405da7f47bcd9c34"
+        },
+        {
+          "path": "apps/api/src/meals/drafts/meal-draft-grounding.ts",
+          "sha256": "5aba45678f1b35114824d35905bfe86229af8bf36ddf67afc41f94b576395c37"
+        },
+        {
+          "path": "apps/api/src/meals/drafts/meal-draft-lexicon.ts",
+          "sha256": "e63fe7581e1283b3634250fc6c934af75619d2f0ad58fc0718de8bf1805d5993"
+        },
+        {
+          "path": "apps/api/src/meals/drafts/meal-draft-mentions.ts",
+          "sha256": "8299afec0ffded6dfdf9a9dd0c235e8c89110f54c6186df32763912d0b926b92"
+        },
+        {
+          "path": "apps/api/src/meals/drafts/meal-draft-prompt.ts",
+          "sha256": "c374100b34179dfd6ebfb79f9144348d24029432e4ed2617da8fa17439638ed7"
+        },
+        {
+          "path": "apps/api/src/meals/drafts/meal-draft-vessel-scope.ts",
+          "sha256": "21a682e084e656d871157623fa5e146a3a3e698c2590d3cc74161028dce44514"
+        },
+        {
+          "path": "apps/api/src/meals/drafts/meal-draft-wire.ts",
+          "sha256": "893910b98d23e26b7b355c0846f72ca48e20d84a1738b812ed04e2da6999faa9"
+        },
+        {
+          "path": "apps/api/src/runs/interpretation/bounded-fetch.ts",
+          "sha256": "d8028ad7a16592f5e1377a146100a3159f925f0c66f6cd86679afaf2a003d1a5"
+        },
+        {
+          "path": "packages/contracts/dist/daily-metrics.js",
+          "sha256": "0859a64361a5f085d23b8991172dfc341288c282e0cf0ab191c7b5eeca840604"
+        },
+        {
+          "path": "packages/contracts/dist/meal-draft.js",
+          "sha256": "c5a1ba57afacd716172004aafbd3a79db7130ee63f374c6a82a83cd7ebc5a0cc"
+        },
+        {
+          "path": "packages/contracts/dist/meals.js",
+          "sha256": "02b4fd08d2686a9096c2c9d8fef181a4fef2ae04aa0bba3231691a98262c3239"
+        },
+        {
+          "path": "packages/contracts/dist/primitives.js",
+          "sha256": "0574e6e01523bcace72fa57104f4dc6b792fb6a824eaedc633c3bed27a14c2e8"
+        }
+      ],
+      "fingerprintVersion": 2,
+      "packages": [
+        {
+          "name": "zod",
+          "version": "4.6.5"
+        }
+      ]
+    },
+    "promptDigest": "f53aeae55420c9079ae6ac68f6b8b618f8afd1fec9f6777a84a72dd603ad2fb5",
+    "promptVersion": "meal-draft-prompt-1",
+    "schemaName": "meal_draft_evidence_v1",
+    "datasetDigest": null,
+    "generation": null,
+    "git": {
+      "dirty": true,
+      "dirtyPathCount": 14,
+      "dirtyPaths": [
+        "apps/api/src/evaluation/meal-draft-evaluation-cli.ts",
+        "apps/api/src/evaluation/meal-draft-evaluation-main.ts",
+        "apps/api/src/evaluation/meal-draft-evaluation.spec.ts",
+        "apps/api/src/evaluation/meal-draft-evaluation.ts",
+        "apps/api/src/evaluation/meal-draft-gates.spec.ts",
+        "apps/api/src/evaluation/meal-draft-gates.ts",
+        "packages/contracts/openapi/openapi.json",
+        "apps/api/evaluation/meal-draft.development.v2.json",
+        "apps/api/evaluation/meal-draft.heldout.v2.json",
+        "docs/reports/artifacts/meal-draft-v2-evaluation-2026-11-18/challenge.json",
+        "docs/reports/artifacts/meal-draft-v2-evaluation-2026-11-18/dataset-freeze.txt",
+        "docs/reports/artifacts/meal-draft-v2-evaluation-2026-11-18/fake-harness-development-v2.json",
+        "docs/reports/artifacts/meal-draft-v2-evaluation-2026-11-18/fake-harness-heldout-v2.json",
+        "docs/reports/artifacts/meal-draft-v2-evaluation-2026-11-18/verifier-safety.json"
+      ],
+      "sha": "88786d2c8fc788ed54dd14910de7de37df8af8ea"
+    },
+    "model": null,
+    "modelDigest": null,
+    "nodeVersion": "v24.11.1",
+    "ollamaVersion": null,
+    "recordedAt": "2026-11-18T08:36:59.518Z",
+    "timeoutMs": null
+  },
+  "model": {
+    "datasetVersion": "2",
+    "evidenceValid": false,
+    "fingerprint": {
+      "current": "9a069010b327175794849b31abde00d1155dc9450b5ab363b1c31b367efcd5ad",
+      "reports": {}
+    },
+    "gate": "model",
+    "metrics": null,
+    "profile": null,
+    "qualityThresholdsMet": null,
+    "sets": {
+      "development": {
+        "detail": "no report",
+        "state": "not_run"
+      },
+      "heldout": {
+        "detail": "no report",
+        "state": "not_run"
+      }
+    },
+    "thresholds": {
+      "frozenOn": "2026-11-16",
+      "maxIncorrectAccepted": 0,
+      "maxTechnicalFailureRate": 0.1,
+      "minExtractionRecall": 0.85,
+      "minOutcomeAccuracy": 0.85,
+      "requiredSets": [
+        "development",
+        "heldout"
+      ]
+    },
+    "reasons": [
+      {
+        "code": "SET_INCOMPLETE",
+        "kind": "completeness",
+        "message": "development: no report."
+      },
+      {
+        "code": "SET_INCOMPLETE",
+        "kind": "completeness",
+        "message": "heldout: no report."
+      },
+      {
+        "code": "FAKE_IGNORED",
+        "kind": "note",
+        "message": "Report 1 (development) comes from the fake provider: harness verification is not model evidence and is ignored."
+      },
+      {
+        "code": "FAKE_IGNORED",
+        "kind": "note",
+        "message": "Report 2 (heldout) comes from the fake provider: harness verification is not model evidence and is ignored."
+      }
+    ],
+    "status": "NOT_RUN"
+  },
+  "overall": "NOT_RUN",
+  "permits": "A PASS on these synthetic checks permits further local experimentation only. It is not evidence of generalisation, of product quality or of safety on real text, and the feature stays off by default.",
+  "reportVersion": 3,
+  "verifier": {
+    "corpus": {
+      "caseCount": 53,
+      "digest": "35a514372d3b4f6ea4151ed6f3cf25dc705f2a81663e3669f3f0c0b41c007c43",
+      "version": "1"
+    },
+    "gate": "verifier",
+    "reasons": [],
+    "score": {
+      "byCategory": {
+        "punctuation-scope": {
+          "cases": 3,
+          "controls": 0,
+          "controlsMissed": 0,
+          "forbiddenAccepted": 0,
+          "mustWithhold": 12,
+          "outcomeMismatches": 0
+        },
+        "bound": {
+          "cases": 3,
+          "controls": 0,
+          "controlsMissed": 0,
+          "forbiddenAccepted": 0,
+          "mustWithhold": 12,
+          "outcomeMismatches": 0
+        },
+        "line-break-scope": {
+          "cases": 2,
+          "controls": 0,
+          "controlsMissed": 0,
+          "forbiddenAccepted": 0,
+          "mustWithhold": 8,
+          "outcomeMismatches": 0
+        },
+        "range": {
+          "cases": 1,
+          "controls": 0,
+          "controlsMissed": 0,
+          "forbiddenAccepted": 0,
+          "mustWithhold": 4,
+          "outcomeMismatches": 0
+        },
+        "mixed-unit-range": {
+          "cases": 4,
+          "controls": 0,
+          "controlsMissed": 0,
+          "forbiddenAccepted": 0,
+          "mustWithhold": 16,
+          "outcomeMismatches": 0
+        },
+        "negation": {
+          "cases": 4,
+          "controls": 0,
+          "controlsMissed": 0,
+          "forbiddenAccepted": 0,
+          "mustWithhold": 16,
+          "outcomeMismatches": 0
+        },
+        "portion": {
+          "cases": 4,
+          "controls": 0,
+          "controlsMissed": 0,
+          "forbiddenAccepted": 0,
+          "mustWithhold": 16,
+          "outcomeMismatches": 0
+        },
+        "container": {
+          "cases": 4,
+          "controls": 0,
+          "controlsMissed": 0,
+          "forbiddenAccepted": 0,
+          "mustWithhold": 16,
+          "outcomeMismatches": 0
+        },
+        "instruction": {
+          "cases": 5,
+          "controls": 0,
+          "controlsMissed": 0,
+          "forbiddenAccepted": 0,
+          "mustWithhold": 20,
+          "outcomeMismatches": 0
+        },
+        "exact-decimal": {
+          "cases": 5,
+          "controls": 0,
+          "controlsMissed": 0,
+          "forbiddenAccepted": 0,
+          "mustWithhold": 20,
+          "outcomeMismatches": 0
+        },
+        "wire-validation": {
+          "cases": 3,
+          "controls": 0,
+          "controlsMissed": 0,
+          "forbiddenAccepted": 0,
+          "mustWithhold": 12,
+          "outcomeMismatches": 0
+        },
+        "title-grounding": {
+          "cases": 1,
+          "controls": 0,
+          "controlsMissed": 0,
+          "forbiddenAccepted": 0,
+          "mustWithhold": 4,
+          "outcomeMismatches": 0
+        },
+        "control-whole-entry": {
+          "cases": 4,
+          "controls": 7,
+          "controlsMissed": 0,
+          "forbiddenAccepted": 0,
+          "mustWithhold": 9,
+          "outcomeMismatches": 0
+        },
+        "control-zero": {
+          "cases": 2,
+          "controls": 4,
+          "controlsMissed": 0,
+          "forbiddenAccepted": 0,
+          "mustWithhold": 4,
+          "outcomeMismatches": 0
+        },
+        "control-decimal": {
+          "cases": 2,
+          "controls": 4,
+          "controlsMissed": 0,
+          "forbiddenAccepted": 0,
+          "mustWithhold": 4,
+          "outcomeMismatches": 0
+        },
+        "control-cross-field": {
+          "cases": 2,
+          "controls": 2,
+          "controlsMissed": 0,
+          "forbiddenAccepted": 0,
+          "mustWithhold": 6,
+          "outcomeMismatches": 0
+        },
+        "control-independent-field": {
+          "cases": 2,
+          "controls": 2,
+          "controlsMissed": 0,
+          "forbiddenAccepted": 0,
+          "mustWithhold": 6,
+          "outcomeMismatches": 0
+        },
+        "control-unrelated-negation": {
+          "cases": 2,
+          "controls": 2,
+          "controlsMissed": 0,
+          "forbiddenAccepted": 0,
+          "mustWithhold": 6,
+          "outcomeMismatches": 0
+        }
+      },
+      "byLanguage": {
+        "en": {
+          "cases": 30,
+          "controls": 10,
+          "controlsMissed": 0,
+          "forbiddenAccepted": 0,
+          "mustWithhold": 110,
+          "outcomeMismatches": 0
+        },
+        "ru": {
+          "cases": 23,
+          "controls": 11,
+          "controlsMissed": 0,
+          "forbiddenAccepted": 0,
+          "mustWithhold": 81,
+          "outcomeMismatches": 0
+        }
+      },
+      "findings": [],
+      "outcomeMismatches": [],
+      "total": {
+        "cases": 53,
+        "controls": 21,
+        "controlsMissed": 0,
+        "forbiddenAccepted": 0,
+        "mustWithhold": 191,
+        "outcomeMismatches": 0
+      }
+    },
+    "status": "PASS"
+  }
+}

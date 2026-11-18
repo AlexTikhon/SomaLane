@@ -2,9 +2,10 @@
 
 - Status: accepted; implemented and verified locally (unit, real PostgreSQL integration, Chromium end-to-end with the
   fake provider). Real-model evaluation: see "Evaluation" (historical, before the grounding corrections) and, for the
-  current code, "Amendment 7" of 2026-11-17 and its 2026-11-18 follow-up (verifier PASS; challenge set PASS; model
-  evidence **stale** since the follow-up: the marginal model PASS of 2026-11-17 was measured at the previous fingerprint,
-  so the model gate FAILs until a new 40-call run). The feature is **off by default**.
+  current code, "Amendment 7" of 2026-11-17 and its 2026-11-18 follow-up (verifier PASS; challenge set PASS) and the
+  "Version 2 evaluation sets" checkpoint of 2026-11-18 (the current model evidence: **model FAIL on quality** with valid
+  evidence at fingerprint `9a069010…`, recall 81.0 % below 85 %, 0 incorrectly accepted). The feature is **off by
+  default**.
 - Amended: 2026-11-14, grounding corrections (qualifier scope, signs, exact decimals); see "Amendment" below.
 - Amended again: 2026-11-14, second grounding correction (a label's "total", ranges split by a line break); see
   "Amendment 2" below.
@@ -36,6 +37,9 @@
 - Amended a seventh time: 2026-11-17, one vessel-scope analysis shared by proposals and conflict detection (the vessel
   rules of Amendment 6 and its follow-ups rebuilt on explicit mention lists and per-list attribution, policy in
   [docs/meal-draft-vessel-scope-policy.md](../meal-draft-vessel-scope-policy.md)); see "Amendment 7" below.
+- Evaluation checkpoint: 2026-11-18, explicit dataset versions (`--dataset-version v1|v2`, v1 by default) and new
+  synthetic v2 sets measured once with `qwen3:8b` (40 calls); no production behaviour changed; see "Version 2
+  evaluation sets" below.
 - Date: 2026-11-14
 - Relates to: ADR-0083 (the meal log, its contract, idempotent creation per form session, `source: manual`, erasure),
   ADR-0057 and its addendum (proposals that change nothing until accepted; admission; request and operation lifetimes),
@@ -948,6 +952,29 @@ sets, the challenge set and earlier artifacts are unchanged. The safety corpus a
 per-case results as before. Fingerprint `eb22d827…` → `9a069010…`, so the model reports above are **stale** and the model
 gate FAILs with `FINGERPRINT_MISMATCH`. No model was called. Results and checks: the closeout report's follow-up section.
 
+## Version 2 evaluation sets (2026-11-18)
+
+An evaluation milestone, not a correction. Grounding, prompt (`meal-draft-prompt-1`), wire schema, contracts, provider
+settings, the frozen thresholds and the off-by-default configuration are unchanged, and the findings were not repaired.
+Report: [meal-draft-v2-evaluation-2026-11-18.md](../reports/meal-draft-v2-evaluation-2026-11-18.md).
+
+**Decision.** Evaluation datasets are versioned explicitly. `--dataset-version v1|v2` selects the development and
+held-out sets for runs, dry runs and `--check` through a pinned registry (file, digest, case count). v1 stays the default
+with its files, digests and history. Every case text must pass the public request contract. The model gate judges one
+version: reports of another version, of mixed versions or without a version are evidence errors and are never counted.
+So v1 evidence is never a v2 measurement, and a new set is always a new version in a new file. v2 is 20 + 20 synthetic
+cases (10 EN and 10 RU each, 58 expected values), written from this ADR and the vessel-scope policy, each with a
+rationale, and frozen by digest before any call (`ecfb74b4…`, `7248ab7f…`). They are authored and examined by the
+implementing engineer: new synthetic evaluation sets, **not** independent blind held-out evidence.
+
+**Result** (fingerprint `9a069010…`, `qwen3:8b` `500a1f06…`, Ollama 0.40.16, CPU, product defaults, 40 of 40 calls, cold
+first call observed, no retries or warm-up). Verifier **PASS** (0 of 191, controls 21/21); challenge set PASS; **model
+FAIL on quality** with valid evidence: 0 incorrectly accepted, outcome 35/40 = 87.5 %, recall 47/58 = **81.0 %** (below
+85 %), precision 100 %, failures 4/40 = 10.0 % (one cold timeout at 45 s, three titles not grounded). Grounding withheld
+13 claims the policy forbids, and the model never claimed 63 other forbidden fields (restraint, not verifier evidence).
+Seven of the 11 missed values come from title or evidence copying, the pattern of every earlier run. **The feature stays
+off by default**; the next step is to attribute those failures (evaluation-only reason codes) before any prompt change.
+
 ## Consequences
 
 - One more AI feature, off by default and independent of the other two; the suite's API runs it with the fake provider,
@@ -958,7 +985,8 @@ gate FAILs with `FINGERPRINT_MISMATCH`. No model was called. Results and checks:
 
 ## Not established
 
-- **Generalisation**: 40 synthetic cases by the author of the rules, one model, one CPU; no real user text. The model on
+- **Generalisation**: synthetic cases by the author of the rules (40 in v1, 40 more in v2 since 2026-11-18, both now
+  examined), one model, one CPU; no real user text. The model on
   its own made wrong claims that only the grounding stopped. The feature stays off by default and is not a product claim.
 - The grounding vocabulary is English and Russian only; other languages get abstentions (not wrong values), and a text
   in another language with English units may still pass the rules.

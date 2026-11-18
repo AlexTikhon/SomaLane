@@ -1,0 +1,1333 @@
+{
+  "caseCount": 65,
+  "challengeDigest": "f521a88f39e70600e30eeeb8bda9057d2121752d8bbdfb463bf1c821ba078f26",
+  "challengeVersion": "1",
+  "kind": "deterministic-vessel-scope-challenge",
+  "metadata": {
+    "fingerprint": {
+      "contracts": {
+        "bindings": [
+          {
+            "local": "MEAL_DRAFT_CLARIFICATION_REASONS",
+            "module": "packages/contracts/dist/meal-draft.js",
+            "name": "MEAL_DRAFT_CLARIFICATION_REASONS"
+          },
+          {
+            "local": "MEAL_DRAFT_EXCERPT_MAX",
+            "module": "packages/contracts/dist/meal-draft.js",
+            "name": "MEAL_DRAFT_EXCERPT_MAX"
+          },
+          {
+            "local": "MEAL_DRAFT_UNSUPPORTED_REASONS",
+            "module": "packages/contracts/dist/meal-draft.js",
+            "name": "MEAL_DRAFT_UNSUPPORTED_REASONS"
+          },
+          {
+            "local": "MEAL_NUTRITION_FIELDS",
+            "module": "packages/contracts/dist/meals.js",
+            "name": "MEAL_NUTRITION_FIELDS"
+          },
+          {
+            "local": "MEAL_NUTRITION_MAX",
+            "module": "packages/contracts/dist/meals.js",
+            "name": "MEAL_NUTRITION_MAX"
+          },
+          {
+            "local": "MEAL_VALUE_DECIMALS",
+            "module": "packages/contracts/dist/meals.js",
+            "name": "MEAL_VALUE_DECIMALS"
+          },
+          {
+            "local": "mealCarbohydrateGSchema",
+            "module": "packages/contracts/dist/meals.js",
+            "name": "mealCarbohydrateGSchema"
+          },
+          {
+            "local": "mealEnergyKcalSchema",
+            "module": "packages/contracts/dist/meals.js",
+            "name": "mealEnergyKcalSchema"
+          },
+          {
+            "local": "mealFatGSchema",
+            "module": "packages/contracts/dist/meals.js",
+            "name": "mealFatGSchema"
+          },
+          {
+            "local": "mealProteinGSchema",
+            "module": "packages/contracts/dist/meals.js",
+            "name": "mealProteinGSchema"
+          },
+          {
+            "local": "mealTitleSchema",
+            "module": "packages/contracts/dist/meals.js",
+            "name": "mealTitleSchema"
+          }
+        ],
+        "conditionPath": [
+          ".",
+          "default"
+        ],
+        "entry": "packages/contracts/dist/index.js",
+        "manifest": "packages/contracts/package.json",
+        "package": "@running-tracker/contracts"
+      },
+      "digest": "9a069010b327175794849b31abde00d1155dc9450b5ab363b1c31b367efcd5ad",
+      "files": [
+        {
+          "path": "apps/api/src/insights/llm-provider.ts",
+          "sha256": "582461a6beb4a1d6e5fc3ab6df6da71c6a9be7369a17d77f22b4f491179eb7f8"
+        },
+        {
+          "path": "apps/api/src/insights/ollama-provider.ts",
+          "sha256": "7b8c6f972ae9f0aa8a8da482f901fdef2c769784fb473e18405da7f47bcd9c34"
+        },
+        {
+          "path": "apps/api/src/meals/drafts/meal-draft-grounding.ts",
+          "sha256": "5aba45678f1b35114824d35905bfe86229af8bf36ddf67afc41f94b576395c37"
+        },
+        {
+          "path": "apps/api/src/meals/drafts/meal-draft-lexicon.ts",
+          "sha256": "e63fe7581e1283b3634250fc6c934af75619d2f0ad58fc0718de8bf1805d5993"
+        },
+        {
+          "path": "apps/api/src/meals/drafts/meal-draft-mentions.ts",
+          "sha256": "8299afec0ffded6dfdf9a9dd0c235e8c89110f54c6186df32763912d0b926b92"
+        },
+        {
+          "path": "apps/api/src/meals/drafts/meal-draft-prompt.ts",
+          "sha256": "c374100b34179dfd6ebfb79f9144348d24029432e4ed2617da8fa17439638ed7"
+        },
+        {
+          "path": "apps/api/src/meals/drafts/meal-draft-vessel-scope.ts",
+          "sha256": "21a682e084e656d871157623fa5e146a3a3e698c2590d3cc74161028dce44514"
+        },
+        {
+          "path": "apps/api/src/meals/drafts/meal-draft-wire.ts",
+          "sha256": "893910b98d23e26b7b355c0846f72ca48e20d84a1738b812ed04e2da6999faa9"
+        },
+        {
+          "path": "apps/api/src/runs/interpretation/bounded-fetch.ts",
+          "sha256": "d8028ad7a16592f5e1377a146100a3159f925f0c66f6cd86679afaf2a003d1a5"
+        },
+        {
+          "path": "packages/contracts/dist/daily-metrics.js",
+          "sha256": "0859a64361a5f085d23b8991172dfc341288c282e0cf0ab191c7b5eeca840604"
+        },
+        {
+          "path": "packages/contracts/dist/meal-draft.js",
+          "sha256": "c5a1ba57afacd716172004aafbd3a79db7130ee63f374c6a82a83cd7ebc5a0cc"
+        },
+        {
+          "path": "packages/contracts/dist/meals.js",
+          "sha256": "02b4fd08d2686a9096c2c9d8fef181a4fef2ae04aa0bba3231691a98262c3239"
+        },
+        {
+          "path": "packages/contracts/dist/primitives.js",
+          "sha256": "0574e6e01523bcace72fa57104f4dc6b792fb6a824eaedc633c3bed27a14c2e8"
+        }
+      ],
+      "fingerprintVersion": 2,
+      "packages": [
+        {
+          "name": "zod",
+          "version": "4.6.5"
+        }
+      ]
+    },
+    "promptDigest": "f53aeae55420c9079ae6ac68f6b8b618f8afd1fec9f6777a84a72dd603ad2fb5",
+    "promptVersion": "meal-draft-prompt-1",
+    "schemaName": "meal_draft_evidence_v1",
+    "datasetDigest": "f521a88f39e70600e30eeeb8bda9057d2121752d8bbdfb463bf1c821ba078f26",
+    "generation": null,
+    "git": {
+      "dirty": true,
+      "dirtyPathCount": 11,
+      "dirtyPaths": [
+        "apps/api/src/evaluation/meal-draft-evaluation-cli.ts",
+        "apps/api/src/evaluation/meal-draft-evaluation-main.ts",
+        "apps/api/src/evaluation/meal-draft-evaluation.spec.ts",
+        "apps/api/src/evaluation/meal-draft-evaluation.ts",
+        "apps/api/src/evaluation/meal-draft-gates.spec.ts",
+        "apps/api/src/evaluation/meal-draft-gates.ts",
+        "packages/contracts/openapi/openapi.json",
+        "apps/api/evaluation/meal-draft.development.v2.json",
+        "apps/api/evaluation/meal-draft.heldout.v2.json",
+        "docs/reports/artifacts/meal-draft-v2-evaluation-2026-11-18/dataset-freeze.txt",
+        "docs/reports/artifacts/meal-draft-v2-evaluation-2026-11-18/verifier-safety.json"
+      ],
+      "sha": "88786d2c8fc788ed54dd14910de7de37df8af8ea"
+    },
+    "model": null,
+    "modelDigest": null,
+    "nodeVersion": "v24.11.1",
+    "ollamaVersion": null,
+    "recordedAt": "2026-11-18T08:34:50.624Z",
+    "timeoutMs": null
+  },
+  "results": [
+    {
+      "category": "mixed-context",
+      "fields": {
+        "energyKcal": {
+          "actual": {
+            "reason": "conflicting",
+            "status": "withheld"
+          },
+          "expected": "conflicting",
+          "verdict": "ok"
+        }
+      },
+      "id": "a1-unresolved-then-consumed",
+      "language": "en",
+      "unclaimedMismatches": []
+    },
+    {
+      "category": "mixed-context",
+      "fields": {
+        "energyKcal": {
+          "actual": {
+            "reason": "per_portion",
+            "status": "withheld"
+          },
+          "expected": "per_portion",
+          "verdict": "ok"
+        }
+      },
+      "id": "a1-unresolved-figure",
+      "language": "en",
+      "unclaimedMismatches": []
+    },
+    {
+      "category": "mixed-context",
+      "fields": {
+        "energyKcal": {
+          "actual": {
+            "reason": "conflicting",
+            "status": "withheld"
+          },
+          "expected": "conflicting",
+          "verdict": "ok"
+        },
+        "proteinG": {
+          "actual": {
+            "reason": "per_portion",
+            "status": "withheld"
+          },
+          "expected": "per_portion",
+          "verdict": "ok"
+        }
+      },
+      "id": "a2-confirmed-elsewhere-cross-field",
+      "language": "en",
+      "unclaimedMismatches": []
+    },
+    {
+      "category": "mixed-context",
+      "fields": {
+        "energyKcal": {
+          "actual": {
+            "reason": "conflicting",
+            "status": "withheld"
+          },
+          "expected": "conflicting",
+          "verdict": "ok"
+        }
+      },
+      "id": "a3-confirmed-before-crlf-same-field",
+      "language": "en",
+      "unclaimedMismatches": []
+    },
+    {
+      "category": "mixed-context",
+      "fields": {
+        "energyKcal": {
+          "actual": {
+            "reason": "conflicting",
+            "status": "withheld"
+          },
+          "expected": "conflicting",
+          "verdict": "ok"
+        },
+        "proteinG": {
+          "actual": {
+            "reason": "per_portion",
+            "status": "withheld"
+          },
+          "expected": "per_portion",
+          "verdict": "ok"
+        }
+      },
+      "id": "a4-ru-confirmed-elsewhere",
+      "language": "ru",
+      "unclaimedMismatches": []
+    },
+    {
+      "category": "mixed-context",
+      "fields": {
+        "energyKcal": {
+          "actual": {
+            "status": "proposed",
+            "value": 300
+          },
+          "expected": 300,
+          "verdict": "ok"
+        }
+      },
+      "id": "a5-control-all-confirmed",
+      "language": "en",
+      "unclaimedMismatches": []
+    },
+    {
+      "category": "unresolved-list",
+      "fields": {
+        "energyKcal": {
+          "actual": {
+            "reason": "per_portion",
+            "status": "withheld"
+          },
+          "expected": "per_portion",
+          "verdict": "ok"
+        },
+        "proteinG": {
+          "actual": {
+            "reason": "conflicting",
+            "status": "withheld"
+          },
+          "expected": "conflicting",
+          "verdict": "ok"
+        }
+      },
+      "id": "b1-unresolved-list-protein-second",
+      "language": "en",
+      "unclaimedMismatches": []
+    },
+    {
+      "category": "unresolved-list",
+      "fields": {
+        "proteinG": {
+          "actual": {
+            "reason": "conflicting",
+            "status": "withheld"
+          },
+          "expected": "conflicting",
+          "verdict": "ok"
+        }
+      },
+      "id": "b2-unresolved-list-protein-first",
+      "language": "en",
+      "unclaimedMismatches": []
+    },
+    {
+      "category": "unresolved-list",
+      "fields": {
+        "fatG": {
+          "actual": {
+            "reason": "conflicting",
+            "status": "withheld"
+          },
+          "expected": "conflicting",
+          "verdict": "ok"
+        }
+      },
+      "id": "b3-unresolved-list-fat-third",
+      "language": "en",
+      "unclaimedMismatches": []
+    },
+    {
+      "category": "unresolved-list",
+      "fields": {
+        "carbohydrateG": {
+          "actual": {
+            "reason": "conflicting",
+            "status": "withheld"
+          },
+          "expected": "conflicting",
+          "verdict": "ok"
+        }
+      },
+      "id": "b4-unresolved-list-carbs-fourth",
+      "language": "en",
+      "unclaimedMismatches": []
+    },
+    {
+      "category": "unresolved-list",
+      "fields": {
+        "energyKcal": {
+          "actual": {
+            "reason": "conflicting",
+            "status": "withheld"
+          },
+          "expected": "conflicting",
+          "verdict": "ok"
+        }
+      },
+      "id": "b5-unresolved-list-energy-fourth",
+      "language": "en",
+      "unclaimedMismatches": []
+    },
+    {
+      "category": "unresolved-list",
+      "fields": {
+        "fatG": {
+          "actual": {
+            "reason": "conflicting",
+            "status": "withheld"
+          },
+          "expected": "conflicting",
+          "verdict": "ok"
+        }
+      },
+      "id": "b6-ru-unresolved-list",
+      "language": "ru",
+      "unclaimedMismatches": []
+    },
+    {
+      "category": "unresolved-list",
+      "fields": {
+        "proteinG": {
+          "actual": {
+            "reason": "conflicting",
+            "status": "withheld"
+          },
+          "expected": "conflicting",
+          "verdict": "ok"
+        }
+      },
+      "id": "b7-unresolved-and-confirmed-same-list",
+      "language": "en",
+      "unclaimedMismatches": []
+    },
+    {
+      "category": "unresolved-list",
+      "fields": {
+        "carbohydrateG": {
+          "actual": {
+            "reason": "conflicting",
+            "status": "withheld"
+          },
+          "expected": "conflicting",
+          "verdict": "ok"
+        }
+      },
+      "id": "b8-unresolved-list-crlf-decimal-comma",
+      "language": "ru",
+      "unclaimedMismatches": []
+    },
+    {
+      "category": "batch",
+      "fields": {
+        "energyKcal": {
+          "actual": {
+            "reason": "per_portion",
+            "status": "withheld"
+          },
+          "expected": "per_portion",
+          "verdict": "ok"
+        }
+      },
+      "id": "c1-batch-en",
+      "language": "en",
+      "unclaimedMismatches": []
+    },
+    {
+      "category": "batch",
+      "fields": {
+        "energyKcal": {
+          "actual": {
+            "reason": "per_portion",
+            "status": "withheld"
+          },
+          "expected": "per_portion",
+          "verdict": "ok"
+        }
+      },
+      "id": "c2-batch-ru",
+      "language": "ru",
+      "unclaimedMismatches": []
+    },
+    {
+      "category": "batch",
+      "fields": {
+        "energyKcal": {
+          "actual": {
+            "reason": "conflicting",
+            "status": "withheld"
+          },
+          "expected": "conflicting",
+          "verdict": "ok"
+        }
+      },
+      "id": "c3-batch-then-consumed-en",
+      "language": "en",
+      "unclaimedMismatches": []
+    },
+    {
+      "category": "batch",
+      "fields": {
+        "energyKcal": {
+          "actual": {
+            "reason": "conflicting",
+            "status": "withheld"
+          },
+          "expected": "conflicting",
+          "verdict": "ok"
+        }
+      },
+      "id": "c4-batch-then-consumed-ru",
+      "language": "ru",
+      "unclaimedMismatches": []
+    },
+    {
+      "category": "batch",
+      "fields": {
+        "proteinG": {
+          "actual": {
+            "reason": "conflicting",
+            "status": "withheld"
+          },
+          "expected": "conflicting",
+          "verdict": "ok"
+        }
+      },
+      "id": "c5-batch-list-then-consumed",
+      "language": "en",
+      "unclaimedMismatches": []
+    },
+    {
+      "category": "confirmed-consumed",
+      "fields": {
+        "energyKcal": {
+          "actual": {
+            "status": "proposed",
+            "value": 300
+          },
+          "expected": 300,
+          "verdict": "ok"
+        }
+      },
+      "id": "d1-confirmed-then-consumed",
+      "language": "en",
+      "unclaimedMismatches": []
+    },
+    {
+      "category": "confirmed-consumed",
+      "fields": {
+        "energyKcal": {
+          "actual": {
+            "reason": "per_portion",
+            "status": "withheld"
+          },
+          "expected": "per_portion",
+          "verdict": "ok"
+        }
+      },
+      "id": "d1-confirmed-figure",
+      "language": "en",
+      "unclaimedMismatches": []
+    },
+    {
+      "category": "confirmed-consumed",
+      "fields": {
+        "energyKcal": {
+          "actual": {
+            "status": "proposed",
+            "value": 300
+          },
+          "expected": 300,
+          "verdict": "ok"
+        },
+        "proteinG": {
+          "actual": {
+            "status": "proposed",
+            "value": 20
+          },
+          "expected": 20,
+          "verdict": "ok"
+        }
+      },
+      "id": "d2-confirmed-list-consumed-list",
+      "language": "en",
+      "unclaimedMismatches": []
+    },
+    {
+      "category": "confirmed-consumed",
+      "fields": {
+        "energyKcal": {
+          "actual": {
+            "reason": "per_portion",
+            "status": "withheld"
+          },
+          "expected": "per_portion",
+          "verdict": "ok"
+        },
+        "proteinG": {
+          "actual": {
+            "reason": "per_portion",
+            "status": "withheld"
+          },
+          "expected": "per_portion",
+          "verdict": "ok"
+        }
+      },
+      "id": "d2-confirmed-list-figures",
+      "language": "en",
+      "unclaimedMismatches": []
+    },
+    {
+      "category": "confirmed-consumed",
+      "fields": {
+        "energyKcal": {
+          "actual": {
+            "status": "proposed",
+            "value": 300
+          },
+          "expected": 300,
+          "verdict": "ok"
+        },
+        "proteinG": {
+          "actual": {
+            "status": "proposed",
+            "value": 20
+          },
+          "expected": 20,
+          "verdict": "ok"
+        }
+      },
+      "id": "d3-ru-confirmed-list-consumed",
+      "language": "ru",
+      "unclaimedMismatches": []
+    },
+    {
+      "category": "confirmed-consumed",
+      "fields": {
+        "energyKcal": {
+          "actual": {
+            "status": "proposed",
+            "value": 300
+          },
+          "expected": 300,
+          "verdict": "ok"
+        }
+      },
+      "id": "d5-action-after-confirmed-changes-nothing",
+      "language": "en",
+      "unclaimedMismatches": []
+    },
+    {
+      "category": "confirmed-consumed",
+      "fields": {
+        "energyKcal": {
+          "actual": {
+            "reason": "conflicting",
+            "status": "withheld"
+          },
+          "expected": "conflicting",
+          "verdict": "ok"
+        }
+      },
+      "id": "d4-two-consumed-totals-conflict",
+      "language": "en",
+      "unclaimedMismatches": []
+    },
+    {
+      "category": "unrelated-action",
+      "fields": {
+        "energyKcal": {
+          "actual": {
+            "status": "proposed",
+            "value": 300
+          },
+          "expected": 300,
+          "verdict": "ok"
+        }
+      },
+      "id": "e1-cooked-in-vessel",
+      "language": "en",
+      "unclaimedMismatches": []
+    },
+    {
+      "category": "unrelated-action",
+      "fields": {
+        "proteinG": {
+          "actual": {
+            "reason": "conflicting",
+            "status": "withheld"
+          },
+          "expected": "conflicting",
+          "verdict": "ok"
+        }
+      },
+      "id": "e2-washed-conflict",
+      "language": "en",
+      "unclaimedMismatches": []
+    },
+    {
+      "category": "unrelated-action",
+      "fields": {
+        "energyKcal": {
+          "actual": {
+            "reason": "conflicting",
+            "status": "withheld"
+          },
+          "expected": "conflicting",
+          "verdict": "ok"
+        }
+      },
+      "id": "e3-ru-washed-conflict",
+      "language": "ru",
+      "unclaimedMismatches": []
+    },
+    {
+      "category": "unrelated-action",
+      "fields": {
+        "energyKcal": {
+          "actual": {
+            "status": "proposed",
+            "value": 300
+          },
+          "expected": 300,
+          "verdict": "ok"
+        }
+      },
+      "id": "e4-washed-afterwards",
+      "language": "en",
+      "unclaimedMismatches": []
+    },
+    {
+      "category": "unrelated-action",
+      "fields": {
+        "energyKcal": {
+          "actual": {
+            "status": "proposed",
+            "value": 900
+          },
+          "expected": 900,
+          "verdict": "ok"
+        }
+      },
+      "id": "e5-ru-washed-plain",
+      "language": "ru",
+      "unclaimedMismatches": []
+    },
+    {
+      "category": "unrelated-action",
+      "fields": {
+        "energyKcal": {
+          "actual": {
+            "status": "proposed",
+            "value": 300
+          },
+          "expected": 300,
+          "verdict": "ok"
+        }
+      },
+      "id": "e6-ru-cooked-in-vessel",
+      "language": "ru",
+      "unclaimedMismatches": []
+    },
+    {
+      "category": "unrelated-action",
+      "fields": {
+        "energyKcal": {
+          "actual": {
+            "reason": "conflicting",
+            "status": "withheld"
+          },
+          "expected": "conflicting",
+          "verdict": "ok"
+        }
+      },
+      "id": "e7-cooked-in-vessel-conflict",
+      "language": "en",
+      "unclaimedMismatches": []
+    },
+    {
+      "category": "unrelated-action",
+      "fields": {
+        "energyKcal": {
+          "actual": {
+            "reason": "conflicting",
+            "status": "withheld"
+          },
+          "expected": "conflicting",
+          "verdict": "ok"
+        }
+      },
+      "id": "e8-ru-same-line-action-contradiction",
+      "language": "ru",
+      "unclaimedMismatches": []
+    },
+    {
+      "category": "label",
+      "fields": {
+        "energyKcal": {
+          "actual": {
+            "reason": "per_portion",
+            "status": "withheld"
+          },
+          "expected": "per_portion",
+          "verdict": "ok"
+        }
+      },
+      "id": "f01-label-before",
+      "language": "en",
+      "unclaimedMismatches": []
+    },
+    {
+      "category": "label",
+      "fields": {
+        "energyKcal": {
+          "actual": {
+            "reason": "per_portion",
+            "status": "withheld"
+          },
+          "expected": "per_portion",
+          "verdict": "ok"
+        }
+      },
+      "id": "f02-label-after-crlf",
+      "language": "en",
+      "unclaimedMismatches": []
+    },
+    {
+      "category": "label",
+      "fields": {
+        "energyKcal": {
+          "actual": {
+            "reason": "per_portion",
+            "status": "withheld"
+          },
+          "expected": "per_portion",
+          "verdict": "ok"
+        }
+      },
+      "id": "f03-label-sentence-end",
+      "language": "en",
+      "unclaimedMismatches": []
+    },
+    {
+      "category": "label",
+      "fields": {
+        "energyKcal": {
+          "actual": {
+            "reason": "per_portion",
+            "status": "withheld"
+          },
+          "expected": "per_portion",
+          "verdict": "ok"
+        }
+      },
+      "id": "f04-label-parenthesis",
+      "language": "en",
+      "unclaimedMismatches": []
+    },
+    {
+      "category": "label",
+      "fields": {
+        "energyKcal": {
+          "actual": {
+            "reason": "per_portion",
+            "status": "withheld"
+          },
+          "expected": "per_portion",
+          "verdict": "ok"
+        }
+      },
+      "id": "f05-label-parenthesis-for",
+      "language": "en",
+      "unclaimedMismatches": []
+    },
+    {
+      "category": "label",
+      "fields": {
+        "energyKcal": {
+          "actual": {
+            "reason": "per_portion",
+            "status": "withheld"
+          },
+          "expected": "per_portion",
+          "verdict": "ok"
+        }
+      },
+      "id": "f06-label-parenthesis-before",
+      "language": "en",
+      "unclaimedMismatches": []
+    },
+    {
+      "category": "label",
+      "fields": {
+        "energyKcal": {
+          "actual": {
+            "reason": "per_portion",
+            "status": "withheld"
+          },
+          "expected": "per_portion",
+          "verdict": "ok"
+        }
+      },
+      "id": "f07-ru-food-label",
+      "language": "ru",
+      "unclaimedMismatches": []
+    },
+    {
+      "category": "unknown-qualifier",
+      "fields": {
+        "energyKcal": {
+          "actual": {
+            "reason": "per_portion",
+            "status": "withheld"
+          },
+          "expected": "per_portion",
+          "verdict": "ok"
+        }
+      },
+      "id": "f08-ru-unlisted-food",
+      "language": "ru",
+      "unclaimedMismatches": []
+    },
+    {
+      "category": "unknown-qualifier",
+      "fields": {
+        "energyKcal": {
+          "actual": {
+            "reason": "per_portion",
+            "status": "withheld"
+          },
+          "expected": "per_portion",
+          "verdict": "ok"
+        }
+      },
+      "id": "f09-ru-unlisted-food-after-crlf",
+      "language": "ru",
+      "unclaimedMismatches": []
+    },
+    {
+      "category": "unknown-qualifier",
+      "fields": {
+        "proteinG": {
+          "actual": {
+            "reason": "per_portion",
+            "status": "withheld"
+          },
+          "expected": "per_portion",
+          "verdict": "ok"
+        }
+      },
+      "id": "f10-ru-unlisted-food-protein",
+      "language": "ru",
+      "unclaimedMismatches": []
+    },
+    {
+      "category": "unknown-qualifier",
+      "fields": {
+        "energyKcal": {
+          "actual": {
+            "reason": "per_portion",
+            "status": "withheld"
+          },
+          "expected": "per_portion",
+          "verdict": "ok"
+        }
+      },
+      "id": "f11-ru-synthetic-qualifier",
+      "language": "ru",
+      "unclaimedMismatches": []
+    },
+    {
+      "category": "unknown-qualifier",
+      "fields": {
+        "energyKcal": {
+          "actual": {
+            "reason": "per_portion",
+            "status": "withheld"
+          },
+          "expected": "per_portion",
+          "verdict": "ok"
+        }
+      },
+      "id": "f12-en-synthetic-qualifier",
+      "language": "en",
+      "unclaimedMismatches": []
+    },
+    {
+      "category": "unknown-qualifier",
+      "fields": {
+        "energyKcal": {
+          "actual": {
+            "reason": "per_portion",
+            "status": "withheld"
+          },
+          "expected": "per_portion",
+          "verdict": "ok"
+        }
+      },
+      "id": "f13-ru-synthetic-parenthesis",
+      "language": "ru",
+      "unclaimedMismatches": []
+    },
+    {
+      "category": "label",
+      "fields": {
+        "energyKcal": {
+          "actual": {
+            "status": "proposed",
+            "value": 300
+          },
+          "expected": 300,
+          "verdict": "ok"
+        }
+      },
+      "id": "f14-label-parenthesis-consumed",
+      "language": "en",
+      "unclaimedMismatches": []
+    },
+    {
+      "category": "label",
+      "fields": {
+        "energyKcal": {
+          "actual": {
+            "reason": "conflicting",
+            "status": "withheld"
+          },
+          "expected": "conflicting",
+          "verdict": "ok"
+        }
+      },
+      "id": "f15-label-both-sides-ambiguous",
+      "language": "en",
+      "unclaimedMismatches": []
+    },
+    {
+      "category": "positive-control",
+      "fields": {
+        "energyKcal": {
+          "actual": {
+            "status": "proposed",
+            "value": 500
+          },
+          "expected": 500,
+          "verdict": "ok"
+        }
+      },
+      "id": "g1-food-name-control",
+      "language": "en",
+      "unclaimedMismatches": []
+    },
+    {
+      "category": "positive-control",
+      "fields": {
+        "energyKcal": {
+          "actual": {
+            "status": "proposed",
+            "value": 300
+          },
+          "expected": 300,
+          "verdict": "ok"
+        }
+      },
+      "id": "g2-source-control",
+      "language": "en",
+      "unclaimedMismatches": []
+    },
+    {
+      "category": "positive-control",
+      "fields": {
+        "energyKcal": {
+          "actual": {
+            "status": "proposed",
+            "value": 300
+          },
+          "expected": 300,
+          "verdict": "ok"
+        }
+      },
+      "id": "g3-ru-source-control",
+      "language": "ru",
+      "unclaimedMismatches": []
+    },
+    {
+      "category": "positive-control",
+      "fields": {
+        "energyKcal": {
+          "actual": {
+            "status": "proposed",
+            "value": 450
+          },
+          "expected": 450,
+          "verdict": "ok"
+        },
+        "proteinG": {
+          "actual": {
+            "status": "proposed",
+            "value": 35
+          },
+          "expected": 35,
+          "verdict": "ok"
+        },
+        "carbohydrateG": {
+          "actual": {
+            "status": "proposed",
+            "value": 0
+          },
+          "expected": 0,
+          "verdict": "ok"
+        },
+        "fatG": {
+          "actual": {
+            "status": "proposed",
+            "value": 20.5
+          },
+          "expected": 20.5,
+          "verdict": "ok"
+        }
+      },
+      "id": "g4-all-fields-zero-decimal-comma",
+      "language": "en",
+      "unclaimedMismatches": []
+    },
+    {
+      "category": "positive-control",
+      "fields": {
+        "energyKcal": {
+          "actual": {
+            "reason": "conflicting",
+            "status": "withheld"
+          },
+          "expected": "conflicting",
+          "verdict": "ok"
+        }
+      },
+      "id": "g5-plain-conflict",
+      "language": "en",
+      "unclaimedMismatches": []
+    },
+    {
+      "category": "positive-control",
+      "fields": {
+        "energyKcal": {
+          "actual": {
+            "status": "proposed",
+            "value": 300
+          },
+          "expected": 300,
+          "verdict": "ok"
+        }
+      },
+      "id": "g6-equal-decimals-no-conflict",
+      "language": "en",
+      "unclaimedMismatches": []
+    },
+    {
+      "category": "positive-control",
+      "fields": {
+        "energyKcal": {
+          "actual": {
+            "status": "proposed",
+            "value": 300
+          },
+          "expected": 300,
+          "verdict": "ok"
+        }
+      },
+      "id": "g7-unresolved-duplicate-no-conflict",
+      "language": "en",
+      "unclaimedMismatches": []
+    },
+    {
+      "category": "positive-control",
+      "fields": {
+        "energyKcal": {
+          "actual": {
+            "reason": "per_portion",
+            "status": "withheld"
+          },
+          "expected": "per_portion",
+          "verdict": "ok"
+        }
+      },
+      "id": "g8-repeated-excerpt-first-occurrence",
+      "language": "en",
+      "unclaimedMismatches": []
+    },
+    {
+      "category": "global-policy",
+      "fields": {
+        "energyKcal": {
+          "actual": {
+            "status": "proposed",
+            "value": 600
+          },
+          "expected": 600,
+          "verdict": "ok"
+        }
+      },
+      "id": "h1-per-portion-consumed",
+      "language": "en",
+      "unclaimedMismatches": []
+    },
+    {
+      "category": "global-policy",
+      "fields": {
+        "energyKcal": {
+          "actual": {
+            "reason": "per_portion",
+            "status": "withheld"
+          },
+          "expected": "per_portion",
+          "verdict": "ok"
+        }
+      },
+      "id": "h2-per-portion-value",
+      "language": "en",
+      "unclaimedMismatches": []
+    },
+    {
+      "category": "global-policy",
+      "fields": {
+        "energyKcal": {
+          "actual": {
+            "status": "proposed",
+            "value": 300
+          },
+          "expected": 300,
+          "verdict": "ok"
+        }
+      },
+      "id": "h3-package-unscoped-leaves-scan",
+      "language": "en",
+      "unclaimedMismatches": []
+    },
+    {
+      "category": "global-policy",
+      "fields": {
+        "energyKcal": {
+          "actual": {
+            "reason": "conflicting",
+            "status": "withheld"
+          },
+          "expected": "conflicting",
+          "verdict": "ok"
+        }
+      },
+      "id": "h4-vessel-unscoped-stays-in-scan",
+      "language": "en",
+      "unclaimedMismatches": []
+    },
+    {
+      "category": "global-policy",
+      "fields": {
+        "proteinG": {
+          "actual": {
+            "reason": "per_portion",
+            "status": "withheld"
+          },
+          "expected": "per_portion",
+          "verdict": "ok"
+        }
+      },
+      "id": "h5-vessel-global-withholds-unscoped",
+      "language": "en",
+      "unclaimedMismatches": []
+    },
+    {
+      "category": "global-policy",
+      "fields": {
+        "energyKcal": {
+          "actual": {
+            "reason": "ambiguous",
+            "status": "withheld"
+          },
+          "expected": "ambiguous",
+          "verdict": "ok"
+        }
+      },
+      "id": "h6-bound-beside-vessel",
+      "language": "en",
+      "unclaimedMismatches": []
+    },
+    {
+      "category": "global-policy",
+      "fields": {
+        "energyKcal": {
+          "actual": {
+            "reason": "negated",
+            "status": "withheld"
+          },
+          "expected": "negated",
+          "verdict": "ok"
+        }
+      },
+      "id": "h7-negation-beside-label",
+      "language": "ru",
+      "unclaimedMismatches": []
+    },
+    {
+      "category": "global-policy",
+      "fields": {
+        "energyKcal": {
+          "actual": {
+            "reason": "per_portion",
+            "status": "withheld"
+          },
+          "expected": "per_portion",
+          "verdict": "ok"
+        }
+      },
+      "id": "h8-per-serving-beside-action",
+      "language": "en",
+      "unclaimedMismatches": []
+    }
+  ],
+  "score": {
+    "byCategory": {
+      "mixed-context": {
+        "cases": 6,
+        "failures": 0
+      },
+      "unresolved-list": {
+        "cases": 8,
+        "failures": 0
+      },
+      "batch": {
+        "cases": 5,
+        "failures": 0
+      },
+      "confirmed-consumed": {
+        "cases": 7,
+        "failures": 0
+      },
+      "unrelated-action": {
+        "cases": 8,
+        "failures": 0
+      },
+      "label": {
+        "cases": 9,
+        "failures": 0
+      },
+      "unknown-qualifier": {
+        "cases": 6,
+        "failures": 0
+      },
+      "positive-control": {
+        "cases": 8,
+        "failures": 0
+      },
+      "global-policy": {
+        "cases": 8,
+        "failures": 0
+      }
+    },
+    "cases": 65,
+    "controls": 23,
+    "failures": [],
+    "fields": 74,
+    "missedControls": 0,
+    "reasonMismatches": 0,
+    "refused": 0,
+    "status": "PASS",
+    "unclaimedMismatches": 0,
+    "unsafeAcceptances": 0
+  },
+  "set": "challenge",
+  "statement": "Engineering challenge and regression set with supplied claims and no model: a statement about the verifier only, not held-out evidence and not a gate input."
+}

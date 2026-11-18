@@ -1,0 +1,109 @@
+Hashes re-recorded after the last inference call: 2026-11-18T08:51:12.354Z
+HEAD 88786d2c8fc788ed54dd14910de7de37df8af8ea
+git status --short --untracked-files=all:
+ M apps/api/src/evaluation/meal-draft-evaluation-cli.ts
+ M apps/api/src/evaluation/meal-draft-evaluation-main.ts
+ M apps/api/src/evaluation/meal-draft-evaluation.spec.ts
+ M apps/api/src/evaluation/meal-draft-evaluation.ts
+ M apps/api/src/evaluation/meal-draft-gates.spec.ts
+ M apps/api/src/evaluation/meal-draft-gates.ts
+ M docs/runbooks/meal-drafts.md
+ M packages/contracts/openapi/openapi.json
+?? apps/api/evaluation/meal-draft.development.v2.json
+?? apps/api/evaluation/meal-draft.heldout.v2.json
+?? docs/reports/artifacts/meal-draft-v2-evaluation-2026-11-18/challenge.json
+?? docs/reports/artifacts/meal-draft-v2-evaluation-2026-11-18/dataset-freeze.txt
+?? docs/reports/artifacts/meal-draft-v2-evaluation-2026-11-18/fake-harness-development-v2.json
+?? docs/reports/artifacts/meal-draft-v2-evaluation-2026-11-18/fake-harness-heldout-v2.json
+?? docs/reports/artifacts/meal-draft-v2-evaluation-2026-11-18/freeze-before-inference.txt
+?? docs/reports/artifacts/meal-draft-v2-evaluation-2026-11-18/gates-check-fake-only.json
+?? docs/reports/artifacts/meal-draft-v2-evaluation-2026-11-18/gates-check-v2.json
+?? docs/reports/artifacts/meal-draft-v2-evaluation-2026-11-18/qwen3-8b-development-v2.json
+?? docs/reports/artifacts/meal-draft-v2-evaluation-2026-11-18/qwen3-8b-heldout-v2.json
+?? docs/reports/artifacts/meal-draft-v2-evaluation-2026-11-18/verifier-safety.json
+Verifier fingerprint (version 2): 9a069010b327175794849b31abde00d1155dc9450b5ab363b1c31b367efcd5ad over 13 files
+  582461a6beb4a1d6e5fc3ab6df6da71c6a9be7369a17d77f22b4f491179eb7f8  apps/api/src/insights/llm-provider.ts
+  7b8c6f972ae9f0aa8a8da482f901fdef2c769784fb473e18405da7f47bcd9c34  apps/api/src/insights/ollama-provider.ts
+  5aba45678f1b35114824d35905bfe86229af8bf36ddf67afc41f94b576395c37  apps/api/src/meals/drafts/meal-draft-grounding.ts
+  e63fe7581e1283b3634250fc6c934af75619d2f0ad58fc0718de8bf1805d5993  apps/api/src/meals/drafts/meal-draft-lexicon.ts
+  8299afec0ffded6dfdf9a9dd0c235e8c89110f54c6186df32763912d0b926b92  apps/api/src/meals/drafts/meal-draft-mentions.ts
+  c374100b34179dfd6ebfb79f9144348d24029432e4ed2617da8fa17439638ed7  apps/api/src/meals/drafts/meal-draft-prompt.ts
+  21a682e084e656d871157623fa5e146a3a3e698c2590d3cc74161028dce44514  apps/api/src/meals/drafts/meal-draft-vessel-scope.ts
+  893910b98d23e26b7b355c0846f72ca48e20d84a1738b812ed04e2da6999faa9  apps/api/src/meals/drafts/meal-draft-wire.ts
+  d8028ad7a16592f5e1377a146100a3159f925f0c66f6cd86679afaf2a003d1a5  apps/api/src/runs/interpretation/bounded-fetch.ts
+  0859a64361a5f085d23b8991172dfc341288c282e0cf0ab191c7b5eeca840604  packages/contracts/dist/daily-metrics.js
+  c5a1ba57afacd716172004aafbd3a79db7130ee63f374c6a82a83cd7ebc5a0cc  packages/contracts/dist/meal-draft.js
+  02b4fd08d2686a9096c2c9d8fef181a4fef2ae04aa0bba3231691a98262c3239  packages/contracts/dist/meals.js
+  0574e6e01523bcace72fa57104f4dc6b792fb6a824eaedc633c3bed27a14c2e8  packages/contracts/dist/primitives.js
+Prompt: meal-draft-prompt-1 digest f53aeae55420c9079ae6ac68f6b8b618f8afd1fec9f6777a84a72dd603ad2fb5; wire schema meal_draft_evidence_v1
+Safety corpus digest (pinned): 35a514372d3b4f6ea4151ed6f3cf25dc705f2a81663e3669f3f0c0b41c007c43
+Challenge set digest: f521a88f39e70600e30eeeb8bda9057d2121752d8bbdfb463bf1c821ba078f26
+Model gate thresholds (unchanged): {"frozenOn":"2026-11-16","maxIncorrectAccepted":0,"maxTechnicalFailureRate":0.1,"minExtractionRecall":0.85,"minOutcomeAccuracy":0.85,"requiredSets":["development","heldout"]}
+Dataset registry: {"1":{"development":{"caseCount":20,"digest":"7081d147294698185b8ba87c3ef98f4770c51a9aa72e2ecf22ff98f0cf9e2951","file":"meal-draft.development.v1.json"},"heldout":{"caseCount":20,"digest":"be55bcaf7c6b1707818a1137eddc7f0d160bc077c5ede7842a3c952e04863b85","file":"meal-draft.heldout.v1.json"}},"2":{"development":{"caseCount":20,"digest":"ecfb74b45fba8870d509f72b6650154a27de31aff5406343013e20613c2c7559","file":"meal-draft.development.v2.json"},"heldout":{"caseCount":20,"digest":"7248ab7f5c2694818b6f7dcca7becb08fc72870b786b344b1838bac54dfd14c0","file":"meal-draft.heldout.v2.json"}}}
+v1 development: file apps/api/evaluation/meal-draft.development.v1.json bytes sha256 064ce4129f9b2b9b279442d250865dbebc8c90d4300efe9eca3e87b4d82e9dac; parsed digest 7081d147294698185b8ba87c3ef98f4770c51a9aa72e2ecf22ff98f0cf9e2951 (pinned equal); 20 cases
+  languages {"en":10,"ru":10}; outcomes {"draft":16,"clarify":2,"unsupported":2}; expected values {"en":8,"ru":8}
+  categories {"grounded":2,"title-only":2,"zero":2,"decimal":2,"food-quantity":2,"per-portion":2,"conflicting":1,"negation":1,"multiple-meals":1,"prompt-injection":1,"ambiguous":1,"estimate-request":1,"not-a-meal":1,"no-food":1}
+v1 heldout: file apps/api/evaluation/meal-draft.heldout.v1.json bytes sha256 28dcf2fa704aa77e75be35cff2097eb996130b195b3e67900fec525a3460ecb4; parsed digest be55bcaf7c6b1707818a1137eddc7f0d160bc077c5ede7842a3c952e04863b85 (pinned equal); 20 cases
+  languages {"en":10,"ru":10}; outcomes {"draft":17,"clarify":2,"unsupported":1}; expected values {"en":8,"ru":7}
+  categories {"grounded":2,"title-only":2,"zero":2,"decimal":2,"per-portion":2,"ambiguous":2,"unit":1,"multiple-meals":2,"prompt-injection":1,"food-quantity":1,"conflicting":1,"negation":1,"not-a-meal":1}
+v2 development: file apps/api/evaluation/meal-draft.development.v2.json bytes sha256 9c2e6c4e460bb7bed9cb7e95807d671ffa8811ea46da47eb1264a1e40fae2011; parsed digest ecfb74b45fba8870d509f72b6650154a27de31aff5406343013e20613c2c7559 (pinned equal); 20 cases
+  languages {"en":10,"ru":10}; outcomes {"draft":17,"unsupported":1,"clarify":2}; expected values {"en":16,"ru":14}
+  categories {"grounded":2,"range":1,"title-only":1,"zero":1,"multiline":2,"food-quantity":1,"container-consumed":1,"per-portion":2,"instruction":1,"estimate-request":1,"bound":1,"decimal":1,"batch-unresolved":1,"conflicting":1,"unit":1,"multiple-meals":1,"no-food":1}
+    en-dev2-grounded-semicolon [en grounded] draft title~["bass"] type=dinner kcal=640 protein=38 carbs=52 fat=27
+    en-dev2-range-to [en range] draft title~["oats"] type=null kcal=null protein=null carbs=46 fat=null
+    en-dev2-title-only [en title-only] draft title~["halloumi"] type=null kcal=null protein=null carbs=null fat=null
+    en-dev2-zero-reordered [en zero] draft title~["celery"] type=snack kcal=18 protein=0.7 carbs=null fat=0
+    en-dev2-multiline-lines [en multiline] draft title~["turkey","sandwich"] type=lunch kcal=530 protein=34 carbs=41 fat=null
+    en-dev2-food-weights-parenthesised [en food-quantity] draft title~["cottage"] type=breakfast kcal=360 protein=25 carbs=null fat=null
+    en-dev2-saucepan-then-consumed [en container-consumed] draft title~["lentil","curry"] type=dinner kcal=375 protein=16 carbs=null fat=null
+    en-dev2-per-bar-multiply [en per-portion] draft title~["granola"] type=null kcal=null protein=null carbs=null fat=null
+    en-dev2-assistant-instruction [en instruction] draft title~["caesar"] type=lunch kcal=560 protein=null carbs=null fat=null
+    en-dev2-estimate-question [en estimate-request] unsupported estimate_requested
+    ru-dev2-grounded-genitive [ru grounded] draft title~["капуст"] type=lunch kcal=480 protein=36 carbs=40 fat=15
+    ru-dev2-bound-ne-bolshe [ru bound] draft title~["суп"] type=null kcal=null protein=14 carbs=null fat=null
+    ru-dev2-decimal-two-places [ru decimal] draft title~["ряженк"] type=null kcal=134.4 protein=6.1 carbs=null fat=null
+    ru-dev2-multiline-unit-first [ru multiline] draft title~["блины"] type=breakfast kcal=480 protein=22 carbs=null fat=19
+    ru-dev2-cooked-pot-unresolved [ru batch-unresolved] draft title~["борщ"] type=null kcal=null protein=null carbs=null fat=22
+    ru-dev2-recount-conflict [ru conflicting] draft title~["шакшука"] type=null kcal=null protein=24 carbs=null fat=null
+    ru-dev2-label-piece-then-consumed [ru per-portion] draft title~["сырки"] type=null kcal=300 protein=null carbs=null fat=null
+    ru-dev2-unsupported-units [ru unit] draft title~["каша"] type=null kcal=null protein=null carbs=null fat=4
+    ru-dev2-two-meals-no-type-words [ru multiple-meals] clarify multiple_meals
+    ru-dev2-unnamed-food [ru no-food] clarify no_food_named
+v2 heldout: file apps/api/evaluation/meal-draft.heldout.v2.json bytes sha256 bf3ed0b1bf52e34b71f28a7b92d281605314b95c0c2601623f8b09f12b4049f1; parsed digest 7248ab7f5c2694818b6f7dcca7becb08fc72870b786b344b1838bac54dfd14c0 (pinned equal); 20 cases
+  languages {"en":10,"ru":10}; outcomes {"draft":18,"unsupported":2}; expected values {"en":16,"ru":12}
+  categories {"multiline":1,"reordered":1,"conflicting":1,"unit":1,"container-consumed":2,"competing-construction":1,"bound":1,"range":2,"batch-unresolved":1,"food-quantity":2,"grounded":1,"zero":1,"title-only":1,"per-portion":1,"instruction":1,"estimate-request":1,"not-a-meal":1}
+    en-ho2-multiline-heading [en multiline] draft title~["chickpea"] type=null kcal=470 protein=19 carbs=58 fat=14
+    en-ho2-reordered-mixed-forms [en reordered] draft title~["poke"] type=null kcal=610 protein=34 carbs=62 fat=21
+    en-ho2-correction-conflict [en conflicting] draft title~["salad"] type=null kcal=null protein=41 carbs=null fat=null
+    en-ho2-kilojoules-and-precision [en unit] draft title~["smoothie"] type=null kcal=null protein=null carbs=30.4 fat=null
+    en-ho2-batch-then-consumed [en container-consumed] draft title~["tomato","soup"] type=null kcal=300 protein=9 carbs=null fat=null
+    en-ho2-competing-saucepan [en competing-construction] draft title~["chili"] type=null kcal=null protein=27 carbs=null fat=null
+    en-ho2-bound-at-most [en bound] draft title~["burger"] type=null kcal=null protein=29 carbs=null fat=null
+    en-ho2-either-or-alternative [en range] draft title~["tacos"] type=null kcal=null protein=null carbs=null fat=18
+    en-ho2-cooked-pan-unresolved [en batch-unresolved] draft title~["paella"] type=null kcal=null protein=15 carbs=null fat=null
+    en-ho2-food-weights-only [en food-quantity] draft title~["chicken"] type=null kcal=null protein=null carbs=null fat=null
+    ru-ho2-dinner-verb [ru grounded] draft title~["форел"] type=dinner kcal=610 protein=44 carbs=null fat=26
+    ru-ho2-zero-second-sentence [ru zero] draft title~["скумбри"] type=snack kcal=220 protein=null carbs=0 fat=15.5
+    ru-ho2-title-only [ru title-only] draft title~["драники"] type=null kcal=null protein=null carbs=null fat=null
+    ru-ho2-food-weights-then-values [ru food-quantity] draft title~["говядин"] type=dinner kcal=560 protein=48 carbs=null fat=null
+    ru-ho2-pack-half-eaten [ru per-portion] draft title~["десерт"] type=null kcal=null protein=null carbs=null fat=null
+    ru-ho2-pot-label-then-consumed [ru container-consumed] draft title~["щи"] type=lunch kcal=400 protein=18 carbs=null fat=null
+    ru-ho2-model-instruction [ru instruction] draft title~["лагман"] type=dinner kcal=640 protein=null carbs=null fat=null
+    ru-ho2-ot-do-range [ru range] draft title~["хачапури"] type=null kcal=null protein=31 carbs=null fat=null
+    ru-ho2-meal-then-estimate [ru estimate-request] unsupported estimate_requested
+    ru-ho2-shopping-list [ru not-a-meal] unsupported not_a_meal
+Evaluator code (working-tree bytes, sha256):
+  5298f986032a966bb08121c78f8553cfcba8d6ee3de239f8c4e40e37af1d7b8f  apps/api/src/evaluation/meal-draft-challenge.spec.ts
+  156d5d5b56be400f769481bde6fc316f24a8b37acfb5280208683ed73d0a4b5d  apps/api/src/evaluation/meal-draft-challenge.ts
+  d89d0e86e43555fbd2a84df7e3a1e48e4111c59ee4f3e1ad48e2c00716397b28  apps/api/src/evaluation/meal-draft-evaluation-cli.ts
+  9859cb6e186453d36c39822cacc0cd3ec332b46e6ed7cf8618bf50d7d2aaf31d  apps/api/src/evaluation/meal-draft-evaluation-main.ts
+  b8e7ae9d8544fbc81253c17a281123e943f069bc67cc8f6a1666eb3050fad2e0  apps/api/src/evaluation/meal-draft-evaluation.spec.ts
+  2484241efce2934a1a1e384a5a7a452baee4a84cd4fbadaecc091b3066107ec4  apps/api/src/evaluation/meal-draft-evaluation.ts
+  7a5ab56829e86832424d76eaebd7fa309400baff7204ef22791d6f9269834359  apps/api/src/evaluation/meal-draft-gates.spec.ts
+  b2fd51251a6e8bd8f57b32d154a82cfa10618222f0604102a7ce14d51e577d86  apps/api/src/evaluation/meal-draft-gates.ts
+  d16e95b301b91e118bc98e7f60f67aea54352f495f45f551614cb10c0553b41c  apps/api/src/evaluation/meal-draft-metadata.ts
+  dd27ac0177526b53b7e8ffd0729899048d3cd3a72b7c42f9ac1c2240a5076908  apps/api/src/evaluation/meal-draft-profile.ts
+  102ad06362a1893082cdc8c7f9a0853046f3e6773eb6c48db0c55cf352a851aa  apps/api/src/evaluation/meal-draft-provenance.spec.ts
+  6afe14b6478785ebe7fca901f78be30a313fed471372c273803b2c4fecf7482a  apps/api/src/evaluation/meal-draft-safety.spec.ts
+  5cb32bccc954169a4531021c50192bb12be3e9e80d4ddd22480a9ae0277df28f  apps/api/src/evaluation/meal-draft-safety.ts
+Ollama /api/ps after the runs: {"models":[{"name":"qwen3:8b","model":"qwen3:8b","size":5945667091,"digest":"500a1f067a9f782620b40bee6f7b0c89e17ae61f686b92c24933e4ca4b2b8b41","details":{"parent_model":"","format":"gguf","family":"qwen3","families":["qwen3"],"parameter_size":"8.2B","quantization_level":"Q4_K_M"},"expires_at":"2026-11-18T09:55:28.0780691+01:00","size_vram":0,"context_length":4096,"runner":"llamacpp"}]}
