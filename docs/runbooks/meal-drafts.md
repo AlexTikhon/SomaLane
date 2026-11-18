@@ -97,6 +97,7 @@ experimentation only**; it is not a product, safety or generalisation claim, and
 
 ```text
 npm run eval:meal-drafts -- --set safety --out .local/eval/safety.json                 # verifier corpus, no model
+npm run eval:meal-drafts -- --set challenge --out .local/eval/challenge.json           # vessel-scope challenge set, no model, not a gate input
 npm run eval:meal-drafts -- --set development --provider fake                           # harness self-check, NOT model evidence
 npm run eval:meal-drafts -- --set development --provider ollama --dry-run
 npm run eval:meal-drafts -- --set development --provider ollama --max-calls 20 --out .local/eval/dev.json
@@ -139,21 +140,26 @@ change that fixes only some findings is judged by what it was meant to fix (the 
 every positive control still correct); the verifier gate stays FAIL until every forbidden acceptance in the corpus is
 gone. The v1
 held-out set was first run on 2026-11-14 and has been examined, so later runs of it are **regression measurements**, not
-fresh held-out evidence. A fake run is labelled as harness verification and is never quoted as model quality. Results:
-[meal-draft-container-relation-2026-11-17.md](../reports/meal-draft-container-relation-2026-11-17.md) (**current**:
-after the Amendment 6 correction and its adjacency, clause-classification, food-qualifier and unknown-qualifier
-follow-ups (current fingerprint `69ac4e55…`), verifier **PASS**, 0 forbidden values, controls 21/21, no
-corpus case changed; **no current model evidence**: its `qwen3:8b` 40-call reports (model PASS, marginal, outcome 34/40
-= 85.0 %) were measured at fingerprint `e410e3f0…` and are stale since the follow-up moved it to `f26e9239…`; the model
-gate FAILs for evidence until a new 40-call run),
+fresh held-out evidence. A fake run is labelled as harness verification and is never quoted as model quality. The
+vessel-scope **challenge set** (`--set challenge`, `apps/api/evaluation/meal-draft.challenge.v1.json`) is an engineering
+challenge and regression set written with the policy ([docs/meal-draft-vessel-scope-policy.md](../meal-draft-vessel-scope-policy.md));
+it fixes reason codes as well as values, is reported separately, never feeds a gate and is not held-out evidence. Results:
+[meal-draft-vessel-scope-2026-11-17.md](../reports/meal-draft-vessel-scope-2026-11-17.md) (**current**: ADR-0092
+Amendment 7, one vessel-scope analysis, with the 2026-11-18 overlapping-constructions follow-up; fingerprint
+`9a069010…`; verifier **PASS**, 0 of 191, controls 21/21; challenge set PASS; **model gate FAIL, evidence stale**
+(`FINGERPRINT_MISMATCH`): its 40-call `qwen3:8b` v1 regression run, a marginal PASS at outcome 34/40 = 85.0 %, was
+measured at the previous fingerprint `eb22d827…`, and no model run has been made since the follow-up),
+[meal-draft-container-relation-2026-11-17.md](../reports/meal-draft-container-relation-2026-11-17.md) (superseded: the
+Amendment 6 correction and its follow-ups; its model reports were measured at fingerprint `e410e3f0…` and are stale),
 [meal-draft-container-scope-2026-11-16.md](../reports/meal-draft-container-scope-2026-11-16.md) (Amendment 6; its
 model reports are stale since the correction, fingerprint `c1d44a46…`),
 [meal-draft-evaluation-2026-11-16.md](../reports/meal-draft-evaluation-2026-11-16.md) (the checkpoint after the four
 grounding amendments, and Amendment 5) and
-[meal-draft-model-evaluation-2026-11-14.md](../reports/meal-draft-model-evaluation-2026-11-14.md) (historical). The
-current model PASS is regression evidence on the examined v1 sets, not fresh held-out evidence; it permits further local
-experimentation only, and **the feature stays off by default**. Any later change to a fingerprinted file makes those
-reports stale again, and the model gate FAILs until a new 40-call run.
+[meal-draft-model-evaluation-2026-11-14.md](../reports/meal-draft-model-evaluation-2026-11-14.md) (historical). No
+current model evidence exists: the last model PASS (fingerprint `eb22d827…`) was regression evidence on the examined v1
+sets, not fresh held-out evidence, and is stale since the 2026-11-18 follow-up. The model gate FAILs until a new 40-call
+run at the current fingerprint, and **the feature stays off by default**. Any later change to a fingerprinted file makes
+model reports stale again in the same way.
 
 ## Troubleshooting
 

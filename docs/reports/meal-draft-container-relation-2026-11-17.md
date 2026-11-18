@@ -1,5 +1,10 @@
 # Meal draft: whole-vessel context needs a relationship, and a v1 regression rerun (2026-11-17)
 
+> **Superseded (later on 2026-11-17).** The vessel rules recorded here, including all five update notes below, were
+> rebuilt as one analysis shared by proposals and conflict detection (ADR-0092 Amendment 7). Current policy:
+> [docs/meal-draft-vessel-scope-policy.md](../meal-draft-vessel-scope-policy.md); current results and model evidence:
+> [meal-draft-vessel-scope-2026-11-17.md](meal-draft-vessel-scope-2026-11-17.md). This report stays as history.
+
 A correction of ADR-0092 Amendment 6 (container scope). Deterministic grounding only; the prompt, wire schema, public
 contracts, reason codes, provider defaults and the off-by-default setting are unchanged, as are the frozen datasets,
 the safety corpus, the gate thresholds and every earlier artifact. Workstation evidence only (Windows 11, Node.js 24.11.1,
@@ -66,6 +71,43 @@ CPU); no hosted CI run and no physical device.
 > direction, but over-abstention), e.g. "Soup, 300 kcal. Whole pot went back on the shelf." withholds 300. Every listed
 > action word makes its clause an action, even when the clause also names food ("Сварила полную кастрюлю супа\n900 ккал"
 > proposes 900, as "Cooked in a full pot" did before). The classification is wording only, not understanding.
+>
+> **Update, per-mention attribution and batch preparation (fifth follow-up, 2026-11-17).** Two defects remained. (1)
+> Conflict detection decided vessel context for the whole text, so one confirmed vessel statement anywhere took an
+> unresolved figure out of the scan: "Whole pot blorped\n900 kcal. The whole pan has protein 80 g. In total I ate 300
+> kcal." proposed 300. Vessel context now leaves a value out of the conflict scan only when THAT value is attributed to
+> a confirmed vessel: it lies in the statement (same line, same sentence) of a `WHOLE_CONTAINER` construction or of a
+> figure beside a label, and it is not a figure beside a vessel clause that is unresolved or an action. Per-portion
+> qualifiers, nutrition labels, packages and partial amounts stay global, and so does the proposal policy (vessel
+> context anywhere still withholds every value without explicit scope). (2) Every English cooking verb before the
+> vessel, and every Russian finite cooking verb, made the clause an unrelated action, so a prepared batch proposed its
+> figure. A cooking verb is now an action only when the vessel follows a locative preposition ("in/into/on a full pot",
+> "в полной кастрюле"); otherwise ("cooked a full pot of soup", "сварила полную кастрюлю супа") the attribution is
+> unresolved. Cleaning and handling words are unchanged.
+>
+> | Reproduction or control (claim) | Before (HEAD `855a1bc`) | After |
+> |---|---|---|
+> | "Whole pot blorped\n900 kcal. In total I ate 300 kcal." (300) | withheld `conflicting` | withheld `conflicting` |
+> | "Whole pot blorped\n900 kcal. The whole pan has protein 80 g. In total I ate 300 kcal." (300) | **proposed 300** | withheld `conflicting` |
+> | "I cooked a full pot of soup.\n900 kcal" (900) | **proposed 900** | withheld `per_portion` |
+> | "Сварила полную кастрюлю супа\n900 ккал" (900) | **proposed 900** | withheld `per_portion` |
+> | "Cooked soup in a full pot. Lunch, 300 kcal." (300) | proposed 300 | proposed 300 |
+> | "Washed the whole pan. Protein 25 g. In total I ate protein 20 g." (20) | withheld `conflicting` | withheld `conflicting` |
+> | "The whole pot has 900 kcal. In total I ate 300 kcal." (900 / 300) | `per_portion` / proposed 300 | `per_portion` / proposed 300 |
+> | "Полная кастрюля окрошки, 900 ккал. Итого съела 300 ккал." (300) | proposed 300 | withheld `conflicting` |
+> | "Полная кастрюля помыта, 900 ккал. Итого съела 300 ккал." (300) | proposed 300 | withheld `conflicting` |
+> | "Soup 900 kcal. The whole pan has protein 80 g. In total I ate 300 kcal." (300) | proposed 300 | withheld `conflicting` |
+> | "Полная кастрюля супа, 900 ккал. Итого съела 300 ккал." (300) | proposed 300 | proposed 300 |
+>
+> The last four rows are side effects, all in the direction of abstention. Verifier **PASS** (0 of 191 forbidden,
+> controls 21/21, 0 mismatches, **0 of 53 cases changed** against the fourth follow-up's report); fingerprint `69ac4e55…`
+> → `45e1821c…`; the saved model reports stay **stale**. No Ollama call. Remaining limits: a confirmed statement
+> attributes every figure on its own line and sentence ("The whole pot is 900 kcal, protein 80 g"), so a consumed
+> figure written into that same statement is attributed too (as before; it is withheld for a proposal by the global
+> policy anyway). A prepared batch with a consumed total beside it ("I cooked a full pot of soup.\n900 kcal. In total I
+> ate 300 kcal.") withholds 300 as `conflicting` rather than proposing it, because a batch is treated as unresolved, not
+> as a confirmed vessel figure. The cooking/place distinction reads a preposition directly before the vessel reference
+> and nothing else.
 
 ## Verdict
 

@@ -5255,3 +5255,114 @@ safe direction: "Soup, 300 kcal. Whole pot went back on the shelf." withholds 30
 an action even when the clause also names food ("Сварила полную кастрюлю супа\n900 ккал" proposes 900, consistent with
 the established "Cooked in a full pot" control). The rule reads wording only. Not run: `npm run verify`, Chromium, other
 integration files, any model. Changes are uncommitted.
+
+### Per-mention vessel attribution and batch preparation (2026-11-17)
+
+**What changed.** `meal-draft-grounding.ts`, vessel-scope logic only. (1) Conflict detection now attributes vessel
+context per mention (`vesselFigureAttribution`): a value leaves the scan only when it lies in the statement of a
+confirmed construction or labelled figure and is not a figure beside an unresolved or action vessel clause. Another
+confirmed vessel statement no longer takes an unresolved figure out of the scan. Per-portion, label, package and partial
+context stay global, as does the proposal policy. (2) A cooking verb is an unrelated action only when the vessel follows
+a locative preposition (`VESSEL_AS_PLACE`); a cooked whole vessel ("cooked a full pot of soup", "сварила полную кастрюлю
+супа") is unresolved. This supersedes the previous entry's limit that "Сварила полную кастрюлю супа\n900 ккал" proposes
+900. No food-name lists added. Contracts, reason codes, prompt, frozen datasets, corpus, thresholds and provider defaults
+unchanged. No Ollama call.
+
+| Reproduction (claim) | Before (HEAD `855a1bc`) | After |
+|---|---|---|
+| "Whole pot blorped\n900 kcal. In total I ate 300 kcal." (300) | withheld `conflicting` | withheld `conflicting` |
+| "Whole pot blorped\n900 kcal. The whole pan has protein 80 g. In total I ate 300 kcal." (300) | **proposed 300** | withheld `conflicting` |
+| "I cooked a full pot of soup.\n900 kcal" (900) | **proposed 900** | withheld `per_portion` |
+| "Сварила полную кастрюлю супа\n900 ккал" (900) | **proposed 900** | withheld `per_portion` |
+
+Controls unchanged: "Cooked soup in a full pot. Lunch, 300 kcal." proposes 300; "Washed the whole pan. Protein 25 g. In
+total I ate protein 20 g." `conflicting`; "The whole pot has 900 kcal. In total I ate 300 kcal." 900 `per_portion`, 300
+proposed. Side effects toward abstention (pinned by tests): "Полная кастрюля окрошки, 900 ккал. Итого съела 300 ккал.",
+"Полная кастрюля помыта, 900 ккал. Итого съела 300 ккал." and "Soup 900 kcal. The whole pan has protein 80 g. In total I
+ate 300 kcal." moved from proposed 300 to `conflicting`.
+
+| Command | Result |
+|---|---|
+| New tests in `meal-draft-grounding-container-relation.spec.ts`: per-mention attribution (both reproductions; mixed confirmed/unresolved in both statement orders, same-field and cross-field, EN/RU, LF/CRLF; global proposal policy; consumed-total controls; same-statement attribution; unresolved scanned like a plain figure under per-portion and package context) and batch preparation (reproductions, both orders, LF/CRLF/sentence ends, every field, conflict beside a consumed total, cooking-place and washing controls), against HEAD grounding | **5 of 48 failed** (first run, before any code: 4 of 47; the same-statement test was added after the first implementation pass); the controls passed |
+| `vitest run src/meals src/evaluation` after the fix | **537 passed** (19 files); no existing assertion changed |
+| `eslint` (grounding, spec, HTTP test), API `tsc --noEmit` | exit 0 / exit 0 |
+| `eval:meal-drafts -- --set safety` (unchanged corpus, report to the session scratchpad) | exit **0**, verifier **PASS**: 0 of 191 forbidden, controls 21/21, 0 mismatches; **0 of 53 cases changed** against the previous follow-up's report; fingerprint `69ac4e55…` → `45e1821c…`; saved model reports stay **stale** |
+| `meal-drafts-http.integration.test.ts` (test database identity verified by `loadIntegrationTestConfiguration`) | **32 passed** (31 + 1 new case as `userOrgA`: three mixed texts `conflicting`, two batches `per_portion`, three controls); with HEAD grounding swapped in the new case **failed** on the second reproduction (300 proposed); file restored, SHA-256 equal (`dbab8725…`) |
+| `git diff --check` | clean |
+
+Remaining limits: a confirmed statement attributes every figure on its own line and sentence, so a consumed figure
+written into that statement is attributed too (it is still withheld for a proposal). A prepared batch beside a consumed
+total ("I cooked a full pot of soup.\n900 kcal. In total I ate 300 kcal.") withholds 300 as `conflicting`, because a
+batch is unresolved rather than a confirmed vessel figure. The cooking/place distinction reads only a preposition directly
+before the vessel reference. Not run: `npm run verify`, Chromium, other integration files, any model. Changes are
+uncommitted.
+
+### Vessel-scope analysis: one analysis for proposals and conflicts (ADR-0092 Amendment 7, 2026-11-17)
+
+**Starting point.** HEAD `5795f03`, with the uncommitted fifth follow-up (per-mention attribution, batch preparation) in
+the grounding, its spec, the HTTP test, the container-relation report, the runbook and this file. Baseline on that tree:
+meals/evaluation unit 537 passed, `meal-drafts-http` 32 passed, safety verifier PASS (fingerprint `45e1821c…`).
+
+**What changed.** The vessel rules had become three competing mechanisms (a global context test, statement-wide
+attribution, "protected" exclusions) that disagreed: "Whole pot blorped\n900 kcal, protein 80 g, the whole pan has 1200
+kcal. In total I ate protein 20 g." proposed 20, and the result depended on which nutrient came first. They are now one
+analysis of the original text: nutrient mentions grouped into coordinated lists, vessel contexts attached to whole
+lists, one attribution per list (unresolved over confirmed over none), computed once per claim and read by both the
+proposal check and the conflict scan. Policy written first: `docs/meal-draft-vessel-scope-policy.md`. New modules
+`meal-draft-vessel-scope.ts`, `meal-draft-mentions.ts`, `meal-draft-lexicon.ts` (moved helpers unchanged plus list
+grouping); the superseded paths are removed. New engineering challenge set `apps/api/evaluation/meal-draft.challenge.v1.json`
+(65 cases, digest `f521a88f…` pinned before the engine change; not held-out evidence, not a gate input) with `--set
+challenge`. No contract, reason code, prompt, wire, provider default, frozen set, corpus, threshold or configuration
+changed; no migration or dependency. Closeout report: `docs/reports/meal-draft-vessel-scope-2026-11-17.md`.
+
+| Check (final code) | Result |
+|---|---|
+| New tests against the previous engine (written first) | challenge set 8 of 74 fields failed (7 unsafe acceptances, 1 missed control); invariants 2 of 32 failed; new `meal-drafts-http` case failed (20 proposed) |
+| `vitest run src/meals src/evaluation` | **581 passed** (21 files) |
+| `eval:meal-drafts -- --set safety` (unchanged corpus) | exit **0**, verifier **PASS**: 0 of 191 forbidden, controls 21/21, 0 mismatches, **0 of 53 cases changed**; fingerprint `45e1821c…` → `eb22d827…` (now covering the three new modules; four new mutation probes prove a change to each invalidates evidence) |
+| `eval:meal-drafts -- --set challenge` | exit **0**, PASS: 65 cases, 74 fields, 0 unsafe acceptances, controls 23/23, 0 reason mismatches |
+| Differential, previous vs final engine | 1,036 texts, 1,378 mention claims, 8 changed (the 8 intended challenge fixes) |
+| Test database identity (read-only probe, deleted) | `127.0.0.1:5433/running_tracker_test`, server `172.18.0.2:5432`; `current_user` = `session_user` = runtime / owner / maintenance roles; migrations current (0042) |
+| `npm run verify` (`VITEST_MAX_WORKERS=2`) | exit **0** (486 s): scripts 115, API **2,397**, web 1,334, contracts 311, fixtures 14, simulator 3 |
+| `npm run test:integration` (workers unset; throwaway backup key in the scratchpad, process scope only) | exit **0**: 79 of 79 files, **1,149 passed** (378 s) |
+| `npm run test:e2e` (Chromium + OIDC) | exit **0**: **170 passed** (15.8 min) |
+| `npm run test:e2e:firefox` | exit **0**: **18 passed** (3.4 min) |
+| `git diff --check` | clean |
+
+A first Chromium run was stopped after about a minute to remove a per-text cache of the analysis (it kept the last
+person's text in memory beyond the call); every check above was rerun on the final code. `openapi.json` shows as
+modified after the build but equals HEAD byte for byte. No pre-existing failure was found.
+
+Model evidence (after the freeze; hashes identical before and after the runs): `qwen3:8b`, 40 of 40 calls, cold,
+product defaults; `eval:meal-drafts:check` exit 0, verifier PASS, **model PASS** (marginal), 0 incorrectly accepted,
+outcome 34/40 = 85.0 %, recall 87.1 %, precision 100 %, failures 3/40; every result equal to the previous run case for
+case. Regression evidence on examined sets only; the feature stays off by default. Details in the closeout report.
+Changes are uncommitted.
+
+### Overlapping vessel constructions (ADR-0092 Amendment 7 follow-up, 2026-11-18)
+
+**Defect.** "Soup, 300 kcal, the whole pot has 900 kcal. In total I ate 900 kcal." with the claim `900` / `ate 900 kcal`
+was **proposed**. The left-to-right, non-overlapping construction scan let "300 kcal, the whole pot" take the vessel,
+confirmed 300 (out of the conflict scan) and skipped the overlapping "the whole pot has 900 kcal".
+
+**What changed.** `meal-draft-vessel-scope.ts` only: each supported construction is matched from every position.
+Readings with the same vessel words and lists are one context. Readings of one vessel word that attach to different
+lists compete and are unresolved, so every list they attach to stays in the conflict scan and is never proposed.
+Everything else is unchanged: constructions, clauses, precedence, proposal and conflict rules, contracts, reason codes,
+prompt, provider defaults, frozen sets, the challenge set and earlier artifacts. Policy section 3 ("Overlapping
+constructions") and section 4 (precedence item 4) document it. The closeout report's false claim that the overlap
+handling only caused abstention is corrected, and its follow-up section records the details.
+
+| Check (final code) | Result |
+|---|---|
+| New tests against the previous engine (written first) | 6 new invariant tests failed (values proposed instead of `conflicting`); the new `meal-drafts-http` case failed (900 proposed) |
+| `vitest run src/meals src/evaluation` | **593 passed** (21 files) |
+| Differential, previous vs new engine | 1,365 texts, 2,028 mention claims, **38 changed**, all proposed → `conflicting`, all competing-construction shapes; none in a frozen set, corpus or challenge set |
+| `eval:meal-drafts -- --set safety` / `--set challenge` (unchanged) | both exit **0** and PASS before and after; 0 of 53 and 0 of 65 per-case results changed; fingerprint `eb22d827…` → `9a069010…` |
+| `eval:meal-drafts:check` on the saved model reports | exit **2**, `FINGERPRINT_MISMATCH` for both: model evidence **stale**, no model called |
+| Test database identity (read-only) and `db:migrate:test` | `127.0.0.1:5433/running_tracker_test`, server `172.18.0.2:5432`, expected roles; migrations current (0042) |
+| `meal-drafts-http` + `meals-access` integration | **86 passed** |
+| `npm run verify` (`VITEST_MAX_WORKERS=2`) | exit **0** (432 s): scripts 115, API **2,409**, web 1,334, contracts 311, fixtures 14, simulator 3 |
+| `git diff --check` | clean |
+
+Not run: the full integration suite, the browser suites, any model. Changes are uncommitted.

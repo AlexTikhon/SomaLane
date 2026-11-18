@@ -1,0 +1,46 @@
+Frozen state (before): 2026-11-17T17:59:11Z
+HEAD 5795f03c3dd70893afd8f8c0e153ef4290bfe4c5 (branch main)
+git status --short:
+ M apps/api/src/evaluation/meal-draft-evaluation-cli.ts
+ M apps/api/src/evaluation/meal-draft-gates.spec.ts
+ M apps/api/src/meals/drafts/meal-draft-grounding-container-relation.spec.ts
+ M apps/api/src/meals/drafts/meal-draft-grounding.ts
+ M apps/api/test/meal-drafts-http.integration.test.ts
+ M docs/adr/0092-meal-draft-from-text.md
+ M docs/progress.md
+ M docs/reports/meal-draft-container-relation-2026-11-17.md
+ M docs/runbooks/meal-drafts.md
+ M packages/contracts/openapi/openapi.json
+?? apps/api/evaluation/meal-draft.challenge.v1.json
+?? apps/api/src/evaluation/meal-draft-challenge.spec.ts
+?? apps/api/src/evaluation/meal-draft-challenge.ts
+?? apps/api/src/meals/drafts/meal-draft-grounding-vessel-invariants.spec.ts
+?? apps/api/src/meals/drafts/meal-draft-lexicon.ts
+?? apps/api/src/meals/drafts/meal-draft-mentions.ts
+?? apps/api/src/meals/drafts/meal-draft-vessel-scope.ts
+?? docs/meal-draft-vessel-scope-policy.md
+?? docs/reports/artifacts/meal-draft-vessel-scope-2026-11-17/
+?? docs/reports/meal-draft-vessel-scope-2026-11-17.md
+SHA-256 (working tree bytes):
+5aba45678f1b35114824d35905bfe86229af8bf36ddf67afc41f94b576395c37 *apps/api/src/meals/drafts/meal-draft-grounding.ts
+a5c774be7aef66e22f76d82cce99d3c102ee637b942becad870218a2740c19c1 *apps/api/src/meals/drafts/meal-draft-vessel-scope.ts
+8299afec0ffded6dfdf9a9dd0c235e8c89110f54c6186df32763912d0b926b92 *apps/api/src/meals/drafts/meal-draft-mentions.ts
+e63fe7581e1283b3634250fc6c934af75619d2f0ad58fc0718de8bf1805d5993 *apps/api/src/meals/drafts/meal-draft-lexicon.ts
+c374100b34179dfd6ebfb79f9144348d24029432e4ed2617da8fa17439638ed7 *apps/api/src/meals/drafts/meal-draft-prompt.ts
+893910b98d23e26b7b355c0846f72ca48e20d84a1738b812ed04e2da6999faa9 *apps/api/src/meals/drafts/meal-draft-wire.ts
+c7fb51b21977b69d48ceadc095125bb66e79f04f8fbd0e9f2ac50339c7dad171 *apps/api/src/insights/ollama-provider.ts
+d9611b15450edac57a28adbeb4aac0f6ad5a62762123a34891fe4bd9a548a9e2 *apps/api/src/config/meal-drafts-config.ts
+064ce4129f9b2b9b279442d250865dbebc8c90d4300efe9eca3e87b4d82e9dac *apps/api/evaluation/meal-draft.development.v1.json
+28dcf2fa704aa77e75be35cff2097eb996130b195b3e67900fec525a3460ecb4 *apps/api/evaluation/meal-draft.heldout.v1.json
+002ae63eea3a4326b76c6786cb137773367a8ea4f4be138c7196194e60b7b8cf *apps/api/evaluation/meal-draft.safety.v1.json
+09d3231fabc76afcd03c651a884310a68858583ad25e7b00bf6e2ca597d8f1a8 *apps/api/evaluation/meal-draft.challenge.v1.json
+e5391212f2a61ceb29ee71992832ae50420d1f74e342c3101bf102dc0a997f4d *apps/api/src/evaluation/meal-draft-gates.ts
+8a1741ca6aaa2b6733c3c3aa72c5eb5a2084e20ba0146c6b3fd976cbb9bc2273 *apps/api/src/evaluation/meal-draft-evaluation.ts
+warning: in the working copy of 'apps/api/src/evaluation/meal-draft-evaluation-cli.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'apps/api/src/evaluation/meal-draft-gates.spec.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'apps/api/src/meals/drafts/meal-draft-grounding.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'apps/api/test/meal-drafts-http.integration.test.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/contracts/openapi/openapi.json', LF will be replaced by CRLF the next time Git touches it
+git diff HEAD (tracked) sha256: 3cfeca0aab78ebdbacda988c145b7101c92065e1b1362e0ac76a73122a054394
+Settings: MEAL_DRAFTS_MODEL=qwen3:8b; every other MEAL_DRAFTS_* unset (product defaults)
+Ollama: {"version":"0.40.16"}; /api/ps: {"models":[]}

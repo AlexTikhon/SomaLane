@@ -2,8 +2,9 @@
 
 - Status: accepted; implemented and verified locally (unit, real PostgreSQL integration, Chromium end-to-end with the
   fake provider). Real-model evaluation: see "Evaluation" (historical, before the grounding corrections) and, for the
-  current code, "Amendment 6" and its "Amendment 6 correction" of 2026-11-17 (verifier PASS; model PASS, marginal,
-  regression evidence on the corrected code). The feature is **off by default**.
+  current code, "Amendment 7" of 2026-11-17 and its 2026-11-18 follow-up (verifier PASS; challenge set PASS; model
+  evidence **stale** since the follow-up: the marginal model PASS of 2026-11-17 was measured at the previous fingerprint,
+  so the model gate FAILs until a new 40-call run). The feature is **off by default**.
 - Amended: 2026-11-14, grounding corrections (qualifier scope, signs, exact decimals); see "Amendment" below.
 - Amended again: 2026-11-14, second grounding correction (a label's "total", ranges split by a line break); see
   "Amendment 2" below.
@@ -32,6 +33,9 @@
   longer container context; only a vessel related to a figure is): verifier **PASS** (no corpus case changed); one v1
   regression rerun (`qwen3:8b`, 40 calls) gives model **PASS**, marginal, with the new fingerprint; a regression in the
   unsafe direction found after the freeze is recorded, not corrected; see "Amendment 6 correction" below.
+- Amended a seventh time: 2026-11-17, one vessel-scope analysis shared by proposals and conflict detection (the vessel
+  rules of Amendment 6 and its follow-ups rebuilt on explicit mention lists and per-list attribution, policy in
+  [docs/meal-draft-vessel-scope-policy.md](../meal-draft-vessel-scope-policy.md)); see "Amendment 7" below.
 - Date: 2026-11-14
 - Relates to: ADR-0083 (the meal log, its contract, idempotent creation per form session, `source: manual`, erasure),
   ADR-0057 and its addendum (proposals that change nothing until accepted; admission; request and operation lifetimes),
@@ -889,6 +893,60 @@ the withheld list to the positive controls ("Washed the whole pan, then soup 300
 failed with the committed grounding swapped in and passes after it. Report:
 [meal-draft-container-relation-2026-11-17.md](../reports/meal-draft-container-relation-2026-11-17.md); artifacts in
 `docs/reports/artifacts/meal-draft-container-relation-2026-11-17/`; full check list in `docs/progress.md`.
+
+## Amendment 7: one vessel-scope analysis for proposals and conflicts (2026-11-17)
+
+**Supersedes** the vessel rules of Amendment 6, its correction and the four follow-ups recorded under it (adjacency,
+clause classification, Russian food qualifier, unknown qualifier, per-mention attribution): their accepted behaviour is
+kept, their mechanism is replaced. The authoritative policy is
+[docs/meal-draft-vessel-scope-policy.md](../meal-draft-vessel-scope-policy.md); the closeout report is
+[meal-draft-vessel-scope-2026-11-17.md](../reports/meal-draft-vessel-scope-2026-11-17.md). Unchanged: endpoint, response
+shape, reason codes, wire schema, prompt (`meal-draft-prompt-1`), public contracts, provider defaults, off by default,
+apply/save, provenance, titles and meal types, exact decimals, bounds, negations, ranges, units, instructions, the
+per-portion and package policy, the frozen v1 sets, the safety corpus and the gate thresholds. No dependency, no
+migration.
+
+**Decision.** The grounding analyses the original text once into nutrient **mentions** (field, exact decimal, span)
+grouped into coordinated **lists**, and vessel **contexts** (supported constructions, labels, explicit actions,
+unresolved clauses) that attach to whole lists. Each list gets one attribution by a fixed precedence (unresolved over
+confirmed over none; an action alone changes nothing). The proposal check withholds every attributed mention and applies
+the existing global consumed-total rule whenever vessel context exists; the conflict scan leaves out only mentions
+excluded by the per-portion/package rule and mentions attributed to a confirmed vessel. Both read the same analysis, so a
+value can leave the conflict scan only if it can never be proposed. Code: `meal-draft-vessel-scope.ts` (new),
+`meal-draft-mentions.ts` and `meal-draft-lexicon.ts` (moved helpers plus list grouping), `meal-draft-grounding.ts`.
+
+**Defect fixed.** "Whole pot blorped\n900 kcal, protein 80 g, the whole pan has 1200 kcal. In total I ate protein 20 g."
+proposed 20: the confirmed construction later on the line attributed the whole line to a vessel and only the figure next
+to the unresolved clause was protected, so the outcome depended on which nutrient came first. Every member of an
+unresolved list now stays in the conflict scan. Also: a label with figures on both sides labels neither with certainty
+(both stay in the scan), and an action sentence after a confirmed figure no longer downgrades it ("The whole pot has 900
+kcal.\nWhole pot washed afterwards. In total I ate 300 kcal." proposes 300).
+
+**Evidence.** A versioned engineering challenge set, `apps/api/evaluation/meal-draft.challenge.v1.json` (65 cases,
+frozen by digest `f521a88f…` before the engine was rebuilt; **not** held-out evidence, not a gate input), failed 8 fields
+on the previous engine and passes all 74 claimed fields after (0 unsafe acceptances, controls 23/23). The unchanged
+safety corpus: verifier **PASS**, 0 of 191, controls 21/21, 0 of 53 cases changed; fingerprint `45e1821c…` →
+`eb22d827…`, now covering the new modules. A differential run over 1,036 known texts (1,378 mention claims) changed
+exactly those 8 results. Verify, the full integration suite (1,149) and both browser suites (Chromium 170, Firefox 18)
+pass on the final code.
+
+**Model gate: one v1 regression run after the freeze** (hashes identical before and after; `qwen3:8b`, Ollama 0.40.16,
+cold, CPU, product defaults, 40 of 40 calls, no retries, no warm-up, nothing pulled): **model PASS**, marginal,
+evidence valid at fingerprint `eb22d827…`, 0 incorrectly accepted, outcome 34/40 = 85.0 % (threshold 85 %), recall
+87.1 %, precision 100 %, failures 3/40; every result equals the previous run case for case. No v1 case contains a vessel
+phrase, so this is regression evidence on examined sets only. **The feature stays off by default.** Details, the full
+check list and the limitations: the closeout report.
+
+**Follow-up: overlapping constructions (2026-11-18).** "Soup, 300 kcal, the whole pot has 900 kcal. In total I ate 900
+kcal." proposed 900. The constructions were matched left to right without overlap, so "300 kcal, the whole pot" took
+the vessel, confirmed 300 and removed it from the conflict scan, and the overlapping "the whole pot has 900 kcal" was
+never read. Every construction is now matched from every position. Readings that contain the same vessel words and
+attach to the same lists are one context. Readings of one vessel word that attach to different lists compete, and every
+list they attach to is unresolved (policy, sections 3 and 4). Equivalent readings stay confirmed ("900 kcal for the
+whole pot. In total I ate 300 kcal." still proposes 300). Contracts, reason codes, prompt, provider defaults, frozen
+sets, the challenge set and earlier artifacts are unchanged. The safety corpus and the challenge set give the same
+per-case results as before. Fingerprint `eb22d827…` → `9a069010…`, so the model reports above are **stale** and the model
+gate FAILs with `FINGERPRINT_MISMATCH`. No model was called. Results and checks: the closeout report's follow-up section.
 
 ## Consequences
 
