@@ -500,7 +500,7 @@ function periodNotes(comparison: Comparison): string[] {
 }
 
 /** The comparison section: both periods, each measure's values with coverage, and a signed change or why there is none. */
-export function activityComparisonView(trends: ActivityTrends): ActivityComparisonView | null {
+export function activityComparisonView(trends: Pick<ActivityTrends, 'comparison' | 'source' | 'summary'>): ActivityComparisonView | null {
   const comparison = trends.comparison;
   if (comparison === undefined) return null;
   const source = trends.source;

@@ -1,5 +1,6 @@
 import type {
   ActivityHistorySource,
+  ActivityType,
   DailyOverview,
   DailyOverviewCheckIn,
   DailyOverviewDay,
@@ -29,7 +30,11 @@ export type TodayAction =
    * The activity history filtered to the overview's date, in the overview's zone, and to the source behind one card
    * (ADR-0088): the actual items behind that card's figures.
    */
-  | { kind: 'history'; localDate: string; source: ActivityHistorySource; timeZone: string };
+  | { kind: 'history'; localDate: string; source: ActivityHistorySource; timeZone: string }
+  /** The weekly review of one week, opened from an "Ask my data" answer (ADR-0094). */
+  | { kind: 'weekly-review'; weekStart: string }
+  /** Trends' Activity section on one source and type, its range ending on the date (ADR-0094; ADR-0089/0090). */
+  | { kind: 'activity-trends'; localDate: string; source: ActivityHistorySource; type: ActivityType };
 
 export interface LabelledValue {
   label: string;

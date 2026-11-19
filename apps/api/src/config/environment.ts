@@ -19,6 +19,12 @@ import {
 } from './run-search-ai-config.js';
 import { resolveSecretFiles } from './secret-files.js';
 import {
+  buildDataQuestionsConfig,
+  checkDataQuestionsEnvironment,
+  dataQuestionsEnvironmentFields,
+  withoutDataQuestionsFields,
+} from './data-questions-config.js';
+import {
   buildMealDraftsConfig,
   checkMealDraftsEnvironment,
   mealDraftsEnvironmentFields,
@@ -287,6 +293,7 @@ const environmentSchema = z
     ...runSearchAiEnvironmentFields,
     ...weeklyInsightsEnvironmentFields,
     ...mealDraftsEnvironmentFields,
+    ...dataQuestionsEnvironmentFields,
   })
   .superRefine((environment, context) => {
     let runtime: ParsedDatabaseConnection | undefined;
@@ -416,21 +423,26 @@ const environmentSchema = z
     checkRunSearchAiEnvironment(environment, environment, context);
     checkWeeklyInsightsEnvironment(environment, environment, context);
     checkMealDraftsEnvironment(environment, environment, context);
+    checkDataQuestionsEnvironment(environment, environment, context);
   })
   // The raw OIDC_*, RUN_SEARCH_AI_*, WEEKLY_INSIGHTS_* and MEAL_DRAFTS_* variables (including the secrets) are replaced by one
   // structured value each.
   .transform((environment) => {
-    const application = withoutMealDraftsFields(withoutWeeklyInsightsFields(withoutRunSearchAiFields(withoutOidcFields(environment))));
+    const application = withoutDataQuestionsFields(
+      withoutMealDraftsFields(withoutWeeklyInsightsFields(withoutRunSearchAiFields(withoutOidcFields(environment)))),
+    );
     const oidc = buildOidcConfig(environment);
     const runSearchAi = buildRunSearchAiConfig(environment);
     const weeklyInsights = buildWeeklyInsightsConfig(environment);
     const mealDrafts = buildMealDraftsConfig(environment);
+    const dataQuestions = buildDataQuestionsConfig(environment);
     return {
       ...application,
       ...(oidc ? { OIDC: oidc } : {}),
       ...(runSearchAi ? { RUN_SEARCH_AI: runSearchAi } : {}),
       ...(weeklyInsights ? { WEEKLY_INSIGHTS: weeklyInsights } : {}),
       ...(mealDrafts ? { MEAL_DRAFTS: mealDrafts } : {}),
+      ...(dataQuestions ? { DATA_QUESTIONS: dataQuestions } : {}),
     };
   });
 

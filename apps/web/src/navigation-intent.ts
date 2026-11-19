@@ -10,11 +10,14 @@ import type { TodayAction } from './daily-overview.js';
 
 export type AppView = 'activity' | 'archive' | 'checkin' | 'coach' | 'meals' | 'runner' | 'today' | 'trends';
 
-/** Opens an existing editor on one date: one of the Check-in tab's two editors, or the Meal log (ADR-0083). */
+/**
+ * Opens an existing editor on one date: one of the Check-in tab's two editors, or the Meal log (ADR-0083); or the Check-in
+ * tab's weekly review on the week starting `localDate` (ADR-0094).
+ */
 export interface EditorIntent {
   localDate: string;
   scope: string;
-  section: 'check-in' | 'meals' | 'movement';
+  section: 'check-in' | 'meals' | 'movement' | 'weekly-review';
 }
 
 /** The date Today shows, or the end date of the Trends range (ADR-0084), kept while the person navigates elsewhere and back. */
@@ -58,7 +61,13 @@ export interface HistoryIntent {
 export function navigationFor(
   action: TodayAction,
   scope: string,
-): { editor: EditorIntent | null; history?: HistoryIntent; trendsEnd?: KeptDate; view: AppView } {
+): {
+  editor: EditorIntent | null;
+  history?: HistoryIntent;
+  trendsActivity?: KeptActivitySelection;
+  trendsEnd?: KeptDate;
+  view: AppView;
+} {
   switch (action.kind) {
     case 'check-in':
       return { editor: { localDate: action.localDate, scope, section: 'check-in' }, view: 'checkin' };
@@ -72,6 +81,15 @@ export function navigationFor(
       return { editor: null, view: 'runner' };
     case 'trends':
       return { editor: null, trendsEnd: { localDate: action.localDate, scope }, view: 'trends' };
+    case 'weekly-review':
+      return { editor: { localDate: action.weekStart, scope, section: 'weekly-review' }, view: 'checkin' };
+    case 'activity-trends':
+      return {
+        editor: null,
+        trendsActivity: { measure: 'count', scope, source: action.source, type: action.type },
+        trendsEnd: { localDate: action.localDate, scope },
+        view: 'trends',
+      };
     case 'history':
       return {
         editor: null,
@@ -81,8 +99,10 @@ export function navigationFor(
   }
 }
 
-/** The intent for the Check-in tab only (its two editors); a Meal log intent is not one. */
-export function checkInIntentOf(intent: EditorIntent | null): { localDate: string; section: 'check-in' | 'movement' } | undefined {
+/** The intent for the Check-in tab only (its two editors and its weekly review); a Meal log intent is not one. */
+export function checkInIntentOf(
+  intent: EditorIntent | null,
+): { localDate: string; section: 'check-in' | 'movement' | 'weekly-review' } | undefined {
   if (intent === null || intent.section === 'meals') return undefined;
   return { localDate: intent.localDate, section: intent.section };
 }

@@ -317,7 +317,7 @@ describe('Today screen', () => {
     const signal = new AbortController().signal;
     const screen = (selectedDate: string | null) =>
       renderToStaticMarkup(
-        <TodayScreen nowMs={nowMs} onAction={noop} onSelectDate={noop} orgId="org" read={read} selectedDate={selectedDate} signal={signal} timeZone="Europe/Warsaw" />,
+        <TodayScreen csrf={{ headerName: 'x-csrf-token', token: 'csrf' }} nowMs={nowMs} onAction={noop} onSelectDate={noop} orgId="org" read={read} selectedDate={selectedDate} signal={signal} timeZone="Europe/Warsaw" />,
       );
     expect(screen(DAY)).toContain('value="2026-11-05"');
     expect(screen(null)).toContain('value="2026-11-08"');

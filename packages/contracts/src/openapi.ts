@@ -23,6 +23,15 @@ import {
 import { dailyOverviewSchema } from './daily-overview.js';
 import { ACTIVITY_TRENDS_COMPARISON_MODES, ACTIVITY_TRENDS_COMPARISON_REASONS, activityTrendsSchema } from './activity-trends.js';
 import { dailyTrendsSchema } from './daily-trends.js';
+import {
+  dataQuestionAnswerRequestSchema,
+  dataQuestionAnswerSchema,
+  dataQuestionCapabilitiesSchema,
+  dataQuestionInterpretationRequestSchema,
+  dataQuestionInterpretationResponseSchema,
+  dataQuestionPlanRequestSchema,
+  dataQuestionPlanResponseSchema,
+} from './data-questions.js';
 import { mealDraftProposalRequestSchema, mealDraftProposalResponseSchema } from './meal-draft.js';
 import {
   createMealRequestSchema,
@@ -136,6 +145,7 @@ export const openApiDocument = {
     { name: 'Meals' },
     { name: 'Daily overview' },
     { name: 'Daily trends' },
+    { name: 'Data questions' },
     { name: 'Insights' },
     { name: 'Shares' },
     { name: 'Live reads' },
@@ -595,6 +605,52 @@ export const openApiDocument = {
           parameterRef('Cursor'),
         ],
         responses: { '200': jsonResponse('One page of the history.', 'ActivityHistoryResponse'), ...defaultErrors },
+      },
+    },
+    '/api/orgs/{orgId}/data-questions/capabilities': {
+      get: {
+        tags: ['Data questions'],
+        summary: 'Whether question interpretation is available on this server ("Ask my data", ADR-0094)',
+        description:
+          'Says only `available` or `off`; no provider, model or address is disclosed. Predefined questions (POST .../plans, then .../answers) work in both cases. Owner-only route boundary like the other health-data routes. Answers `Cache-Control: no-store`, errors included.',
+        parameters: [parameterRef('OrgId')],
+        responses: { '200': jsonResponse('The interpretation capability.', 'DataQuestionCapabilities'), ...defaultErrors },
+      },
+    },
+    '/api/orgs/{orgId}/data-questions/plans': {
+      post: {
+        tags: ['Data questions'],
+        summary: 'Resolve a symbolic question intent into an executable plan with explicit dates (no model, no data read)',
+        description:
+          "Deterministic (ADR-0094). The intent names one of three operations (`day_overview`, `weekly_review` with a focus, `activity_comparison` with ONE explicit source and ONE type) and a symbolic period (`selected_date`, `today`, `yesterday`; `selected_week`, `current_week`, `previous_week`). The server resolves it with its own clock in the request's `timeZone` (never the host's): today and yesterday are dates in that zone, weeks run Monday to Sunday, and the comparison's periods are the existing activity-trends periods for its end date. `selectedDate` must not be before 2000-01-01 nor after today in `timeZone` (400 INVALID_REQUEST), and the resolved date or week must satisfy the same rules. The membership is checked; no health record is read. Unknown fields are refused. Answers `Cache-Control: no-store`, errors included.",
+        parameters: [parameterRef('OrgId'), ...csrfParameters],
+        requestBody: requestBody('DataQuestionPlanRequest'),
+        responses: { '200': jsonResponse('The plan to review or execute.', 'DataQuestionPlanResponse'), ...defaultErrors },
+      },
+    },
+    '/api/orgs/{orgId}/data-questions/interpretations': {
+      post: {
+        tags: ['Data questions'],
+        summary: 'Interpret an English or Russian question into a plan to review (local model, optional, off by default)',
+        description:
+          "Optional and off by default (DATA_QUESTIONS_PROVIDER=off: 503 DATA_QUESTION_INTERPRETATION_DISABLED). Sends the question text, the selected date and the zone, and nothing else (no record, result, identifier or earlier question), once to a local Ollama model whose answer may only choose closed symbolic values. The server validates and normalizes them and resolves the period itself, exactly as for POST .../plans; an activity comparison needs a source the question names explicitly (otherwise `clarify` `activity_source_missing`, with a `sourceChoice` the screen can offer). The answer is a `proposal` to review, a `clarify` or an `unsupported` reason; nothing is read and nothing runs until the person executes the plan. Failures: 429 DATA_QUESTION_RATE_LIMITED or DATA_QUESTION_IN_PROGRESS, 503 DATA_QUESTION_BUSY or DATA_QUESTION_BUDGET_EXHAUSTED, 504 DATA_QUESTION_TIMEOUT, 502 DATA_QUESTION_FAILED with `details.reason`. The membership is checked before the model call and again, with the session, before the answer is returned; no database connection is held while the model runs. Clients must not retry automatically. Nothing about the question or the answer is stored or logged. Answers `Cache-Control: no-store`, errors included.",
+        parameters: [parameterRef('OrgId'), ...csrfParameters],
+        requestBody: requestBody('DataQuestionInterpretationRequest'),
+        responses: {
+          '200': jsonResponse('A plan to review, a clarification or an unsupported reason.', 'DataQuestionInterpretationResponse'),
+          ...defaultErrors,
+        },
+      },
+    },
+    '/api/orgs/{orgId}/data-questions/answers': {
+      post: {
+        tags: ['Data questions'],
+        summary: "Execute a reviewed plan: exactly one read of the signed-in person's own daily overview, weekly review or activity comparison",
+        description:
+          "Read-only and owner-only (ADR-0094). The plan is executed with its reviewed dates and zone, never re-resolved; the underlying service applies its own rules (not after today, week alignment, 2000-01-01, comparison eligibility) and answers 400 INVALID_REQUEST when they fail. Exactly one existing service is read once, in its own snapshot, with its own ownership predicates and row-level security; nothing is recomputed, combined, cached or stored. The `result` is an explicit allowlist of that service's existing fields (the daily overview; the weekly review's week, coverage, statements and either its activity, movement or meal part; the comparison's range, summary and comparison with its suppression reasons), so units, coverage, sources and unavailable reasons keep their documented meaning. A coach role or a run-sharing grant never widens what is read. Answers `Cache-Control: no-store`, errors included.",
+        parameters: [parameterRef('OrgId'), ...csrfParameters],
+        requestBody: requestBody('DataQuestionAnswerRequest'),
+        responses: { '200': jsonResponse('The deterministic answer with its plan and provenance.', 'DataQuestionAnswer'), ...defaultErrors },
       },
     },
     '/api/orgs/{orgId}/daily-overview/{localDate}': {
@@ -1147,6 +1203,13 @@ export const openApiDocument = {
       DailyOverview: jsonSchema(dailyOverviewSchema),
       ActivityTrends: jsonSchema(activityTrendsSchema),
       DailyTrends: jsonSchema(dailyTrendsSchema),
+      DataQuestionCapabilities: jsonSchema(dataQuestionCapabilitiesSchema),
+      DataQuestionPlanRequest: jsonSchema(dataQuestionPlanRequestSchema),
+      DataQuestionPlanResponse: jsonSchema(dataQuestionPlanResponseSchema),
+      DataQuestionInterpretationRequest: jsonSchema(dataQuestionInterpretationRequestSchema),
+      DataQuestionInterpretationResponse: jsonSchema(dataQuestionInterpretationResponseSchema),
+      DataQuestionAnswerRequest: jsonSchema(dataQuestionAnswerRequestSchema),
+      DataQuestionAnswer: jsonSchema(dataQuestionAnswerSchema),
       RunSearchResponse: jsonSchema(runSearchResponseSchema),
       RunSearchInterpretationRequest: jsonSchema(runSearchInterpretationRequestSchema),
       RunSearchInterpretationResponse: jsonSchema(runSearchInterpretationResponseSchema),

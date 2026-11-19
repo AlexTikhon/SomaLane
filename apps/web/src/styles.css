@@ -502,6 +502,26 @@ h1 { max-width: 11ch; margin: 0; font-size: clamp(3.1rem, 7.2vw, 6.2rem); line-h
 .today-meal-totals .today-meal-totals__coverage { grid-column: 1 / -1; color: #8b968e; font-size: 0.78rem; font-weight: 500; text-align: left; }
 .today-meal-totals__missing dd:not(.today-meal-totals__coverage) { color: #8b968e; font-weight: 500; }
 
+/* Ask my data on Today (ADR-0094): one question, its reviewed plan and its answer; wraps at phone width. */
+.ask-card { justify-items: stretch; margin-top: 1rem; }
+.ask-card h3 { margin: 0; font-size: 1.05rem; }
+.ask-card h4 { margin: 0.4rem 0 0; color: #dfe8e1; font-size: 0.92rem; }
+.ask-form { display: grid; gap: 0.4rem; min-width: 0; }
+.ask-form input { width: 100%; min-width: 0; box-sizing: border-box; }
+.ask-form button { justify-self: start; }
+.ask-questions { display: flex; flex-wrap: wrap; gap: 0.5rem; min-width: 0; }
+.ask-questions button, .ask-card .run-card__actions button { max-width: 100%; white-space: normal; text-align: left; overflow-wrap: anywhere; }
+.ask-status { display: grid; gap: 0.6rem; min-width: 0; }
+.ask-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; }
+.ask-review { display: grid; gap: 0.6rem; min-width: 0; padding: 0.8rem; border: 1px solid #344038; border-radius: 0.8rem; }
+.ask-review p { margin: 0; overflow-wrap: anywhere; }
+.ask-plan, .ask-comparison { display: grid; gap: 0.45rem; margin: 0; min-width: 0; }
+.ask-plan div, .ask-comparison div { display: grid; gap: 0.1rem; min-width: 0; }
+.ask-plan dt, .ask-comparison dt { color: #7f8a82; font-size: 0.75rem; }
+.ask-plan dd, .ask-comparison dd { margin: 0; overflow-wrap: anywhere; }
+.ask-answer { display: grid; gap: 0.5rem; min-width: 0; }
+.ask-list { display: grid; gap: 0.3rem; margin: 0; padding-left: 1.1rem; overflow-wrap: anywhere; }
+
 /* Trends (ADR-0084): one series at a time, a simple SVG chart with gaps, and a table of every date. */
 .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .trends-content { display: grid; gap: 1rem; min-width: 0; }

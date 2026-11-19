@@ -62,12 +62,14 @@ export default defineConfig({
     webApp(environment.mapWebOrigin, environment.apiOrigin, { VITE_MAPBOX_ACCESS_TOKEN: mapPlaceholderToken }),
     // The same app as `npm run demo:up` serves it: a dev server with the demo sign-in buttons turned on.
     webApp(environment.demoWebOrigin, environment.apiOrigin, { VITE_LOCAL_DEMO_ENABLED: 'true' }),
-    // Weekly insight generation and meal drafts explicitly off (the product defaults), for the deterministic weekly review
-    // scenario and the "drafts are off" Meal log scenario:
+    // Weekly insight generation, meal drafts and question interpretation explicitly off (the product defaults), for the
+    // deterministic weekly review scenario, the "drafts are off" Meal log scenario and "Ask my data" with predefined
+    // questions only:
     // a second development-session API and the demo-enabled app proxying to it.
     localSessionApi(environment, {
       allowedOrigins: [environment.reviewWebOrigin],
       apiOrigin: environment.reviewApiOrigin,
+      dataQuestions: 'off',
       mealDrafts: 'off',
       runSearchAi: { RUN_SEARCH_AI_ENABLED: 'false' },
       weeklyInsights: 'off',

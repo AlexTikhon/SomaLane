@@ -59,6 +59,9 @@ export function localSessionApi(
     // "Draft from text" in the Meal log (ADR-0092). Default 'fake' (the deterministic in-process stand-in; no model is
     // ever configured in the suite); 'off' is the product default.
     readonly mealDrafts?: 'fake' | 'off';
+    // "Ask my data" question interpretation (ADR-0094). Default 'fake' (deterministic, never model evidence); 'off' is the
+    // product default. Predefined questions work either way.
+    readonly dataQuestions?: 'fake' | 'off';
   },
 ): WebServerConfig {
   const apiOrigin = options.apiOrigin ?? environment.apiOrigin;
@@ -91,6 +94,9 @@ export function localSessionApi(
       ...(options.mealDrafts === 'off'
         ? { MEAL_DRAFTS_PROVIDER: 'off' }
         : { MEAL_DRAFTS_MAX_CONCURRENT: '4', MEAL_DRAFTS_PROVIDER: 'fake', MEAL_DRAFTS_TIMEOUT_MS: '10000', MEAL_DRAFTS_USER_RATE_PER_MINUTE: '60' }),
+      ...(options.dataQuestions === 'off'
+        ? { DATA_QUESTIONS_PROVIDER: 'off' }
+        : { DATA_QUESTIONS_MAX_CONCURRENT: '4', DATA_QUESTIONS_PROVIDER: 'fake', DATA_QUESTIONS_TIMEOUT_MS: '10000', DATA_QUESTIONS_USER_RATE_PER_MINUTE: '60' }),
     },
     reuseExistingServer: false,
     stderr: 'pipe',

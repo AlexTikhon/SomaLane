@@ -7,6 +7,7 @@
     "prebuild": "npm run build --workspace=@running-tracker/contracts",
     "build": "tsc -p tsconfig.build.json",
     "dev": "node --watch --import tsx src/entrypoint.ts",
+    "eval:data-questions": "node --import tsx src/evaluation/data-question-evaluation-main.ts",
     "eval:meal-drafts": "node --import tsx src/evaluation/meal-draft-evaluation-main.ts",
     "eval:meal-drafts:check": "node --import tsx src/evaluation/meal-draft-evaluation-main.ts --check",
     "eval:run-search": "node --import tsx src/evaluation/run-search-evaluation-main.ts",

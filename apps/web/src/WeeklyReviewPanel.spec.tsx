@@ -23,7 +23,7 @@ function render(snapshot: Partial<ReviewSnapshot>): string {
 describe('weekly review section', () => {
   it('is labelled as computed by the app, not AI, in every state, and offers the week picker', () => {
     for (const html of [render({}), render({ load: { kind: 'ready', refreshing: false, review: reviewFixture() } })]) {
-      expect(html).toContain('<h2 id="review-title">Weekly review</h2>');
+      expect(html).toContain('<h2 id="review-title" tabindex="-1">Weekly review</h2>');
       expect(html).toContain('Computed by the app');
       expect(html).toContain('No AI model writes this section.');
       expect(html).not.toContain('AI-generated');

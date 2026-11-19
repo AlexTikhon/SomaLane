@@ -12,6 +12,9 @@ import { DailyOverviewService, type DailyOverviewTestHooks } from './daily-overv
 import { createDailyOverviewRouter, dailyOverviewNoStore } from './daily-overview/daily-overview.routes.js';
 import { DailyTrendsService, type DailyTrendsTestHooks } from './daily-trends/daily-trends-service.js';
 import { createDailyTrendsRouter, dailyTrendsNoStore } from './daily-trends/daily-trends.routes.js';
+import { DataQuestionExecutor } from './data-questions/data-question-executor.js';
+import { createDataQuestionInterpretationService } from './data-questions/data-question-factory.js';
+import { createDataQuestionRouter, dataQuestionsNoStore } from './data-questions/data-question.routes.js';
 import { createMealDraftService } from './meals/drafts/meal-draft-factory.js';
 import { createMealRouter, mealsNoStore } from './meals/meal.routes.js';
 import { createArchiveRouter } from './archive/archive.routes.js';
@@ -82,6 +85,8 @@ export interface AppDependencies {
   /** Barriers inside the daily overview's read transaction, for snapshot tests. */
   testOnlyDailyOverviewHooks?: DailyOverviewTestHooks;
   testOnlyDailyTrendsHooks?: DailyTrendsTestHooks;
+  /** Replaces the configured question interpretation model in tests, so that no test can reach Ollama. */
+  testOnlyDataQuestionProvider?: LlmProvider;
   testOnlyFaultInjector?: TestOnlyFaultInjector;
   /** Replaces the configured meal draft model in tests, so that no test can reach Ollama. */
   testOnlyMealDraftProvider?: LlmProvider;
@@ -112,6 +117,7 @@ export function createApp({
   testOnlyActivityTrendsHooks,
   testOnlyDailyOverviewHooks,
   testOnlyDailyTrendsHooks,
+  testOnlyDataQuestionProvider,
   testOnlyFaultInjector,
   testOnlyMealDraftProvider,
   testOnlyRunSearchInterpreter,
@@ -125,6 +131,7 @@ export function createApp({
       testOnlyActivityTrendsHooks ||
       testOnlyDailyOverviewHooks ||
       testOnlyDailyTrendsHooks ||
+      testOnlyDataQuestionProvider ||
       testOnlyFaultInjector ||
       testOnlyMealDraftProvider ||
       testOnlyRouter ||
@@ -168,6 +175,32 @@ export function createApp({
     metrics: metrics.mealDrafts,
     ...(testOnlyMealDraftProvider ? { provider: testOnlyMealDraftProvider } : {}),
   });
+  // Undefined unless DATA_QUESTIONS_PROVIDER is ollama or fake: then no provider object exists and only predefined questions
+  // (no model) are offered. The deterministic answers never depend on it.
+  const dataQuestionInterpretation = createDataQuestionInterpretationService({
+    clock,
+    config,
+    logger,
+    metrics: metrics.dataQuestions,
+    ...(testOnlyDataQuestionProvider ? { provider: testOnlyDataQuestionProvider } : {}),
+  });
+  // The three deterministic read services, each built once and shared by its own route and by "Ask my data" (ADR-0094),
+  // whose executor calls exactly one of them per answer.
+  const dailyOverviewService = new DailyOverviewService({
+    clock,
+    pool: pool as Pick<Pool, 'connect'>,
+    ...(testOnlyDailyOverviewHooks ? { hooks: testOnlyDailyOverviewHooks } : {}),
+  });
+  const activityTrendsService = new ActivityTrendsService({
+    clock,
+    pool: pool as Pick<Pool, 'connect'>,
+    ...(testOnlyActivityTrendsHooks ? { hooks: testOnlyActivityTrendsHooks } : {}),
+  });
+  const weeklyReviewService = new WeeklyReviewService({
+    clock,
+    pool: pool as Pick<Pool, 'connect'>,
+    ...(testOnlyWeeklyReviewHooks ? { hooks: testOnlyWeeklyReviewHooks } : {}),
+  });
   const insights =
     weeklyInsights ??
     createWeeklyInsightService({
@@ -199,6 +232,7 @@ export function createApp({
   app.use('/api/orgs/:orgId/daily-overview', dailyOverviewNoStore);
   app.use('/api/orgs/:orgId/daily-trends', dailyTrendsNoStore);
   app.use('/api/orgs/:orgId/meals', mealsNoStore);
+  app.use('/api/orgs/:orgId/data-questions', dataQuestionsNoStore);
   // The global body limit. It reads application/json only; the GPX (ADR-0086) and TCX (ADR-0091) upload routes read their own,
   // larger application/gpx+xml or application/vnd.garmin.tcx+xml body inside the activity router, after the session, Origin
   // and CSRF checks.
@@ -305,11 +339,7 @@ export function createApp({
   app.use(
     '/api/orgs/:orgId/daily-overview',
     routePrefix('/api/orgs/:orgId/daily-overview', createDailyOverviewRouter({
-      overview: new DailyOverviewService({
-        clock,
-        pool: pool as Pick<Pool, 'connect'>,
-        ...(testOnlyDailyOverviewHooks ? { hooks: testOnlyDailyOverviewHooks } : {}),
-      }),
+      overview: dailyOverviewService,
       sessionManager: sessions,
     })),
   );
@@ -318,11 +348,7 @@ export function createApp({
     '/api/orgs/:orgId/activity-trends',
     routePrefix('/api/orgs/:orgId/activity-trends', createActivityTrendsRouter({
       sessionManager: sessions,
-      trends: new ActivityTrendsService({
-        clock,
-        pool: pool as Pick<Pool, 'connect'>,
-        ...(testOnlyActivityTrendsHooks ? { hooks: testOnlyActivityTrendsHooks } : {}),
-      }),
+      trends: activityTrendsService,
     })),
   );
   // 28-day trends (ADR-0084): read-only, derived on every read from the person's own daily records.
@@ -345,11 +371,21 @@ export function createApp({
   app.use(
     '/api/orgs/:orgId/weekly-review',
     routePrefix('/api/orgs/:orgId/weekly-review', createWeeklyReviewRouter({
-      review: new WeeklyReviewService({
-        clock,
-        pool: pool as Pick<Pool, 'connect'>,
-        ...(testOnlyWeeklyReviewHooks ? { hooks: testOnlyWeeklyReviewHooks } : {}),
-      }),
+      review: weeklyReviewService,
+      sessionManager: sessions,
+    })),
+  );
+  // "Ask my data" (ADR-0094): owner-only, read-only questions over the three services above; optional interpretation.
+  app.use(
+    '/api/orgs/:orgId/data-questions',
+    routePrefix('/api/orgs/:orgId/data-questions', createDataQuestionRouter({
+      clock,
+      config,
+      executor: new DataQuestionExecutor({ overview: dailyOverviewService, review: weeklyReviewService, trends: activityTrendsService }),
+      ...(dataQuestionInterpretation ? { interpretation: dataQuestionInterpretation } : {}),
+      logger,
+      metrics: metrics.dataQuestions,
+      pool: pool as Pick<Pool, 'connect'>,
       sessionManager: sessions,
     })),
   );

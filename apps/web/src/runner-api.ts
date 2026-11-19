@@ -13,6 +13,17 @@ import {
   dailyMovementViewSchema,
   dailyOverviewSchema,
   dailyTrendsSchema,
+  DATA_QUESTION_CLIENT_WAIT_MS,
+  DATA_QUESTION_CONTRACT_VERSION,
+  dataQuestionAnswerSchema,
+  dataQuestionCapabilitiesSchema,
+  dataQuestionInterpretationResponseSchema,
+  dataQuestionPlanResponseSchema,
+  type DataQuestionAnswer,
+  type DataQuestionCapabilities,
+  type DataQuestionIntent,
+  type DataQuestionInterpretationResponse,
+  type DataQuestionPlan,
   GPX_IMPORT_CONTENT_TYPE,
   gpxImportPreviewSchema,
   TCX_IMPORT_CONTENT_TYPE,
@@ -981,6 +992,85 @@ export async function readDailyOverview(target: DailyOverviewTarget, signal: Abo
   const overview = dailyOverviewSchema.parse(requireSuccess(response));
   if (overview.day.localDate !== target.localDate) throw new Error('The server returned a different date');
   return overview;
+}
+
+// "Ask my data" (ADR-0094): one question at a time over three existing reads. The interpretation only proposes a plan;
+// an answer is read only for a plan the person executes. Nothing here is cached or stored by the browser.
+const dataQuestionPath = (orgId: string, route: string) => `/api/orgs/${encodeURIComponent(orgId)}/data-questions/${route}`;
+
+export async function readDataQuestionCapabilities(orgId: string, signal: AbortSignal): Promise<DataQuestionCapabilities> {
+  const response = await requestJson(dataQuestionPath(orgId, 'capabilities'), { cache: 'no-store', credentials: 'same-origin', signal });
+  return dataQuestionCapabilitiesSchema.parse(requireSuccess(response));
+}
+
+export interface DataQuestionContext {
+  orgId: string;
+  selectedDate: string;
+  timeZone: string;
+}
+
+/** A predefined question or an explicit source choice, resolved into a plan by the server (no model). */
+export async function resolveDataQuestionPlan(
+  context: DataQuestionContext,
+  intent: DataQuestionIntent,
+  csrf: CsrfCredentials,
+  signal: AbortSignal,
+): Promise<DataQuestionPlan> {
+  const response = await requestJson(dataQuestionPath(context.orgId, 'plans'), {
+    body: JSON.stringify({ intent, selectedDate: context.selectedDate, timeZone: context.timeZone, version: DATA_QUESTION_CONTRACT_VERSION }),
+    cache: 'no-store',
+    credentials: 'same-origin',
+    headers: mutationHeaders(csrf),
+    method: 'POST',
+    signal,
+  });
+  return dataQuestionPlanResponseSchema.parse(requireSuccess(response)).plan;
+}
+
+/** A question interpreted into a plan to review (optional model); never an answer. */
+export async function interpretDataQuestion(
+  context: DataQuestionContext,
+  text: string,
+  csrf: CsrfCredentials,
+  signal: AbortSignal,
+): Promise<DataQuestionInterpretationResponse> {
+  const response = await requestJson(
+    dataQuestionPath(context.orgId, 'interpretations'),
+    {
+      body: JSON.stringify({ selectedDate: context.selectedDate, text, timeZone: context.timeZone, version: DATA_QUESTION_CONTRACT_VERSION }),
+      cache: 'no-store',
+      credentials: 'same-origin',
+      headers: mutationHeaders(csrf),
+      method: 'POST',
+      signal,
+    },
+    { timeoutMs: DATA_QUESTION_CLIENT_WAIT_MS },
+  );
+  return dataQuestionInterpretationResponseSchema.parse(requireSuccess(response));
+}
+
+/** Executes a reviewed plan: exactly one read of the person's own data, as the plan states it. */
+export async function answerDataQuestion(orgId: string, plan: DataQuestionPlan, csrf: CsrfCredentials, signal: AbortSignal): Promise<DataQuestionAnswer> {
+  const response = await requestJson(dataQuestionPath(orgId, 'answers'), {
+    body: JSON.stringify({ plan, version: DATA_QUESTION_CONTRACT_VERSION }),
+    cache: 'no-store',
+    credentials: 'same-origin',
+    headers: mutationHeaders(csrf),
+    method: 'POST',
+    signal,
+  });
+  const answer = dataQuestionAnswerSchema.parse(requireSuccess(response));
+  if (canonicalJson(answer.plan) !== canonicalJson(plan)) throw new Error('The server answered a different plan');
+  return answer;
+}
+
+/** JSON with object keys sorted, so two equal plans compare equal whatever their key order. */
+function canonicalJson(value: unknown): string {
+  return JSON.stringify(value, (_key, inner: unknown) =>
+    inner !== null && typeof inner === 'object' && !Array.isArray(inner)
+      ? Object.fromEntries(Object.entries(inner as Record<string, unknown>).toSorted(([left], [right]) => left.localeCompare(right)))
+      : inner,
+  );
 }
 
 export interface DailyTrendsTarget {

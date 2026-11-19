@@ -67,6 +67,19 @@ describe('Today navigation', () => {
     expect(inScope(null, SCOPE)).toBeNull();
   });
 
+  it('opens the weekly review on the week of an answer and Trends on its source and type (ADR-0094)', () => {
+    const review = navigationFor({ kind: 'weekly-review', weekStart: '2026-11-09' }, SCOPE);
+    expect(review).toEqual({ editor: { localDate: '2026-11-09', scope: SCOPE, section: 'weekly-review' }, view: 'checkin' });
+    expect(checkInIntentOf(review.editor)).toEqual({ localDate: '2026-11-09', section: 'weekly-review' });
+    expect(mealIntentDateOf(review.editor)).toBeNull();
+    expect(navigationFor({ kind: 'activity-trends', localDate: '2026-11-17', source: 'gpx', type: 'ride' }, SCOPE)).toEqual({
+      editor: null,
+      trendsActivity: { measure: 'count', scope: SCOPE, source: 'gpx', type: 'ride' },
+      trendsEnd: { localDate: '2026-11-17', scope: SCOPE },
+      view: 'trends',
+    });
+  });
+
   it('consumes a history intent once applied, and never a newer one, even for the same day (ADR-0088)', () => {
     const action = { kind: 'history', localDate: '2026-03-29', source: 'manual', timeZone: 'Europe/Warsaw' } as const;
     const first = navigationFor(action, SCOPE).history!;

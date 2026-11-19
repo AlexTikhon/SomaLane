@@ -838,6 +838,7 @@ export function App() {
     setEditorIntent(next.editor);
     setHistoryIntent(next.history ?? null);
     if (next.trendsEnd) setTrendsEnd(next.trendsEnd);
+    if (next.trendsActivity) setTrendsActivity(next.trendsActivity);
     setActiveView(next.view);
   };
   const navigation: Array<{ label: string; view: AppView }> = [
@@ -1001,6 +1002,7 @@ export function App() {
           // crosses a change of scope. The selected date is kept here, for this scope only.
           <TodayScreen
             key={viewScope}
+            csrf={session.session.csrf}
             onAction={openFromToday}
             onSelectDate={(localDate) => setTodayDate({ localDate, scope: viewScope })}
             orgId={selectedOrgId}

@@ -1,5 +1,7 @@
 import { DAILY_METRICS_LOCAL_DATE_MIN, isEmptyDailyOverview, type ActivityHistorySource, type DailyOverview } from '@running-tracker/contracts';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+
+import { AskMyDataSection } from './AskMyDataSection.js';
 
 import { checkInDateProblem, formatCheckInDate, localDateIn } from './daily-checkin.js';
 import {
@@ -23,7 +25,7 @@ import {
 import { DailyOverviewController, loadingOverview, type OverviewReader, type OverviewSnapshot } from './daily-overview-controller.js';
 import { movementSourceLabel } from './daily-movement.js';
 import { mealSourceLabel, mealsSummary, mealTotalRows } from './meal-log.js';
-import { readDailyOverview } from './runner-api.js';
+import { readDailyOverview, type CsrfCredentials } from './runner-api.js';
 
 // The Today screen (ADR-0082): a read-only overview of one day of the person's own records, recomputed by the server on
 // every read. It shows what was recorded and nothing else: no target, judgement, trend or recommendation. Editing happens
@@ -209,6 +211,8 @@ export function OverviewContent({ onAction, overview }: { onAction: (action: Tod
 }
 
 export interface TodayViewProps {
+  /** "Ask my data" (ADR-0094), rendered below the overview. */
+  ask?: ReactNode;
   dateInput: string;
   onAction: (action: TodayAction) => void;
   onChooseDate: (value: string) => void;
@@ -219,7 +223,7 @@ export interface TodayViewProps {
 }
 
 /** Everything the screen shows, from one snapshot. Pure, so every state is testable without a DOM. */
-export function TodayView({ dateInput, onAction, onChooseDate, onRefresh, snapshot, timeZone, today }: TodayViewProps) {
+export function TodayView({ ask, dateInput, onAction, onChooseDate, onRefresh, snapshot, timeZone, today }: TodayViewProps) {
   const { load } = snapshot;
   const busy = load.kind === 'loading' || (load.kind === 'ready' && load.refreshing);
   const state = load.kind === 'ready' && load.refreshing ? 'refreshing' : load.kind;
@@ -276,11 +280,14 @@ export function TodayView({ dateInput, onAction, onChooseDate, onRefresh, snapsh
         )}
         {load.kind === 'ready' && <OverviewContent onAction={onAction} overview={load.overview} />}
       </div>
+      {ask}
     </section>
   );
 }
 
 export interface TodayScreenProps {
+  /** The session's CSRF credentials, for "Ask my data" (its routes are POSTs). */
+  csrf: CsrfCredentials;
   onAction: (action: TodayAction) => void;
   /** Called with every valid date the person selects, so the parent can keep it during ordinary navigation. */
   onSelectDate: (localDate: string) => void;
@@ -297,7 +304,7 @@ export interface TodayScreenProps {
 
 // The parent keys this screen by session, person and organization and mounts it only while Today is open, so each
 // opening reads the day again (after an edit or a deletion elsewhere too) and no answer crosses a change of scope.
-export function TodayScreen({ nowMs, onAction, onSelectDate, orgId, read = readDailyOverview, selectedDate, signal, timeZone }: TodayScreenProps) {
+export function TodayScreen({ csrf, nowMs, onAction, onSelectDate, orgId, read = readDailyOverview, selectedDate, signal, timeZone }: TodayScreenProps) {
   const today = useMemo(() => localDateIn(timeZone, nowMs ?? Date.now()), [nowMs, timeZone]);
   const initialDate = selectedDate !== null && checkInDateProblem(selectedDate, today) === null ? selectedDate : today;
   const initialRef = useRef(initialDate);
@@ -326,6 +333,18 @@ export function TodayScreen({ nowMs, onAction, onSelectDate, orgId, read = readD
 
   return (
     <TodayView
+      ask={
+        // The selected date of the overview (not the unvalidated input) and the view zone are the question's context.
+        <AskMyDataSection
+          csrf={csrf}
+          onAction={onAction}
+          onSelectDate={chooseDate}
+          orgId={orgId}
+          selectedDate={snapshot.localDate}
+          signal={signal}
+          timeZone={timeZone}
+        />
+      }
       dateInput={dateInput}
       onAction={onAction}
       onChooseDate={chooseDate}

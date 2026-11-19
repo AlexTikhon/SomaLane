@@ -308,7 +308,7 @@ export function ReviewPanelView({ onRefresh, onSelectWeek, snapshot, weeks }: Re
   return (
     <section aria-labelledby="review-title" className="review-panel search-results">
       <div className="insight-panel__heading">
-        <h2 id="review-title">Weekly review</h2>
+        <h2 id="review-title" tabIndex={-1}>Weekly review</h2>
         <p className="insight-panel__positioning">
           <span className="review-badge">Computed by the app</span> Counted from your own check-ins, manual activities, GPS
           runs, manually entered movement and logged meals each time you open it. No AI model writes this section. It describes what was recorded; it is not medical

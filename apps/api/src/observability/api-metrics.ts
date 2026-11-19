@@ -107,6 +107,28 @@ export function createApiMetrics(registry: MetricsRegistry = new MetricsRegistry
         name: 'run_search_interpretation_tokens_total',
       }),
     },
+    // "Ask my data" (ADR-0094): bounded outcome and operation labels only; never a question, a date, a source or a value.
+    dataQuestions: {
+      answers: registry.counter({
+        help: 'Executed data question plans by operation and bounded outcome.',
+        labelNames: ['operation', 'outcome'],
+        maxSeries: 16,
+        name: 'data_question_answers_total',
+      }),
+      interpretationSeconds: registry.histogram({
+        buckets: MEAL_DRAFT_BUCKETS_SECONDS,
+        help: 'Time from admission to answer of a data question interpretation, by bounded outcome.',
+        labelNames: ['outcome'],
+        maxSeries: 32,
+        name: 'data_question_interpretation_seconds',
+      }),
+      interpretations: registry.counter({
+        help: 'Data question interpretation requests by bounded outcome (answers, provider failures, admission refusals).',
+        labelNames: ['outcome'],
+        maxSeries: 32,
+        name: 'data_question_interpretation_requests_total',
+      }),
+    },
     mealDrafts: {
       durationSeconds: registry.histogram({
         buckets: MEAL_DRAFT_BUCKETS_SECONDS,
