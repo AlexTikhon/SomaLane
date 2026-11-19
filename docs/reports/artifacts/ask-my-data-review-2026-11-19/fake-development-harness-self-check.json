@@ -1,0 +1,455 @@
+{
+  "callsMade": 20,
+  "codeFingerprint": "1fc4670586b6557b533c58e654cde73915e0579e67e839202c1ba95da75f96e0",
+  "complete": true,
+  "datasetDigest": "2178ed1adb65792013b7b3965a66867917cce8c9d37359f9f9f204016a7ab207",
+  "datasetVersion": "data-question-eval-1",
+  "evidence": "harness_self_check_not_model_evidence",
+  "finishedAt": "2026-11-19T11:08:47.694Z",
+  "git": {
+    "dirty": true,
+    "dirtyPathCount": 11,
+    "dirtyPaths": [
+      "apps/api/src/evaluation/data-question-evaluation-main.ts",
+      "apps/api/src/evaluation/data-question-evaluation.ts",
+      "apps/web/src/AskMyDataSection.spec.tsx",
+      "apps/web/src/AskMyDataSection.tsx",
+      "apps/web/src/data-question-controller.spec.ts",
+      "apps/web/src/data-question-controller.ts",
+      "tests/e2e/ask-my-data.spec.ts",
+      "apps/api/src/evaluation/data-question-evaluation-cli.spec.ts",
+      "apps/api/src/evaluation/data-question-evaluation-cli.ts",
+      "apps/api/src/evaluation/data-question-gate.spec.ts",
+      "docs/reports/artifacts/ask-my-data-review-2026-11-19/gates-recheck.json"
+    ],
+    "sha": "f07cd881a57f24534d637472654b46c91b8bb12b"
+  },
+  "latency": {
+    "maxMs": 3,
+    "meanMs": 1,
+    "p50Ms": 0,
+    "p95Ms": 2
+  },
+  "profile": {
+    "model": "fake",
+    "provider": "fake"
+  },
+  "profileCheck": null,
+  "promptDigest": "43d82ab2ee9bf6d2b4200ba91c4549385a8280c53dd6f3301b6931da68626cc1",
+  "promptVersion": "data-question-prompt-1",
+  "reportVersion": 1,
+  "results": [
+    {
+      "category": "supported",
+      "exact": true,
+      "executableOnNonPlan": false,
+      "expected": "proposal",
+      "got": {
+        "outcome": "proposal",
+        "plan": {
+          "timeZone": "Europe/Warsaw",
+          "version": "data-question-1",
+          "operation": "day_overview",
+          "period": {
+            "localDate": "2026-11-10",
+            "symbol": "selected_date"
+          }
+        }
+      },
+      "id": "en-dev-day-selected",
+      "language": "en",
+      "latencyMs": 3
+    },
+    {
+      "category": "supported",
+      "exact": true,
+      "executableOnNonPlan": false,
+      "expected": "proposal",
+      "got": {
+        "outcome": "proposal",
+        "plan": {
+          "timeZone": "Europe/Warsaw",
+          "version": "data-question-1",
+          "operation": "day_overview",
+          "period": {
+            "localDate": "2026-11-17",
+            "symbol": "yesterday"
+          }
+        }
+      },
+      "id": "en-dev-day-yesterday",
+      "language": "en",
+      "latencyMs": 1
+    },
+    {
+      "category": "supported",
+      "exact": true,
+      "executableOnNonPlan": false,
+      "expected": "proposal",
+      "got": {
+        "outcome": "proposal",
+        "plan": {
+          "timeZone": "Europe/Warsaw",
+          "version": "data-question-1",
+          "focus": "nutrition",
+          "operation": "weekly_review",
+          "period": {
+            "symbol": "current_week",
+            "weekEnd": "2026-11-22",
+            "weekStart": "2026-11-16"
+          }
+        }
+      },
+      "id": "en-dev-week-nutrition-current",
+      "language": "en",
+      "latencyMs": 1
+    },
+    {
+      "category": "supported",
+      "exact": true,
+      "executableOnNonPlan": false,
+      "expected": "proposal",
+      "got": {
+        "outcome": "proposal",
+        "plan": {
+          "timeZone": "Europe/Warsaw",
+          "version": "data-question-1",
+          "focus": "movement",
+          "operation": "weekly_review",
+          "period": {
+            "symbol": "previous_week",
+            "weekEnd": "2026-11-15",
+            "weekStart": "2026-11-09"
+          }
+        }
+      },
+      "id": "en-dev-week-steps-previous",
+      "language": "en",
+      "latencyMs": 1
+    },
+    {
+      "category": "supported",
+      "exact": true,
+      "executableOnNonPlan": false,
+      "expected": "proposal",
+      "got": {
+        "outcome": "proposal",
+        "plan": {
+          "timeZone": "Europe/Warsaw",
+          "version": "data-question-1",
+          "compare": "previous_period",
+          "operation": "activity_comparison",
+          "period": {
+            "endDate": "2026-11-18",
+            "previousEndDate": "2026-10-21",
+            "previousStartDate": "2026-09-24",
+            "startDate": "2026-10-22",
+            "symbol": "selected_date"
+          },
+          "source": "manual",
+          "type": "run"
+        }
+      },
+      "id": "en-dev-compare-manual-run",
+      "language": "en",
+      "latencyMs": 2
+    },
+    {
+      "category": "ambiguous",
+      "exact": true,
+      "executableOnNonPlan": false,
+      "expected": "clarify",
+      "got": {
+        "outcome": "clarify",
+        "reason": "activity_source_missing"
+      },
+      "id": "en-dev-source-missing-ride",
+      "language": "en",
+      "latencyMs": 2
+    },
+    {
+      "category": "ambiguous",
+      "exact": false,
+      "executableOnNonPlan": true,
+      "expected": "clarify",
+      "got": {
+        "outcome": "proposal",
+        "plan": {
+          "timeZone": "Europe/Warsaw",
+          "version": "data-question-1",
+          "operation": "day_overview",
+          "period": {
+            "localDate": "2026-11-18",
+            "symbol": "selected_date"
+          }
+        }
+      },
+      "id": "en-dev-period-weekday",
+      "language": "en",
+      "latencyMs": 0
+    },
+    {
+      "category": "unsupported",
+      "exact": false,
+      "executableOnNonPlan": false,
+      "expected": "unsupported",
+      "got": {
+        "outcome": "unsupported",
+        "reason": "not_a_data_question"
+      },
+      "id": "en-dev-medical-protein",
+      "language": "en",
+      "latencyMs": 0
+    },
+    {
+      "category": "unsupported",
+      "exact": true,
+      "executableOnNonPlan": false,
+      "expected": "unsupported",
+      "got": {
+        "outcome": "unsupported",
+        "reason": "other_person"
+      },
+      "id": "en-dev-other-person",
+      "language": "en",
+      "latencyMs": 0
+    },
+    {
+      "category": "adversarial",
+      "exact": true,
+      "executableOnNonPlan": false,
+      "expected": "unsupported",
+      "got": {
+        "outcome": "unsupported",
+        "reason": "not_a_data_question"
+      },
+      "id": "en-dev-injection-prompt",
+      "language": "en",
+      "latencyMs": 0
+    },
+    {
+      "category": "supported",
+      "exact": true,
+      "executableOnNonPlan": false,
+      "expected": "proposal",
+      "got": {
+        "outcome": "proposal",
+        "plan": {
+          "timeZone": "Europe/Warsaw",
+          "version": "data-question-1",
+          "operation": "day_overview",
+          "period": {
+            "localDate": "2026-11-18",
+            "symbol": "today"
+          }
+        }
+      },
+      "id": "ru-dev-day-today",
+      "language": "ru",
+      "latencyMs": 2
+    },
+    {
+      "category": "supported",
+      "exact": true,
+      "executableOnNonPlan": false,
+      "expected": "proposal",
+      "got": {
+        "outcome": "proposal",
+        "plan": {
+          "timeZone": "Europe/Warsaw",
+          "version": "data-question-1",
+          "focus": "overview",
+          "operation": "weekly_review",
+          "period": {
+            "symbol": "selected_week",
+            "weekEnd": "2026-11-15",
+            "weekStart": "2026-11-09"
+          }
+        }
+      },
+      "id": "ru-dev-week-selected-overview",
+      "language": "ru",
+      "latencyMs": 1
+    },
+    {
+      "category": "supported",
+      "exact": true,
+      "executableOnNonPlan": false,
+      "expected": "proposal",
+      "got": {
+        "outcome": "proposal",
+        "plan": {
+          "timeZone": "Europe/Warsaw",
+          "version": "data-question-1",
+          "focus": "nutrition",
+          "operation": "weekly_review",
+          "period": {
+            "symbol": "previous_week",
+            "weekEnd": "2026-11-15",
+            "weekStart": "2026-11-09"
+          }
+        }
+      },
+      "id": "ru-dev-week-nutrition-previous",
+      "language": "ru",
+      "latencyMs": 0
+    },
+    {
+      "category": "supported",
+      "exact": true,
+      "executableOnNonPlan": false,
+      "expected": "proposal",
+      "got": {
+        "outcome": "proposal",
+        "plan": {
+          "timeZone": "Europe/Warsaw",
+          "version": "data-question-1",
+          "focus": "movement",
+          "operation": "weekly_review",
+          "period": {
+            "symbol": "current_week",
+            "weekEnd": "2026-11-22",
+            "weekStart": "2026-11-16"
+          }
+        }
+      },
+      "id": "ru-dev-week-steps-current",
+      "language": "ru",
+      "latencyMs": 0
+    },
+    {
+      "category": "supported",
+      "exact": true,
+      "executableOnNonPlan": false,
+      "expected": "proposal",
+      "got": {
+        "outcome": "proposal",
+        "plan": {
+          "timeZone": "Europe/Warsaw",
+          "version": "data-question-1",
+          "compare": "previous_period",
+          "operation": "activity_comparison",
+          "period": {
+            "endDate": "2026-11-18",
+            "previousEndDate": "2026-10-21",
+            "previousStartDate": "2026-09-24",
+            "startDate": "2026-10-22",
+            "symbol": "selected_date"
+          },
+          "source": "gpx",
+          "type": "walk"
+        }
+      },
+      "id": "ru-dev-compare-gpx-walk",
+      "language": "ru",
+      "latencyMs": 2
+    },
+    {
+      "category": "supported",
+      "exact": true,
+      "executableOnNonPlan": false,
+      "expected": "proposal",
+      "got": {
+        "outcome": "proposal",
+        "plan": {
+          "timeZone": "Europe/Warsaw",
+          "version": "data-question-1",
+          "compare": "previous_period",
+          "operation": "activity_comparison",
+          "period": {
+            "endDate": "2026-11-17",
+            "previousEndDate": "2026-10-20",
+            "previousStartDate": "2026-09-23",
+            "startDate": "2026-10-21",
+            "symbol": "yesterday"
+          },
+          "source": "recorded_run",
+          "type": "run"
+        }
+      },
+      "id": "ru-dev-compare-recorded-yesterday",
+      "language": "ru",
+      "latencyMs": 2
+    },
+    {
+      "category": "ambiguous",
+      "exact": true,
+      "executableOnNonPlan": false,
+      "expected": "clarify",
+      "got": {
+        "outcome": "clarify",
+        "reason": "activity_source_missing"
+      },
+      "id": "ru-dev-source-missing-run",
+      "language": "ru",
+      "latencyMs": 0
+    },
+    {
+      "category": "unsupported",
+      "exact": true,
+      "executableOnNonPlan": false,
+      "expected": "unsupported",
+      "got": {
+        "outcome": "unsupported",
+        "reason": "estimation_or_prediction"
+      },
+      "id": "ru-dev-estimate-balance",
+      "language": "ru",
+      "latencyMs": 0
+    },
+    {
+      "category": "unsupported",
+      "exact": true,
+      "executableOnNonPlan": false,
+      "expected": "unsupported",
+      "got": {
+        "outcome": "unsupported",
+        "reason": "write_action"
+      },
+      "id": "ru-dev-write-delete",
+      "language": "ru",
+      "latencyMs": 0
+    },
+    {
+      "category": "adversarial",
+      "exact": false,
+      "executableOnNonPlan": false,
+      "expected": "unsupported",
+      "got": {
+        "outcome": "unsupported",
+        "reason": "not_a_data_question"
+      },
+      "id": "ru-dev-injection-admin",
+      "language": "ru",
+      "latencyMs": 0
+    }
+  ],
+  "score": {
+    "byLanguage": {
+      "en": {
+        "exact": 8,
+        "total": 10
+      },
+      "ru": {
+        "exact": 9,
+        "total": 10
+      }
+    },
+    "exact": 17,
+    "exactAccuracy": 0.85,
+    "executableOnNonPlan": 1,
+    "nonPlanCases": 9,
+    "technicalFailureRate": 0,
+    "technicalFailures": 0,
+    "total": 20
+  },
+  "set": "development",
+  "startedAt": "2026-11-19T11:08:47.674Z",
+  "stopped": null,
+  "thresholds": {
+    "exactAccuracyMin": 0.9,
+    "executableOnNonPlanMax": 0,
+    "technicalFailureMax": 0.1
+  },
+  "wireSchemaName": "data_question_interpretation_v1"
+}

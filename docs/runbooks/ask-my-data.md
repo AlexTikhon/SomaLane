@@ -38,6 +38,10 @@ title, a note, an identifier or an earlier question. The answer is a closed set 
 resolves into dates itself; an activity comparison needs a source the question names in words. A proposal is only shown;
 the person executes it.
 
+On the screen a proposal, answer, clarification or Retry belongs to exactly the question text it came from: editing the
+text removes them (the new text waits for Interpret, and a late response to the old text is ignored); a new selected date
+or zone, and New question, also empty the text. Discard keeps the text so it can be interpreted again on purpose.
+
 ## Failures and what they mean
 
 | Answer | Meaning | Action |
@@ -63,12 +67,30 @@ npm run eval:data-questions -- --set heldout --provider ollama --model qwen3:8b 
 npm run eval:data-questions -- --check --report dev.json --report heldout.json --out gates.json    # offline
 ```
 
+Relative `--report` and `--out` paths mean the directory the command was typed in (npm's `INIT_CWD`; the working
+directory when the script is run directly with `node --import tsx apps/api/src/evaluation/data-question-evaluation-main.ts`).
+Absolute paths are used as typed; `--out` creates missing directories. The frozen datasets are always read from
+`apps/api/evaluation/`. Recheck of the saved ADR-0094 measurement from the repository root:
+
+```
+npm run eval:data-questions -- --check --report docs/reports/artifacts/ask-my-data-2026-11-19/qwen3-8b-development.json --report docs/reports/artifacts/ask-my-data-2026-11-19/qwen3-8b-heldout.json
+# MODEL GATE (data questions): FAIL; evidence valid   (exit 2)
+#   development: exact 18/20 = 90.0 %; executable proposals on clarification/refusal cases 1; technical failures 0/20
+#   heldout: exact 17/20 = 85.0 %; executable proposals on clarification/refusal cases 1; technical failures 0/20
+```
+
 One sequential call per case, no retries, no warm-up, at most 40 calls for both sets; a run stops after three identical
-systemic failures. `--check` is offline: it recomputes the code fingerprint and prompt digest and answers PASS (0), FAIL
-(2) or NOT_RUN (3). Evidence is invalid (NOT_RUN) when a set is missing or incomplete, came from the fake provider, or the
-dataset, prompt, fingerprinted code or execution profile changed since. Thresholds: exact normalized interpretation
-≥ 90 % per set, zero executable proposals on clarification/refusal cases, technical failures ≤ 10 %. A PASS does not turn
-the feature on; that is a separate decision.
+systemic failures. `--check` is offline (it never uses the network) and answers PASS (0), FAIL (2) or NOT_RUN (3). It
+does not trust a report's own summary: it validates each report's structure, loads the pinned datasets, requires exactly
+one report per set with every frozen case exactly once and in order, recomputes each case's judgment from the recorded
+outcome against the frozen expectation, and recomputes the scores with the frozen denominators. Evidence is invalid
+(NOT_RUN) when a report is missing, unreadable, not JSON or malformed; when a set is stopped, partial, has missing,
+duplicate, unknown or reordered cases, or unchecked or extra calls; when it came from the fake provider; when the dataset
+version or digest, prompt, wire schema, fingerprinted code, stored thresholds or execution profile differ; or when a stored
+score, flag, expected outcome, `complete` flag or latency summary contradicts what the gate recomputes. The printed
+quality lines are always the recomputed ones. Thresholds: exact normalized interpretation ≥ 90 % per set, zero executable
+proposals on clarification/refusal cases, technical failures ≤ 10 %. A PASS does not turn the feature on; that is a
+separate decision.
 
 The fingerprint covers an explicit file list (`DATA_QUESTION_FINGERPRINT_FILES` in
 `apps/api/src/evaluation/data-question-evaluation.ts`); changing any of them makes earlier reports stale. The datasets are

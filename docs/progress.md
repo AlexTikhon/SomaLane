@@ -5421,3 +5421,34 @@ weekly insights and run-search interpretation are unchanged. Report: `docs/repor
 | `git diff --check` | clean |
 
 Interpretation stays off by default. Not verified: physical Safari, hosted CI, real GPS, production. Changes are uncommitted.
+
+## Ask my data: review correction — stale question state, evidence-checking gate, CLI paths (ADR-0094) (2026-11-19)
+
+**What changed.** Three confirmed review findings, each reproduced before any change and fixed test-first, on top of HEAD
+`f07cd88`. (1) The question text moved into `DataQuestionController`'s snapshot; `setText` invalidates the previous
+proposal, answer, clarification, error and retry and abandons the request, `setContext` and the new `newQuestion` also
+empty the text. Before, editing a proposed question kept the old plan executable, Retry repeated the old question, and a
+date change kept the text. (2) `evaluateDataQuestionGate` validates reports at run time, loads the pinned datasets,
+requires every frozen case exactly once and in order, recomputes judgments and aggregates, and treats contradictory
+stored values as NOT_RUN. Before, edited scores, or `complete: true` with one case per set, passed. (3) The CLI
+(`data-question-evaluation-cli.ts`, thin `…-main.ts`) resolves relative `--report`/`--out` against `INIT_CWD`, else the
+working directory. Before, the root `--check` command failed with `ENOENT` under `apps/api`. Production interpreter,
+prompt, schema, normalization, provider settings, thresholds and datasets are unchanged; fingerprint `1fc46705…` and
+prompt digest `43d82ab2…` are still current. **No inference call.** Report:
+`docs/reports/ask-my-data-review-correction-2026-11-19.md`; new artifacts in
+`docs/reports/artifacts/ask-my-data-review-2026-11-19/`; the 2026-11-19 artifacts are unchanged.
+
+| Check | Result |
+|---|---|
+| Reproductions (before) | Chromium: proposal stays executable after an edit; root `--check` `ENOENT`, exit 3; in-memory gate probes: edited scores PASS, one case per set PASS |
+| New regressions, RED | gate 12 of 13 failed; CLI suite missing; controller 9 failed; Chromium scenarios 6–9 failed at the stale-state assertions |
+| Focused tests, GREEN | contracts 11; API 24 files, 445 passed (gate 13, CLI 8, evaluation 9); web 8 files, 109 passed |
+| Gate on the unchanged saved reports (`npm run eval:data-questions -- --check --report docs/reports/…` from the root) | exit **2**: **FAIL** (quality), evidence valid; recomputed development 18/20, 1 executable on a non-plan case; held-out 17/20, 1; 40 calls; 0 technical failures |
+| Fake run with repository-relative `--out`; check and fake run with every `fetch` blocked and counted | written at the requested path; **0** fetch calls |
+| `npm run verify` (`VITEST_MAX_WORKERS=2`) | exit **0**: scripts 115, API **2,508**, web **1,373**, contracts **322**, fixtures 14, simulator 3, build |
+| Test database identity (read-only probe, before the browser and the integration runs) | `127.0.0.1:5433/running_tracker_test`, server `172.18.0.2:5432`, PostgreSQL 17.5; runtime, owner and maintenance roles connect as themselves |
+| Integration (`VITEST_MAX_WORKERS` unset): the 18 files of the ADR-0094 run; authentication (`oidc-identity`, `oidc-login`, `oidc-login-restart`) | **18 files, 376 passed**; **3 files, 19 passed** |
+| Chromium: `ask-my-data` (9) + Today, Today history, Trends, activity trends, weekly review, check-in, movement, meal draft, meal log, record, sign-out | **44 passed** |
+| `git diff --check` | clean |
+
+Model quality remains FAIL and interpretation stays off by default; this is no new model evidence. Changes are uncommitted.

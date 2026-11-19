@@ -1,0 +1,33 @@
+{
+  "checkedAt": "2026-11-19T11:08:46.211Z",
+  "codeFingerprint": "1fc4670586b6557b533c58e654cde73915e0579e67e839202c1ba95da75f96e0",
+  "gate": {
+    "evidenceValid": true,
+    "problems": [
+      "development: 1 executable proposal(s) on clarification or refusal cases",
+      "heldout: exact accuracy 85.0 % < 90 %",
+      "heldout: 1 executable proposal(s) on clarification or refusal cases"
+    ],
+    "quality": {
+      "development": {
+        "exact": 18,
+        "exactAccuracy": 0.9,
+        "executableOnNonPlan": 1,
+        "technicalFailureRate": 0,
+        "technicalFailures": 0,
+        "total": 20
+      },
+      "heldout": {
+        "exact": 17,
+        "exactAccuracy": 0.85,
+        "executableOnNonPlan": 1,
+        "technicalFailureRate": 0,
+        "technicalFailures": 0,
+        "total": 20
+      }
+    },
+    "status": "FAIL"
+  },
+  "inferenceCallsMade": 0,
+  "promptDigest": "43d82ab2ee9bf6d2b4200ba91c4549385a8280c53dd6f3301b6931da68626cc1"
+}

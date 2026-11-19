@@ -126,6 +126,18 @@ re-reads the plan, and an error never keeps an old answer. A generation counter 
 responses; cancelling, a date or zone change, sign-out (the session signal), session replacement and organization change
 (the screen is keyed by session, person and organization) and disposal all invalidate the request in flight.
 
+**Question text and derived state (review correction, 2026-11-19).** The question text is part of the controller's
+snapshot, next to the state derived from it, and changes only through `setText`. Invariants: (1) every state other than
+`idle` was derived from the current text (or from a predefined question); (2) a different text invalidates the previous
+proposal, answer, clarification with its source choice, error and retry, abandons the request in flight (the generation
+moves on, so a late response is dropped) and returns to `idle` keeping the new text, which is only interpreted by an
+explicit Interpret; (3) a new selected date or zone and **New question** empty the text as well; Discard and Dismiss keep
+the text for an explicit re-interpretation. No second state machine: `setText`, `setContext` and `newQuestion` reuse the
+existing abort and idle transitions. Before the correction the text lived in React state beside the controller, so an
+edited question kept the old plan executable (Interpret "What did I record today?", edit to "Show my recorded nutrition
+for this week", Get answer executed `day_overview`), an error's Retry repeated the old question, and a date change kept
+the old text.
+
 ## Measurement (synthetic engineering gate, not generalization)
 
 A separate evaluation (`npm run eval:data-questions`, not part of the meal-draft gate): two frozen sets of 20 synthetic
@@ -137,11 +149,36 @@ prompt digest, code fingerprint (an explicit file list) and one execution profil
 Dataset digests, prompt/schema version, fingerprint, profile and thresholds were frozen before inference
 (`docs/reports/artifacts/ask-my-data-2026-11-19/freeze-before-inference.json`).
 
+**The offline gate re-derives its verdict (review correction, 2026-11-19).** The first gate trusted each report's stored
+`score`, per-case `exact`/`executableOnNonPlan` flags and `complete` flag: editing the scores of the saved failing reports
+to passing values, or keeping `complete: true` with one case per set (and matching call counts), produced PASS. The gate
+now: validates every report at run time (a strict schema, plans and reasons against the product contract; a malformed
+report never throws and is NOT_RUN); loads and checks the pinned datasets itself; requires exactly one report per known
+set; requires every frozen case id exactly once, in the frozen order (missing, duplicate, unknown and substituted ids are
+refused); checks set, dataset version, pinned digest, prompt digest and version, wire schema, code fingerprint, stored
+thresholds and one execution profile for both sets; refuses a stopped or partial run whatever its `complete` flag; requires
+one profile-checked request per recorded case; **recomputes every judgment** from the recorded outcome against the frozen
+expectation (report-supplied expected outcomes and flags are only compared, never used); and **recomputes the aggregates**
+with the frozen denominators. Any stored summary, flag, expected outcome or latency summary that disagrees is invalid
+evidence (NOT_RUN) with bounded diagnostics (at most 24 problems, three ids listed per problem). Invalid or missing evidence
+is NOT_RUN and never PASS; valid evidence below a threshold is FAIL. Thresholds and datasets are unchanged.
+
+The command line resolves user-supplied relative `--report` and `--out` paths against npm's `INIT_CWD` (the directory the
+command was typed in), else the working directory, like the meal-draft CLI; absolute paths stay as typed and the datasets
+stay anchored to the repository. Before, `npm run eval:data-questions -- --check --report docs/reports/…` from the
+repository root looked under `apps/api` and failed with `ENOENT` (exit 3).
+
 **Result (2026-11-19, `qwen3:8b`, Ollama 0.40.16, 40 of 40 calls): FAIL (quality), evidence valid.** Development 18/20 =
 90.0 % exact, held-out 17/20 = 85.0 %; one executable proposal on a clarification case in each set (a weekday read as the
 selected date; an injected source word accepted by the guard); 0 technical failures. Details in
 [the report](../reports/ask-my-data-2026-11-19.md). Interpretation stays off by default; predefined questions and
 deterministic answers are unaffected.
+
+Rechecked with the corrected gate on the unchanged saved reports (2026-11-19, no new inference): **FAIL (quality), evidence
+valid**, exit 2, with the figures recomputed from the recorded outcomes — development 18/20 exact and 1 executable
+proposal on a non-plan case, held-out 17/20 and 1, 40 calls, 0 technical failures. The production interpreter, prompt,
+schema, normalization, provider settings and datasets are unchanged, so code fingerprint `1fc46705…` and prompt digest
+`43d82ab2…` are still current; this is the same evidence, not a fresh measurement.
 
 ## Alternatives considered
 

@@ -4,6 +4,10 @@ Workstation verification of the first "Ask my data" slice: contracts, API, optio
 section, automated tests at every layer, Chromium scenarios, and a frozen real-model measurement of question
 interpretation. Chromium only; no physical Safari, hosted CI, real GPS or production run. Changes are uncommitted.
 
+> Review correction (same day): stale question state, the offline gate and CLI paths were corrected; the saved reports
+> below were rechecked unchanged and remain FAIL (quality), evidence valid. See
+> [ask-my-data-review-correction-2026-11-19.md](ask-my-data-review-correction-2026-11-19.md).
+
 ## Summary
 
 | Area | Result |
