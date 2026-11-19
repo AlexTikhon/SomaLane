@@ -19,6 +19,7 @@ const handlers: AskMyDataHandlers = {
   dismiss: noop,
   execute: noop,
   interpret: noop,
+  newQuestion: noop,
   openSource: noop,
   refresh: noop,
   retry: noop,
@@ -27,7 +28,7 @@ const handlers: AskMyDataHandlers = {
 const provenance = { answerVersion: version, computedAt: '2026-11-08T10:00:00.000Z', persisted: false as const, serviceVersion: 'x' };
 
 const render = (state: AskState, capability: AskSnapshot['capability'] = 'available', text = '') =>
-  renderToStaticMarkup(<AskMyDataView handlers={handlers} snapshot={{ capability, context: { selectedDate: '2026-11-05', timeZone: 'Europe/Warsaw' }, state }} text={text} />);
+  renderToStaticMarkup(<AskMyDataView handlers={handlers} snapshot={{ capability, context: { selectedDate: '2026-11-05', timeZone: 'Europe/Warsaw' }, state, text }} />);
 
 const dayPlan: DataQuestionPlan = { operation: 'day_overview', period: { localDate: '2026-11-05', symbol: 'selected_date' }, timeZone: 'Europe/Warsaw', version };
 

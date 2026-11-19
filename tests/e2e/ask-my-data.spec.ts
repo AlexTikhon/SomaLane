@@ -169,18 +169,21 @@ test('5. a pending interpretation is dropped on a date change and on sign-out; n
     for (const route of held.splice(0)) await route.continue().catch(() => undefined);
   };
 
-  // A date change while the question is being interpreted: back to idle, the late answer is ignored.
-  await ask.getByLabel('Ask in your own words (English or Russian)').fill('What did I record today?');
+  // A date change while the question is being interpreted: back to idle with an empty question, the late answer is ignored.
+  const input = ask.getByLabel('Ask in your own words (English or Russian)');
+  await input.fill('What did I record today?');
   await ask.getByRole('button', { name: 'Interpret question' }).click();
   await expect(state).toHaveAttribute('data-ask-state', 'interpreting');
   await expect(ask.getByRole('button', { name: 'What did I record for the selected day?' })).toBeDisabled();
   await screen.getByLabel('Date').fill(daysBefore(today, 1));
   await expect(state).toHaveAttribute('data-ask-state', 'idle');
+  await expect(input).toHaveValue('');
   await releaseAll();
   await page.waitForTimeout(300);
   await expect(state).toHaveAttribute('data-ask-state', 'idle');
 
   // Cancel, then a retry works.
+  await input.fill('What did I record today?');
   await ask.getByRole('button', { name: 'Interpret question' }).click();
   await expect(state).toHaveAttribute('data-ask-state', 'interpreting');
   await ask.getByRole('button', { name: 'Cancel' }).click();
@@ -200,4 +203,170 @@ test('5. a pending interpretation is dropped on a date change and on sign-out; n
   await expect(state).toHaveAttribute('data-ask-state', 'idle');
   await expect(ask.getByLabel('Ask in your own words (English or Russian)')).toHaveValue('');
   await expect(ask.getByRole('region', { name: 'Review the question before reading' })).toHaveCount(0);
+});
+
+// The question text owns everything derived from it (ADR-0094 review correction): editing it, a new date or zone, and
+// New question drop the previous proposal, answer, clarification and retry, and a late response cannot bring them back.
+
+const ANSWERS = '**/api/orgs/*/data-questions/answers';
+
+function recordQuestionRequests(page: Page): { executed: string[]; interpreted: string[] } {
+  const seen = { executed: [] as string[], interpreted: [] as string[] };
+  page.on('request', (request) => {
+    if (request.method() !== 'POST') return;
+    if (request.url().endsWith('/data-questions/interpretations')) seen.interpreted.push((request.postDataJSON() as { text: string }).text);
+    if (request.url().endsWith('/data-questions/answers')) seen.executed.push((request.postDataJSON() as { plan: { operation: string } }).plan.operation);
+  });
+  return seen;
+}
+
+test('6. editing a proposed question removes its plan; only the replacement is interpreted and executed', async ({ demoScenario, environment, page }) => {
+  stableToday();
+  await signIn(page, environment.demoWebOrigin, demoScenario.runnerUserId, demoScenario.orgId);
+  const { ask, state } = await openAsk(page);
+  const seen = recordQuestionRequests(page);
+  const input = ask.getByLabel('Ask in your own words (English or Russian)');
+  const review = ask.getByRole('region', { name: 'Review the question before reading' });
+
+  await input.fill('What did I record today?');
+  await ask.getByRole('button', { name: 'Interpret question' }).click();
+  await expect(state).toHaveAttribute('data-ask-state', 'proposal');
+  await expect(review.getByText('Everything you recorded for one day')).toBeVisible();
+
+  // The edit keeps the new text and removes the old plan and its Get answer.
+  await input.fill('Show my recorded nutrition for this week');
+  await expect(state).toHaveAttribute('data-ask-state', 'idle');
+  await expect(input).toHaveValue('Show my recorded nutrition for this week');
+  await expect(review).toHaveCount(0);
+  await expect(ask.getByRole('button', { name: 'Get answer' })).toHaveCount(0);
+  expect(seen).toEqual({ executed: [], interpreted: ['What did I record today?'] });
+
+  // Only an explicit interpretation of the replacement produces a plan, and that plan is the one executed.
+  await ask.getByRole('button', { name: 'Interpret question' }).click();
+  await expect(state).toHaveAttribute('data-ask-state', 'proposal');
+  await expect(review.getByText('The weekly review: recorded nutrition')).toBeVisible();
+  await review.getByRole('button', { name: 'Get answer' }).click();
+  await expect(state).toHaveAttribute('data-ask-state', 'ready');
+  await expect(ask.getByRole('region', { name: 'Answer' }).getByText('No meals were logged in this week.')).toBeVisible();
+  expect(seen).toEqual({ executed: ['weekly_review'], interpreted: ['What did I record today?', 'Show my recorded nutrition for this week'] });
+
+  // Editing after the answer removes it too; New question starts empty.
+  await input.fill('Show my recorded nutrition for this week?');
+  await expect(state).toHaveAttribute('data-ask-state', 'idle');
+  await expect(ask.getByRole('region', { name: 'Answer' })).toHaveCount(0);
+  await ask.getByRole('button', { name: 'What did I record for the selected day?' }).click();
+  await expect(state).toHaveAttribute('data-ask-state', 'ready');
+  await ask.getByRole('button', { name: 'New question' }).click();
+  await expect(state).toHaveAttribute('data-ask-state', 'idle');
+  await expect(input).toHaveValue('');
+});
+
+test('7. editing after an error cannot retry the previous question', async ({ demoScenario, environment, page }) => {
+  stableToday();
+  await signIn(page, environment.demoWebOrigin, demoScenario.runnerUserId, demoScenario.orgId);
+  const { ask, state } = await openAsk(page);
+  const seen = recordQuestionRequests(page);
+  const input = ask.getByLabel('Ask in your own words (English or Russian)');
+
+  await page.route(INTERPRETATIONS, (route) => route.abort('failed'));
+  await input.fill('What did I record today?');
+  await ask.getByRole('button', { name: 'Interpret question' }).click();
+  await expect(state).toHaveAttribute('data-ask-state', 'error');
+  await expect(ask.getByRole('button', { name: 'Retry' })).toBeVisible();
+  await page.unroute(INTERPRETATIONS);
+
+  await input.fill('Show my recorded nutrition for this week');
+  await expect(state).toHaveAttribute('data-ask-state', 'idle');
+  await expect(ask.getByRole('alert')).toHaveCount(0);
+  await expect(ask.getByRole('button', { name: 'Retry' })).toHaveCount(0);
+  expect(seen.interpreted).toEqual(['What did I record today?']);
+
+  await ask.getByRole('button', { name: 'Interpret question' }).click();
+  await expect(state).toHaveAttribute('data-ask-state', 'proposal');
+  await expect(ask.getByText('The weekly review: recorded nutrition')).toBeVisible();
+  expect(seen).toEqual({ executed: [], interpreted: ['What did I record today?', 'Show my recorded nutrition for this week'] });
+});
+
+test('8. a new date or time zone clears the question text and everything derived from it', async ({ browser, demoScenario, environment, page }) => {
+  const today = stableToday();
+  await signIn(page, environment.demoWebOrigin, demoScenario.runnerUserId, demoScenario.orgId);
+  const opened = await openAsk(page);
+  const { screen } = opened;
+  let { ask, state } = opened;
+  let input = ask.getByLabel('Ask in your own words (English or Russian)');
+
+  await input.fill('What did I record today?');
+  await ask.getByRole('button', { name: 'Interpret question' }).click();
+  await expect(state).toHaveAttribute('data-ask-state', 'proposal');
+  await screen.getByLabel('Date').fill(daysBefore(today, 2));
+  await expect(state).toHaveAttribute('data-ask-state', 'idle');
+  await expect(input).toHaveValue('');
+  await expect(ask.getByRole('button', { name: 'Get answer' })).toHaveCount(0);
+
+  // The app reads the device zone once per page load (App.tsx), so a zone change arrives with a new page load in the new
+  // zone: nothing of the previous question survives it (nothing is stored). The in-page zone path is the same
+  // setContext as the date change above, covered for the zone by the controller tests.
+  await input.fill('What did I record today?');
+  await ask.getByRole('button', { name: 'Interpret question' }).click();
+  await expect(state).toHaveAttribute('data-ask-state', 'proposal');
+  // The same signed-in session opened in another zone (Chromium cannot swap the zone of a running page).
+  const elsewhere = await browser.newContext({ locale: 'en-GB', storageState: await page.context().storageState(), timezoneId: 'America/New_York' });
+  try {
+    const moved = await elsewhere.newPage();
+    await moved.goto(environment.demoWebOrigin);
+    await expectSignedIn(moved, demoScenario.runnerUserId);
+    ({ ask, state } = await openAsk(moved));
+    input = ask.getByLabel('Ask in your own words (English or Russian)');
+    await expect(ask.getByText(/in America\/New_York\./u)).toBeVisible();
+    await expect(state).toHaveAttribute('data-ask-state', 'idle');
+    await expect(input).toHaveValue('');
+    await expect(ask.getByRole('region', { name: 'Review the question before reading' })).toHaveCount(0);
+    await expect(ask.getByRole('button', { name: 'Get answer' })).toHaveCount(0);
+  } finally {
+    await elsewhere.close();
+  }
+});
+
+test('9. late responses of a cancelled and then edited question stay ignored', async ({ demoScenario, environment, page }) => {
+  stableToday();
+  await signIn(page, environment.demoWebOrigin, demoScenario.runnerUserId, demoScenario.orgId);
+  const { ask, state } = await openAsk(page);
+  const input = ask.getByLabel('Ask in your own words (English or Russian)');
+  const held: Route[] = [];
+  const releaseAll = async () => {
+    for (const route of held.splice(0)) await route.continue().catch(() => undefined);
+  };
+
+  // A held interpretation: cancel, edit, then let the old answer arrive.
+  await page.route(INTERPRETATIONS, (route) => {
+    held.push(route);
+  });
+  await input.fill('What did I record today?');
+  await ask.getByRole('button', { name: 'Interpret question' }).click();
+  await expect(state).toHaveAttribute('data-ask-state', 'interpreting');
+  await ask.getByRole('button', { name: 'Cancel' }).click();
+  await input.fill('Show my recorded nutrition for this week');
+  await releaseAll();
+  await page.unroute(INTERPRETATIONS);
+  await page.waitForTimeout(300);
+  await expect(state).toHaveAttribute('data-ask-state', 'idle');
+  await expect(ask.getByRole('region', { name: 'Review the question before reading' })).toHaveCount(0);
+
+  // A held execution: cancel back to the proposal, edit (which removes it), then let the old answer arrive.
+  await ask.getByRole('button', { name: 'Interpret question' }).click();
+  await expect(state).toHaveAttribute('data-ask-state', 'proposal');
+  await page.route(ANSWERS, (route) => {
+    held.push(route);
+  });
+  await ask.getByRole('button', { name: 'Get answer' }).click();
+  await expect(state).toHaveAttribute('data-ask-state', 'answering');
+  await ask.getByRole('button', { name: 'Cancel' }).click();
+  await expect(state).toHaveAttribute('data-ask-state', 'proposal');
+  await input.fill('What did I record today?');
+  await expect(state).toHaveAttribute('data-ask-state', 'idle');
+  await releaseAll();
+  await page.unroute(ANSWERS);
+  await page.waitForTimeout(300);
+  await expect(state).toHaveAttribute('data-ask-state', 'idle');
+  await expect(ask.getByRole('region', { name: 'Answer' })).toHaveCount(0);
 });

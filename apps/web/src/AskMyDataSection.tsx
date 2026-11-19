@@ -205,6 +205,7 @@ export interface AskMyDataHandlers {
   dismiss: () => void;
   execute: () => void;
   interpret: () => void;
+  newQuestion: () => void;
   openSource: (answer: DataQuestionAnswer) => void;
   refresh: () => void;
   retry: () => void;
@@ -213,13 +214,13 @@ export interface AskMyDataHandlers {
 
 export interface AskMyDataViewProps {
   handlers: AskMyDataHandlers;
+  /** The question text is part of the snapshot, so it can never disagree with the state derived from it. */
   snapshot: AskSnapshot;
-  text: string;
 }
 
 /** Everything the section shows, from one snapshot. Pure, so every state is testable without a DOM. */
-export function AskMyDataView({ handlers, snapshot, text }: AskMyDataViewProps) {
-  const { capability, context, state } = snapshot;
+export function AskMyDataView({ handlers, snapshot }: AskMyDataViewProps) {
+  const { capability, context, state, text } = snapshot;
   const busy = state.kind === 'interpreting' || state.kind === 'answering' || (state.kind === 'ready' && state.refreshing);
   const textLength = [...text].length;
   const submit = (event: FormEvent) => {
@@ -301,7 +302,7 @@ export function AskMyDataView({ handlers, snapshot, text }: AskMyDataViewProps) 
               <button onClick={() => handlers.openSource(state.answer)} type="button">{sourceActionOf(state.answer).label}</button>
               <button disabled={state.refreshing} onClick={handlers.refresh} type="button">{state.refreshing ? 'Updating…' : 'Refresh answer'}</button>
               {state.refreshing && <button onClick={handlers.cancel} type="button">Cancel</button>}
-              <button onClick={handlers.dismiss} type="button">New question</button>
+              <button onClick={handlers.newQuestion} type="button">New question</button>
             </div>
           </section>
         )}
@@ -352,8 +353,9 @@ export interface AskMyDataSectionProps {
 }
 
 /**
- * The section and its controller. Today mounts it keyed by session, person and organization; a new selected date or zone
- * clears the question's state, and the controller dies with the screen or the session.
+ * The section and its controller. Today mounts it keyed by session, person and organization; the controller owns the
+ * question text with everything derived from it, so an edit, a new selected date or zone, and New question clear the old
+ * question's state; the controller dies with the screen or the session.
  */
 export function AskMyDataSection({ api, csrf, onAction, onSelectDate, orgId, selectedDate, signal, timeZone }: AskMyDataSectionProps) {
   const csrfRef = useRef(csrf);
@@ -369,8 +371,7 @@ export function AskMyDataSection({ api, csrf, onAction, onSelectDate, orgId, sel
   const contextRef = useRef({ selectedDate, timeZone });
   contextRef.current = { selectedDate, timeZone };
   const controller = useRef<DataQuestionController | null>(null);
-  const [snapshot, setSnapshot] = useState<AskSnapshot>(() => ({ capability: 'checking', context: { selectedDate, timeZone }, state: { kind: 'idle' } }));
-  const [text, setText] = useState('');
+  const [snapshot, setSnapshot] = useState<AskSnapshot>(() => ({ capability: 'checking', context: { selectedDate, timeZone }, state: { kind: 'idle' }, text: '' }));
 
   useEffect(() => {
     const next = new DataQuestionController({ api: apiRef.current, context: contextRef.current, onChange: setSnapshot, orgId, signal });
@@ -396,7 +397,8 @@ export function AskMyDataSection({ api, csrf, onAction, onSelectDate, orgId, sel
     chooseSource: (source) => controller.current?.chooseSource(source),
     dismiss: () => controller.current?.dismiss(),
     execute: () => controller.current?.execute(),
-    interpret: () => controller.current?.interpret(text),
+    interpret: () => controller.current?.interpret(),
+    newQuestion: () => controller.current?.newQuestion(),
     openSource: (answer) => {
       const { action } = sourceActionOf(answer);
       if (action.kind === 'select-date') onSelectDate(action.localDate);
@@ -404,8 +406,8 @@ export function AskMyDataSection({ api, csrf, onAction, onSelectDate, orgId, sel
     },
     refresh: () => controller.current?.refresh(),
     retry: () => controller.current?.retry(),
-    textChange: setText,
+    textChange: (text) => controller.current?.setText(text),
   };
 
-  return <AskMyDataView handlers={handlers} snapshot={snapshot} text={text} />;
+  return <AskMyDataView handlers={handlers} snapshot={snapshot} />;
 }

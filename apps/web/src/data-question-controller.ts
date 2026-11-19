@@ -16,9 +16,15 @@ import { RunnerApiError } from './runner-api.js';
 // nothing is persisted, cached or kept as a history. It belongs to one session, person and organization (the screen is
 // keyed by them); the selected date and the zone are its context, and changing either clears the state.
 //
+// The question text lives in the same snapshot as the state derived from it, and every change of the text goes through
+// `setText`: a different text invalidates the proposal, answer, clarification and retry of the previous one (and aborts
+// its request), so no plan of an earlier question can be executed. The new text is kept for an explicit Interpret. A new
+// date or zone, and New question, also empty the text.
+//
 // Every request is explicit and at most one is in flight. A generation counter, not the abort signal, decides whether a
 // response is still wanted, so a transport that ignores cancellation can never overwrite newer state; cancelling, a
-// context change, a sign-out (the session signal) and disposal all move the generation on and abort the request.
+// edit of the question text, a context change, a sign-out (the session signal) and disposal all move the generation on
+// and abort the request.
 // Interpretation only ever yields a plan to REVIEW; only `ask` (a predefined question, itself an explicit read request)
 // and `execute` read data.
 
@@ -45,6 +51,8 @@ export interface AskSnapshot {
   capability: InterpretationCapability;
   context: AskContext;
   state: AskState;
+  /** The question as typed; every state above except `idle` was derived from exactly this text (or a predefined question). */
+  text: string;
 }
 
 /** The four routes, bound to the session's CSRF credentials by the screen. */
@@ -127,7 +135,7 @@ export class DataQuestionController {
     this.#api = options.api;
     this.#onChange = options.onChange;
     this.#orgId = options.orgId;
-    this.#snapshot = { capability: 'checking', context: options.context, state: { kind: 'idle' } };
+    this.#snapshot = { capability: 'checking', context: options.context, state: { kind: 'idle' }, text: '' };
     const signal = options.signal;
     if (signal?.aborted) this.dispose();
     else if (signal !== undefined) {
@@ -180,11 +188,23 @@ export class DataQuestionController {
     );
   }
 
-  /** Interprets a question into a plan to review. Never reads data. */
-  public interpret(text: string): void {
-    const question = text.trim();
+  /**
+   * A new question text. A text different from the current one invalidates everything derived from the previous text
+   * (its proposal, answer, clarification, error and retry) and abandons its request; the new text waits for Interpret.
+   */
+  public setText(text: string): void {
+    if (this.#disposed || text === this.#snapshot.text) return;
+    this.#abort();
+    this.#retry = null;
+    this.#emit({ ...this.#snapshot, state: { kind: 'idle' }, text });
+  }
+
+  /** Interprets the current question text into a plan to review. Never reads data. */
+  public interpret(): void {
+    const question = this.#snapshot.text.trim();
     if (this.#disposed || this.#busy || question === '') return;
-    this.#retry = () => this.interpret(question);
+    // Safe to repeat: any edit of the text clears this retry before it could interpret an older question.
+    this.#retry = () => this.interpret();
     const { context } = this.#snapshot;
     this.#setState({ kind: 'interpreting' });
     this.#request(
@@ -250,7 +270,7 @@ export class DataQuestionController {
     else if (state.kind === 'ready' && state.refreshing) this.#setState({ ...state, refreshing: false });
   }
 
-  /** Back to an empty question (after an answer, a clarification, a refusal or an error). */
+  /** Drops the proposal, answer, clarification, refusal or error; the typed text stays for an explicit re-interpretation. */
   public dismiss(): void {
     if (this.#disposed) return;
     this.#abort();
@@ -258,14 +278,22 @@ export class DataQuestionController {
     this.#setState({ kind: 'idle' });
   }
 
-  /** A new selected date or zone: everything about the previous context is dropped. */
+  /** Starts over: an empty question and nothing derived from the previous one. */
+  public newQuestion(): void {
+    if (this.#disposed) return;
+    this.#abort();
+    this.#retry = null;
+    this.#emit({ ...this.#snapshot, state: { kind: 'idle' }, text: '' });
+  }
+
+  /** A new selected date or zone: everything about the previous context is dropped, the question text included. */
   public setContext(context: AskContext): void {
     if (this.#disposed) return;
     const current = this.#snapshot.context;
     if (current.selectedDate === context.selectedDate && current.timeZone === context.timeZone) return;
     this.#abort();
     this.#retry = null;
-    this.#emit({ ...this.#snapshot, context, state: { kind: 'idle' } });
+    this.#emit({ ...this.#snapshot, context, state: { kind: 'idle' }, text: '' });
   }
 
   public dispose(): void {

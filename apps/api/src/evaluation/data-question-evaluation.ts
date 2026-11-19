@@ -356,54 +356,260 @@ export function buildDataQuestionReport(input: {
 
 export type GateStatus = 'FAIL' | 'NOT_RUN' | 'PASS';
 
+/** Quality recomputed by the gate from the recorded outcomes and the frozen dataset (never the report's own summary). */
+export interface DataQuestionGateQuality {
+  exact: number;
+  exactAccuracy: number;
+  executableOnNonPlan: number;
+  technicalFailureRate: number;
+  technicalFailures: number;
+  total: number;
+}
+
 export interface DataQuestionGate {
   /** Whether the reports are valid evidence for the CURRENT code, prompt and datasets (separate from quality). */
   evidenceValid: boolean;
   problems: string[];
-  quality: Record<DataQuestionEvalSet, { exactAccuracy: number; executableOnNonPlan: number; technicalFailureRate: number } | null>;
+  quality: Record<DataQuestionEvalSet, DataQuestionGateQuality | null>;
   status: GateStatus;
 }
 
+/** At most this many problems are reported, each at most `PROBLEM_TEXT_MAX` characters: diagnostics stay bounded. */
+export const DATA_QUESTION_GATE_PROBLEM_LIMIT = 24;
+const PROBLEM_TEXT_MAX = 300;
+const LISTED = 3;
+
+// Run-time shape of a report read from disk. Strict: an unexpected field is malformed evidence, not ignored. Plans and
+// refusal reasons are validated against the product contract, so a recorded outcome is one the screen could have shown.
+const caseOutcomeSchema = z.discriminatedUnion('outcome', [
+  z.strictObject({ outcome: z.literal('proposal'), plan: dataQuestionPlanSchema }),
+  z.strictObject({ outcome: z.literal('clarify'), reason: z.enum(DATA_QUESTION_CLARIFICATION_REASONS) }),
+  z.strictObject({ outcome: z.literal('unsupported'), reason: z.enum(DATA_QUESTION_UNSUPPORTED_REASONS) }),
+  z.strictObject({ failure: z.string().regex(/^[a-z0-9_]{1,64}$/u), outcome: z.literal('failure') }),
+]);
+const count = z.number().int().min(0).max(1_000);
+const ratio = z.number().finite().min(0).max(1);
+const latencyValue = z.number().int().min(0).nullable();
+const caseResultSchema = z.strictObject({
+  category: z.enum(['supported', 'ambiguous', 'unsupported', 'adversarial']),
+  exact: z.boolean(),
+  executableOnNonPlan: z.boolean(),
+  expected: z.enum(['clarify', 'proposal', 'unsupported']),
+  got: caseOutcomeSchema,
+  id: z.string().min(1).max(80),
+  language: z.enum(['en', 'ru']),
+  latencyMs: z.number().int().min(0),
+});
+const scoreSchema = z.strictObject({
+  byLanguage: z.strictObject({ en: z.strictObject({ exact: count, total: count }), ru: z.strictObject({ exact: count, total: count }) }),
+  exact: count,
+  exactAccuracy: ratio,
+  executableOnNonPlan: count,
+  nonPlanCases: count,
+  technicalFailureRate: ratio,
+  technicalFailures: count,
+  total: count,
+});
+const digestSchema = z.string().max(128);
+export const dataQuestionEvalReportSchema = z.strictObject({
+  callsMade: count,
+  codeFingerprint: digestSchema,
+  complete: z.boolean(),
+  datasetDigest: digestSchema,
+  datasetVersion: z.string().max(64),
+  evidence: z.enum(['harness_self_check_not_model_evidence', 'model']),
+  finishedAt: z.string().max(64),
+  git: z.strictObject({ dirty: z.boolean().nullable(), dirtyPathCount: count.nullable(), dirtyPaths: z.array(z.string().max(512)).max(1_000), sha: z.string().max(64).nullable() }),
+  latency: z.strictObject({ maxMs: latencyValue, meanMs: latencyValue, p50Ms: latencyValue, p95Ms: latencyValue }),
+  profile: z.union([mealDraftExecutionProfileSchema, dataQuestionFakeProfileSchema]),
+  profileCheck: z.strictObject({ mismatches: count, requests: count }).nullable(),
+  promptDigest: digestSchema,
+  promptVersion: z.string().max(64),
+  reportVersion: z.number().int(),
+  results: z.array(caseResultSchema).max(100),
+  score: scoreSchema,
+  set: z.enum(DATA_QUESTION_EVAL_SETS),
+  startedAt: z.string().max(64),
+  stopped: z.string().max(100).nullable(),
+  thresholds: z.strictObject({ exactAccuracyMin: z.number(), executableOnNonPlanMax: z.number(), technicalFailureMax: z.number() }),
+  wireSchemaName: z.string().max(100),
+});
+
+const bounded = (text: string) => (text.length <= PROBLEM_TEXT_MAX ? text : `${text.slice(0, PROBLEM_TEXT_MAX - 1)}…`);
+const listed = (values: readonly string[]) => `${values.slice(0, LISTED).join(', ')}${values.length > LISTED ? ` and ${values.length - LISTED} more` : ''}`;
+
+function malformed(index: number, error: z.ZodError): string {
+  const issues = error.issues.slice(0, LISTED).map((issue) => `${issue.path.join('.') || '(root)'}: ${issue.message}`);
+  return `report ${index + 1}: malformed (${issues.join('; ')}${error.issues.length > LISTED ? `; and ${error.issues.length - LISTED} more` : ''})`;
+}
+
 /**
- * The model gate: both sets exactly once, complete, from Ollama, with the pinned dataset digests, the current prompt digest
- * and code fingerprint, one execution profile for both (checked on every request), and each set meeting the thresholds.
- * Invalid or missing evidence is NOT_RUN (never PASS); valid evidence below a threshold is FAIL.
+ * `safeParse` that cannot throw: some contract refinements (calendar-date checks) raise instead of reporting an issue for
+ * values such as "2026-02-30". Such a report is malformed evidence like any other, with a bounded reason; validation itself
+ * is not weakened, only its exceptions are contained.
  */
-export function evaluateDataQuestionGate(reports: readonly DataQuestionEvalReport[], current = { codeFingerprint: dataQuestionCodeFingerprint(), promptDigest: dataQuestionPromptDigest() }): DataQuestionGate {
+function parseReport(input: unknown, index: number): { problem: string; report?: never } | { problem?: never; report: ParsedReport } {
+  try {
+    const parsed = dataQuestionEvalReportSchema.safeParse(input);
+    return parsed.success ? { report: parsed.data } : { problem: malformed(index, parsed.error) };
+  } catch (error) {
+    const reason = error instanceof Error ? `${error.name}: ${error.message}`.slice(0, 120) : 'unknown error';
+    return { problem: `report ${index + 1}: malformed (validation failed: ${reason})` };
+  }
+}
+
+type ParsedReport = z.infer<typeof dataQuestionEvalReportSchema>;
+
+/**
+ * Verifies one set's report against its frozen dataset and re-derives its quality. Returns the problems that make it invalid
+ * evidence and, when every frozen case was recorded exactly once and in order, the recomputed quality.
+ */
+function verifyReport(
+  report: ParsedReport,
+  loaded: { dataset: DataQuestionEvalDataset; digest: string },
+  current: { codeFingerprint: string; promptDigest: string },
+): { problems: string[]; quality: DataQuestionGateQuality | null } {
+  const { set } = report;
+  const { dataset, digest } = loaded;
+  const problems: string[] = [];
+  const problem = (text: string) => problems.push(`${set}: ${text}`);
+
+  if (report.reportVersion !== DATA_QUESTION_REPORT_VERSION) problem(`report version ${report.reportVersion}`);
+  if (report.evidence !== 'model' || report.profile.provider !== 'ollama') problem('not a model run with a valid execution profile');
+  if (report.datasetVersion !== dataset.version) problem(`dataset version ${report.datasetVersion} is not the frozen ${dataset.version}`);
+  if (report.datasetDigest !== DATA_QUESTION_DATASET_DIGESTS[set] || report.datasetDigest !== digest) problem('dataset digest differs from the pinned one');
+  if (report.promptDigest !== current.promptDigest) problem('prompt digest is stale');
+  if (report.promptVersion !== DATA_QUESTION_PROMPT_VERSION) problem(`prompt version ${report.promptVersion} is not the current one`);
+  if (report.codeFingerprint !== current.codeFingerprint) problem('code fingerprint is stale');
+  if (report.wireSchemaName !== DATA_QUESTION_WIRE_SCHEMA_NAME) problem('wire schema differs from the current one');
+  if (canonical(report.thresholds) !== canonical(DATA_QUESTION_THRESHOLDS)) problem('stored thresholds differ from the frozen ones');
+  if (report.stopped !== null) problem(`the run stopped (${report.stopped})`);
+
+  // Every frozen case exactly once, in the frozen order; nothing else.
+  const total = dataset.cases.length;
+  const expectedIds = dataset.cases.map((entry) => entry.id);
+  const frozen = new Map(dataset.cases.map((entry) => [entry.id, entry]));
+  const seen = new Map<string, number>();
+  for (const result of report.results) seen.set(result.id, (seen.get(result.id) ?? 0) + 1);
+  const duplicate = [...seen].filter(([, times]) => times > 1).map(([id]) => id);
+  const missing = expectedIds.filter((id) => !seen.has(id));
+  const unknown = [...seen.keys()].filter((id) => !frozen.has(id));
+  const idsMatch = duplicate.length === 0 && missing.length === 0 && unknown.length === 0;
+  if (!idsMatch) {
+    const parts = [
+      duplicate.length > 0 ? `duplicate ${listed(duplicate)}` : null,
+      missing.length > 0 ? `missing ${listed(missing)}` : null,
+      unknown.length > 0 ? `unknown ${listed(unknown)}` : null,
+    ].filter((part) => part !== null);
+    problem(`case ids do not match the frozen set (${parts.join('; ')})`);
+  } else if (report.results.some((result, index) => result.id !== expectedIds[index])) problem('results are not in the frozen order');
+  if (report.results.length !== total) problem(`${report.results.length} of ${total} frozen cases recorded`);
+
+  // Complete call accounting: one checked request per recorded case.
+  if (report.callsMade !== report.results.length) problem(`${report.callsMade} calls for ${report.results.length} recorded cases`);
+  if (report.profileCheck === null || report.profileCheck.mismatches > 0 || report.profileCheck.requests !== report.callsMade) {
+    problem('requests not all checked against the profile');
+  }
+  const complete = report.stopped === null && idsMatch && report.results.length === total;
+  if (report.complete !== complete) problem(`stored complete flag contradicts the recorded run (${String(report.complete)}, recomputed ${String(complete)})`);
+
+  // Each judgment re-derived from the recorded outcome against the FROZEN expectation; stored flags are only compared.
+  const contradictions: string[] = [];
+  const rejudged: DataQuestionCaseResult[] = [];
+  const judgedIds = new Set<string>();
+  for (const result of report.results) {
+    const entry = frozen.get(result.id);
+    if (entry === undefined || judgedIds.has(result.id)) continue;
+    judgedIds.add(result.id);
+    if (result.category !== entry.category || result.language !== entry.language || result.expected !== entry.expected.outcome) {
+      contradictions.push(`${result.id}: stored case (category, language or expected outcome) differs from the frozen dataset`);
+    }
+    const judgment = judge(entry, result.got);
+    if (judgment.exact !== result.exact || judgment.executableOnNonPlan !== result.executableOnNonPlan) {
+      contradictions.push(`${result.id}: stored judgment contradicts its recorded outcome`);
+    }
+    rejudged.push({ ...result, ...judgment, category: entry.category, expected: entry.expected.outcome, got: result.got, language: entry.language });
+  }
+  for (const text of contradictions.slice(0, LISTED)) problem(text);
+  if (contradictions.length > LISTED) problem(`and ${contradictions.length - LISTED} more contradictory cases`);
+
+  // Aggregates recomputed with the frozen denominators; a stored summary that differs is contradictory evidence.
+  const nonPlanCases = dataset.cases.filter((entry) => entry.expected.outcome !== 'proposal').length;
+  const score = scoreDataQuestionResults(rejudged, total, nonPlanCases);
+  if (canonical(report.score) !== canonical(score)) {
+    problem(`stored score contradicts the recomputed one (exact ${score.exact}/${score.total}, executable on non-plan ${score.executableOnNonPlan}, technical failures ${score.technicalFailures})`);
+  }
+  if (canonical(report.latency) !== canonical(latencySummary(report.results))) problem('stored latency summary contradicts the recorded latencies');
+
+  const quality = idsMatch
+    ? { exact: score.exact, exactAccuracy: score.exactAccuracy, executableOnNonPlan: score.executableOnNonPlan, technicalFailureRate: score.technicalFailureRate, technicalFailures: score.technicalFailures, total: score.total }
+    : null;
+  return { problems, quality };
+}
+
+/**
+ * The model gate, re-derived from the evidence: each input is validated at run time; the pinned datasets are loaded here;
+ * exactly one report per known set, from Ollama, complete and unstopped, with every frozen case exactly once and in order,
+ * one checked request per case, the pinned dataset digest and version, the current prompt and code fingerprint, and one
+ * execution profile for both sets. Each case's judgment and each set's aggregates are recomputed from the recorded
+ * outcomes against the frozen expectations; a stored summary, flag or expected outcome that disagrees makes the evidence
+ * invalid. Invalid or missing evidence is NOT_RUN (never PASS); valid evidence below a threshold is FAIL.
+ */
+export function evaluateDataQuestionGate(
+  inputs: readonly unknown[],
+  options: {
+    current?: { codeFingerprint: string; promptDigest: string };
+    loadDataset?: (set: DataQuestionEvalSet) => { dataset: DataQuestionEvalDataset; digest: string };
+  } = {},
+): DataQuestionGate {
+  const current = options.current ?? { codeFingerprint: dataQuestionCodeFingerprint(), promptDigest: dataQuestionPromptDigest() };
+  const load = options.loadDataset ?? ((set: DataQuestionEvalSet) => loadDataQuestionDataset(set));
   const problems: string[] = [];
   const quality: DataQuestionGate['quality'] = { development: null, heldout: null };
-  const bySet = new Map<DataQuestionEvalSet, DataQuestionEvalReport>();
-  for (const report of reports) {
-    if (bySet.has(report.set)) problems.push(`more than one ${report.set} report`);
-    bySet.set(report.set, report);
-  }
+
+  const datasets = new Map<DataQuestionEvalSet, { dataset: DataQuestionEvalDataset; digest: string }>();
   for (const set of DATA_QUESTION_EVAL_SETS) {
-    const report = bySet.get(set);
-    if (report === undefined) {
-      problems.push(`no ${set} report`);
-      continue;
+    try {
+      datasets.set(set, load(set));
+    } catch (error) {
+      problems.push(`${set}: the frozen dataset cannot be loaded (${error instanceof Error ? error.message : 'unknown error'})`);
     }
-    if (report.reportVersion !== DATA_QUESTION_REPORT_VERSION) problems.push(`${set}: report version ${String(report.reportVersion)}`);
-    if (report.evidence !== 'model' || !mealDraftExecutionProfileSchema.safeParse(report.profile).success) problems.push(`${set}: not a model run with a valid execution profile`);
-    if (!report.complete) problems.push(`${set}: incomplete (${report.results.length} of ${report.score.total}${report.stopped === null ? '' : `, stopped: ${report.stopped}`})`);
-    if (report.datasetDigest !== DATA_QUESTION_DATASET_DIGESTS[set]) problems.push(`${set}: dataset digest differs from the pinned one`);
-    if (report.promptDigest !== current.promptDigest) problems.push(`${set}: prompt digest is stale`);
-    if (report.codeFingerprint !== current.codeFingerprint) problems.push(`${set}: code fingerprint is stale`);
-    if (report.profileCheck === null || report.profileCheck.mismatches > 0 || report.profileCheck.requests !== report.callsMade) {
-      problems.push(`${set}: requests not all checked against the profile`);
-    }
-    if (report.callsMade !== report.results.length) problems.push(`${set}: calls and results differ`);
-    quality[set] = { exactAccuracy: report.score.exactAccuracy, executableOnNonPlan: report.score.executableOnNonPlan, technicalFailureRate: report.score.technicalFailureRate };
   }
-  const development = bySet.get('development');
-  const heldout = bySet.get('heldout');
+
+  const bySet = new Map<DataQuestionEvalSet, ParsedReport[]>();
+  inputs.forEach((input, index) => {
+    const parsed = parseReport(input, index);
+    if (parsed.report === undefined) problems.push(parsed.problem);
+    else bySet.set(parsed.report.set, [...(bySet.get(parsed.report.set) ?? []), parsed.report]);
+  });
+
+  const single = new Map<DataQuestionEvalSet, ParsedReport>();
+  for (const set of DATA_QUESTION_EVAL_SETS) {
+    const reports = bySet.get(set) ?? [];
+    if (reports.length === 0) problems.push(`no ${set} report`);
+    if (reports.length > 1) problems.push(`more than one ${set} report`);
+    if (reports.length !== 1) continue;
+    const report = reports[0]!;
+    single.set(set, report);
+    const loaded = datasets.get(set);
+    if (loaded === undefined) continue;
+    const verdict = verifyReport(report, loaded, current);
+    problems.push(...verdict.problems);
+    quality[set] = verdict.quality;
+  }
+  const development = single.get('development');
+  const heldout = single.get('heldout');
   if (development !== undefined && heldout !== undefined) {
     const differences = valueDifferences(development.profile, heldout.profile);
-    if (differences.length > 0) problems.push(`the two sets ran under different profiles (${differences.join(', ')})`);
-    if (development.callsMade + heldout.callsMade > DATA_QUESTION_EVAL_MAX_CALLS) problems.push('more than 40 inference calls in total');
+    if (differences.length > 0) problems.push(`the two sets ran under different profiles (${listed(differences)})`);
+    if (development.callsMade + heldout.callsMade > DATA_QUESTION_EVAL_MAX_CALLS) problems.push(`more than ${DATA_QUESTION_EVAL_MAX_CALLS} inference calls in total`);
   }
+
   const evidenceValid = problems.length === 0;
-  if (!evidenceValid) return { evidenceValid, problems, quality, status: 'NOT_RUN' };
+  if (!evidenceValid) {
+    const shown = problems.length > DATA_QUESTION_GATE_PROBLEM_LIMIT ? [...problems.slice(0, DATA_QUESTION_GATE_PROBLEM_LIMIT - 1), `and ${problems.length - DATA_QUESTION_GATE_PROBLEM_LIMIT + 1} more problems`] : problems;
+    return { evidenceValid, problems: shown.map(bounded), quality, status: 'NOT_RUN' };
+  }
   for (const set of DATA_QUESTION_EVAL_SETS) {
     const score = quality[set]!;
     if (score.exactAccuracy < DATA_QUESTION_THRESHOLDS.exactAccuracyMin) problems.push(`${set}: exact accuracy ${(score.exactAccuracy * 100).toFixed(1)} % < 90 %`);
@@ -432,5 +638,16 @@ export function formatDataQuestionReport(report: DataQuestionEvalReport): string
 }
 
 export function formatDataQuestionGate(gate: DataQuestionGate): string {
-  return [`MODEL GATE (data questions): ${gate.status}; evidence ${gate.evidenceValid ? 'valid' : 'NOT valid for the current code'}`, ...gate.problems.map((problem) => `  - ${problem}`)].join('\n');
+  const pct = (value: number) => `${(value * 100).toFixed(1)} %`;
+  const quality = DATA_QUESTION_EVAL_SETS.flatMap((set) => {
+    const score = gate.quality[set];
+    return score === null
+      ? []
+      : [`  ${set}: exact ${score.exact}/${score.total} = ${pct(score.exactAccuracy)}; executable proposals on clarification/refusal cases ${score.executableOnNonPlan}; technical failures ${score.technicalFailures}/${score.total} (recomputed from the recorded outcomes)`];
+  });
+  return [
+    `MODEL GATE (data questions): ${gate.status}; evidence ${gate.evidenceValid ? 'valid' : 'NOT valid (missing, malformed, contradictory or stale)'}`,
+    ...quality,
+    ...gate.problems.map((problem) => `  - ${problem}`),
+  ].join('\n');
 }
