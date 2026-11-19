@@ -33,7 +33,9 @@ commitment to dates or to every item below.
    - An asynchronous weekly review written from a facts bundle that SQL produced.
    - Food text parsing against a JSON schema, which the person confirms before anything is stored: a first form is
      "Draft from text" in the Meal log ([ADR-0092](adr/0092-meal-draft-from-text.md)), off by default.
-   - A chat coach with read-only tools.
+   - A chat coach with read-only tools. A first, deliberately narrower form is "Ask my data" on Today
+     ([ADR-0094](adr/0094-ask-my-data.md)): one question at a time, resolved into a plan the person reviews, answered by
+     exactly one existing deterministic read; no chat history, no tools chosen by a model, interpretation off by default.
 4. **Optional:** retrieval over a small, curated knowledge base.
 
 ## Principles
@@ -187,6 +189,17 @@ stays unknown and a written 0 stays 0. The proposal and its evidence are shown f
 form, and the person saves through the ordinary create route, so the entry is `source: manual` ("entered or confirmed by
 the person"). The date and zone are the form's, never the model's. No migration; nothing from the text or the answer is
 stored or logged. Frozen English and Russian evaluation sets measure a local model; see the ADR for the result.
+
+**Ask my data** is [ADR-0094](adr/0094-ask-my-data.md): a compact section on Today that answers one owner-only, read-only
+question at a time from three existing reads: the day (Today), the Monday-to-Sunday week (the weekly review, recorded
+nutrition included) and one activity source and type over 28 dates against the 28 before (activity trends). Predefined
+questions need no model. An optional local model (off by default, `DATA_QUESTIONS_PROVIDER=off`) may only choose closed
+symbols from the question, the selected date and the zone; the server resolves the dates with its own clock and zone,
+shows the plan with explicit dates, zone and source, and reads only when the person asks. Exactly one existing service is
+read once; the answer is an allowlist of its fields with their coverage and provenance. Sources are never combined
+("running" alone names no source), no record or result reaches the model, and nothing is stored or logged. A separate
+frozen synthetic evaluation measured `qwen3:8b` on 2026-11-19: FAIL (90.0 % and 85.0 % exact, one executable proposal on
+a clarification case in each set), so typed questions stay off; predefined questions work without any model.
 
 **HealthKit remains deferred** until macOS/Xcode access exists: reading Apple Health needs a native app, which cannot be
 built or signed from Windows. Nothing in the web pilot depends on it, and phone or watch imports stay a later item of the

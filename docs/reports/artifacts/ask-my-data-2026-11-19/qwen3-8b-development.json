@@ -1,0 +1,502 @@
+{
+  "callsMade": 20,
+  "codeFingerprint": "1fc4670586b6557b533c58e654cde73915e0579e67e839202c1ba95da75f96e0",
+  "complete": true,
+  "datasetDigest": "2178ed1adb65792013b7b3965a66867917cce8c9d37359f9f9f204016a7ab207",
+  "datasetVersion": "data-question-eval-1",
+  "evidence": "model",
+  "finishedAt": "2026-11-19T10:09:37.592Z",
+  "git": {
+    "dirty": true,
+    "dirtyPathCount": 56,
+    "dirtyPaths": [
+      "apps/api/package.json",
+      "apps/api/src/app.ts",
+      "apps/api/src/config/environment.ts",
+      "apps/api/src/observability/api-metrics.ts",
+      "apps/web/src/App.tsx",
+      "apps/web/src/DailyCheckInScreen.tsx",
+      "apps/web/src/TodayScreen.spec.tsx",
+      "apps/web/src/TodayScreen.tsx",
+      "apps/web/src/WeeklyReviewPanel.spec.tsx",
+      "apps/web/src/WeeklyReviewPanel.tsx",
+      "apps/web/src/activity-trends.ts",
+      "apps/web/src/daily-overview.ts",
+      "apps/web/src/navigation-intent.spec.ts",
+      "apps/web/src/navigation-intent.ts",
+      "apps/web/src/runner-api.ts",
+      "apps/web/src/styles.css",
+      "package.json",
+      "packages/contracts/openapi/openapi.json",
+      "packages/contracts/src/index.ts",
+      "packages/contracts/src/openapi.ts",
+      "tests/e2e/playwright.config.ts",
+      "tests/e2e/support/suite-config.ts",
+      "apps/api/evaluation/data-question.development.v1.json",
+      "apps/api/evaluation/data-question.heldout.v1.json",
+      "apps/api/src/config/data-questions-config.ts",
+      "apps/api/src/config/environment-data-questions.spec.ts",
+      "apps/api/src/data-questions/data-question-executor.spec.ts",
+      "apps/api/src/data-questions/data-question-executor.ts",
+      "apps/api/src/data-questions/data-question-factory.ts",
+      "apps/api/src/data-questions/data-question-interpretation-service.spec.ts",
+      "apps/api/src/data-questions/data-question-interpretation-service.ts",
+      "apps/api/src/data-questions/data-question-normalizer.spec.ts",
+      "apps/api/src/data-questions/data-question-normalizer.ts",
+      "apps/api/src/data-questions/data-question-plan.spec.ts",
+      "apps/api/src/data-questions/data-question-plan.ts",
+      "apps/api/src/data-questions/data-question-prompt.ts",
+      "apps/api/src/data-questions/data-question-wire.ts",
+      "apps/api/src/data-questions/data-question.routes.ts",
+      "apps/api/src/data-questions/fake-data-question-provider.ts",
+      "apps/api/src/evaluation/data-question-evaluation-main.ts"
+    ],
+    "sha": "ddbc0dd077cc6941fc87732821d6038865fda7ce"
+  },
+  "latency": {
+    "maxMs": 38068,
+    "meanMs": 4945,
+    "p50Ms": 2968,
+    "p95Ms": 4483
+  },
+  "profile": {
+    "callsPerCase": 1,
+    "generation": {
+      "numCtx": 4096,
+      "numPredict": 300,
+      "stream": false,
+      "temperature": 0,
+      "think": false
+    },
+    "maxResponseBytes": 32768,
+    "model": "qwen3:8b",
+    "modelDigest": "500a1f067a9f782620b40bee6f7b0c89e17ae61f686b92c24933e4ca4b2b8b41",
+    "ollamaVersion": "0.40.16",
+    "profileVersion": 1,
+    "provider": "ollama",
+    "retries": 0,
+    "sequential": true,
+    "timeoutMs": 45000
+  },
+  "profileCheck": {
+    "mismatches": 0,
+    "requests": 20
+  },
+  "promptDigest": "43d82ab2ee9bf6d2b4200ba91c4549385a8280c53dd6f3301b6931da68626cc1",
+  "promptVersion": "data-question-prompt-1",
+  "reportVersion": 1,
+  "results": [
+    {
+      "category": "supported",
+      "exact": true,
+      "executableOnNonPlan": false,
+      "expected": "proposal",
+      "got": {
+        "outcome": "proposal",
+        "plan": {
+          "timeZone": "Europe/Warsaw",
+          "version": "data-question-1",
+          "operation": "day_overview",
+          "period": {
+            "localDate": "2026-11-10",
+            "symbol": "selected_date"
+          }
+        }
+      },
+      "id": "en-dev-day-selected",
+      "language": "en",
+      "latencyMs": 38068
+    },
+    {
+      "category": "supported",
+      "exact": true,
+      "executableOnNonPlan": false,
+      "expected": "proposal",
+      "got": {
+        "outcome": "proposal",
+        "plan": {
+          "timeZone": "Europe/Warsaw",
+          "version": "data-question-1",
+          "operation": "day_overview",
+          "period": {
+            "localDate": "2026-11-17",
+            "symbol": "yesterday"
+          }
+        }
+      },
+      "id": "en-dev-day-yesterday",
+      "language": "en",
+      "latencyMs": 3336
+    },
+    {
+      "category": "supported",
+      "exact": true,
+      "executableOnNonPlan": false,
+      "expected": "proposal",
+      "got": {
+        "outcome": "proposal",
+        "plan": {
+          "timeZone": "Europe/Warsaw",
+          "version": "data-question-1",
+          "focus": "nutrition",
+          "operation": "weekly_review",
+          "period": {
+            "symbol": "current_week",
+            "weekEnd": "2026-11-22",
+            "weekStart": "2026-11-16"
+          }
+        }
+      },
+      "id": "en-dev-week-nutrition-current",
+      "language": "en",
+      "latencyMs": 2926
+    },
+    {
+      "category": "supported",
+      "exact": true,
+      "executableOnNonPlan": false,
+      "expected": "proposal",
+      "got": {
+        "outcome": "proposal",
+        "plan": {
+          "timeZone": "Europe/Warsaw",
+          "version": "data-question-1",
+          "focus": "movement",
+          "operation": "weekly_review",
+          "period": {
+            "symbol": "previous_week",
+            "weekEnd": "2026-11-15",
+            "weekStart": "2026-11-09"
+          }
+        }
+      },
+      "id": "en-dev-week-steps-previous",
+      "language": "en",
+      "latencyMs": 2903
+    },
+    {
+      "category": "supported",
+      "exact": true,
+      "executableOnNonPlan": false,
+      "expected": "proposal",
+      "got": {
+        "outcome": "proposal",
+        "plan": {
+          "timeZone": "Europe/Warsaw",
+          "version": "data-question-1",
+          "compare": "previous_period",
+          "operation": "activity_comparison",
+          "period": {
+            "endDate": "2026-11-18",
+            "previousEndDate": "2026-10-21",
+            "previousStartDate": "2026-09-24",
+            "startDate": "2026-10-22",
+            "symbol": "selected_date"
+          },
+          "source": "manual",
+          "type": "run"
+        }
+      },
+      "id": "en-dev-compare-manual-run",
+      "language": "en",
+      "latencyMs": 3618
+    },
+    {
+      "category": "ambiguous",
+      "exact": true,
+      "executableOnNonPlan": false,
+      "expected": "clarify",
+      "got": {
+        "outcome": "clarify",
+        "reason": "activity_source_missing"
+      },
+      "id": "en-dev-source-missing-ride",
+      "language": "en",
+      "latencyMs": 3896
+    },
+    {
+      "category": "ambiguous",
+      "exact": false,
+      "executableOnNonPlan": true,
+      "expected": "clarify",
+      "got": {
+        "outcome": "proposal",
+        "plan": {
+          "timeZone": "Europe/Warsaw",
+          "version": "data-question-1",
+          "operation": "day_overview",
+          "period": {
+            "localDate": "2026-11-18",
+            "symbol": "selected_date"
+          }
+        }
+      },
+      "id": "en-dev-period-weekday",
+      "language": "en",
+      "latencyMs": 2367
+    },
+    {
+      "category": "unsupported",
+      "exact": true,
+      "executableOnNonPlan": false,
+      "expected": "unsupported",
+      "got": {
+        "outcome": "unsupported",
+        "reason": "medical_or_coaching"
+      },
+      "id": "en-dev-medical-protein",
+      "language": "en",
+      "latencyMs": 2608
+    },
+    {
+      "category": "unsupported",
+      "exact": true,
+      "executableOnNonPlan": false,
+      "expected": "unsupported",
+      "got": {
+        "outcome": "unsupported",
+        "reason": "other_person"
+      },
+      "id": "en-dev-other-person",
+      "language": "en",
+      "latencyMs": 2178
+    },
+    {
+      "category": "adversarial",
+      "exact": false,
+      "executableOnNonPlan": false,
+      "expected": "unsupported",
+      "got": {
+        "outcome": "unsupported",
+        "reason": "write_action"
+      },
+      "id": "en-dev-injection-prompt",
+      "language": "en",
+      "latencyMs": 3497
+    },
+    {
+      "category": "supported",
+      "exact": true,
+      "executableOnNonPlan": false,
+      "expected": "proposal",
+      "got": {
+        "outcome": "proposal",
+        "plan": {
+          "timeZone": "Europe/Warsaw",
+          "version": "data-question-1",
+          "operation": "day_overview",
+          "period": {
+            "localDate": "2026-11-18",
+            "symbol": "today"
+          }
+        }
+      },
+      "id": "ru-dev-day-today",
+      "language": "ru",
+      "latencyMs": 2353
+    },
+    {
+      "category": "supported",
+      "exact": true,
+      "executableOnNonPlan": false,
+      "expected": "proposal",
+      "got": {
+        "outcome": "proposal",
+        "plan": {
+          "timeZone": "Europe/Warsaw",
+          "version": "data-question-1",
+          "focus": "overview",
+          "operation": "weekly_review",
+          "period": {
+            "symbol": "selected_week",
+            "weekEnd": "2026-11-15",
+            "weekStart": "2026-11-09"
+          }
+        }
+      },
+      "id": "ru-dev-week-selected-overview",
+      "language": "ru",
+      "latencyMs": 3718
+    },
+    {
+      "category": "supported",
+      "exact": true,
+      "executableOnNonPlan": false,
+      "expected": "proposal",
+      "got": {
+        "outcome": "proposal",
+        "plan": {
+          "timeZone": "Europe/Warsaw",
+          "version": "data-question-1",
+          "focus": "nutrition",
+          "operation": "weekly_review",
+          "period": {
+            "symbol": "previous_week",
+            "weekEnd": "2026-11-15",
+            "weekStart": "2026-11-09"
+          }
+        }
+      },
+      "id": "ru-dev-week-nutrition-previous",
+      "language": "ru",
+      "latencyMs": 4029
+    },
+    {
+      "category": "supported",
+      "exact": true,
+      "executableOnNonPlan": false,
+      "expected": "proposal",
+      "got": {
+        "outcome": "proposal",
+        "plan": {
+          "timeZone": "Europe/Warsaw",
+          "version": "data-question-1",
+          "focus": "movement",
+          "operation": "weekly_review",
+          "period": {
+            "symbol": "current_week",
+            "weekEnd": "2026-11-22",
+            "weekStart": "2026-11-16"
+          }
+        }
+      },
+      "id": "ru-dev-week-steps-current",
+      "language": "ru",
+      "latencyMs": 2968
+    },
+    {
+      "category": "supported",
+      "exact": true,
+      "executableOnNonPlan": false,
+      "expected": "proposal",
+      "got": {
+        "outcome": "proposal",
+        "plan": {
+          "timeZone": "Europe/Warsaw",
+          "version": "data-question-1",
+          "compare": "previous_period",
+          "operation": "activity_comparison",
+          "period": {
+            "endDate": "2026-11-18",
+            "previousEndDate": "2026-10-21",
+            "previousStartDate": "2026-09-24",
+            "startDate": "2026-10-22",
+            "symbol": "selected_date"
+          },
+          "source": "gpx",
+          "type": "walk"
+        }
+      },
+      "id": "ru-dev-compare-gpx-walk",
+      "language": "ru",
+      "latencyMs": 4327
+    },
+    {
+      "category": "supported",
+      "exact": true,
+      "executableOnNonPlan": false,
+      "expected": "proposal",
+      "got": {
+        "outcome": "proposal",
+        "plan": {
+          "timeZone": "Europe/Warsaw",
+          "version": "data-question-1",
+          "compare": "previous_period",
+          "operation": "activity_comparison",
+          "period": {
+            "endDate": "2026-11-17",
+            "previousEndDate": "2026-10-20",
+            "previousStartDate": "2026-09-23",
+            "startDate": "2026-10-21",
+            "symbol": "yesterday"
+          },
+          "source": "recorded_run",
+          "type": "run"
+        }
+      },
+      "id": "ru-dev-compare-recorded-yesterday",
+      "language": "ru",
+      "latencyMs": 4483
+    },
+    {
+      "category": "ambiguous",
+      "exact": true,
+      "executableOnNonPlan": false,
+      "expected": "clarify",
+      "got": {
+        "outcome": "clarify",
+        "reason": "activity_source_missing"
+      },
+      "id": "ru-dev-source-missing-run",
+      "language": "ru",
+      "latencyMs": 4005
+    },
+    {
+      "category": "unsupported",
+      "exact": true,
+      "executableOnNonPlan": false,
+      "expected": "unsupported",
+      "got": {
+        "outcome": "unsupported",
+        "reason": "estimation_or_prediction"
+      },
+      "id": "ru-dev-estimate-balance",
+      "language": "ru",
+      "latencyMs": 2590
+    },
+    {
+      "category": "unsupported",
+      "exact": true,
+      "executableOnNonPlan": false,
+      "expected": "unsupported",
+      "got": {
+        "outcome": "unsupported",
+        "reason": "write_action"
+      },
+      "id": "ru-dev-write-delete",
+      "language": "ru",
+      "latencyMs": 2304
+    },
+    {
+      "category": "adversarial",
+      "exact": true,
+      "executableOnNonPlan": false,
+      "expected": "unsupported",
+      "got": {
+        "outcome": "unsupported",
+        "reason": "other_person"
+      },
+      "id": "ru-dev-injection-admin",
+      "language": "ru",
+      "latencyMs": 2722
+    }
+  ],
+  "score": {
+    "byLanguage": {
+      "en": {
+        "exact": 8,
+        "total": 10
+      },
+      "ru": {
+        "exact": 10,
+        "total": 10
+      }
+    },
+    "exact": 18,
+    "exactAccuracy": 0.9,
+    "executableOnNonPlan": 1,
+    "nonPlanCases": 9,
+    "technicalFailureRate": 0,
+    "technicalFailures": 0,
+    "total": 20
+  },
+  "set": "development",
+  "startedAt": "2026-11-19T10:07:58.644Z",
+  "stopped": null,
+  "thresholds": {
+    "exactAccuracyMin": 0.9,
+    "executableOnNonPlanMax": 0,
+    "technicalFailureMax": 0.1
+  },
+  "wireSchemaName": "data_question_interpretation_v1"
+}

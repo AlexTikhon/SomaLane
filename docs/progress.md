@@ -5393,3 +5393,31 @@ not independent blind held-out evidence. Production files are byte-identical to 
 Findings, not fixed: title and evidence copying cost 7 of the 11 missed values, and the same pattern appears in every
 recorded run. The cold first call timed out at 45 s again. The failure rate sits exactly at the limit. v1 was not re-run
 and its evidence stays stale. The feature stays off by default. Changes are uncommitted.
+
+## Ask my data: one read-only question over existing analytics (ADR-0094) (2026-11-19)
+
+**What changed.** A compact "Ask my data" section on Today: predefined questions (no model) and optional English/Russian
+interpretation, a reviewed plan with explicit dates, zone and source, and a deterministic answer from exactly one existing
+read (daily overview, weekly review with recorded nutrition, or the activity trends' previous-28-days comparison for one
+explicit source and type). New: `packages/contracts/src/data-questions.ts` (`data-question-1`, OpenAPI for four routes
+under `/api/orgs/:orgId/data-questions`), `apps/api/src/data-questions` (plan resolution with the injected clock and the
+requested zone, the allowlisted executor over the existing service instances, normalization with an explicit-source guard,
+the interpretation service with ADR-0057/0092 lifetimes), `DATA_QUESTIONS_*` (`off` default | `fake` | `ollama`), a
+separate evaluation (`npm run eval:data-questions`, two frozen 20-case sets), the web controller and section, typed
+navigation to the weekly review and Trends. No migration, table, job, cache, browser storage or dependency. Meal drafts,
+weekly insights and run-search interpretation are unchanged. Report: `docs/reports/ask-my-data-2026-11-19.md`; runbook:
+`docs/runbooks/ask-my-data.md`. Backlog D11 records meal-draft title/evidence diagnostics (not started).
+
+| Check | Result |
+|---|---|
+| Focused tests (contracts, API, web) | contracts 11; API plan 8, executor 7, normalizer 8, service 11, config 5, evaluation 9; web 6 files, 75 passed |
+| `npm run verify` (`VITEST_MAX_WORKERS=2`) | exit **0**: scripts 115, API **2,487**, web **1,364**, contracts **322**, fixtures 14, simulator 3, build |
+| Test database identity (before writes) | `127.0.0.1:5433/running_tracker_test`, server `172.18.0.2:5432`, PostgreSQL 17.5; runtime, owner and maintenance roles as expected |
+| Integration (`VITEST_MAX_WORKERS` unset): new `data-questions-http` + daily overview, weekly review (+ meals explain), activity trends (+ explain), daily trends, meals/movement/activity/check-in/insights access, tenant isolation, HTTP session tenant, observability, meal drafts, run-search interpretation, session runtime | **18 files, 376 passed** |
+| Chromium: `ask-my-data` (5 scenarios) + Today, Today history, Trends, activity trends, weekly review, check-in, movement, meal draft, meal log, record, sign-out | **40 passed** |
+| Fake-provider harness on both sets | runs end to end, 17/20 each; labelled not evidence |
+| Real model `qwen3:8b`, Ollama 0.40.16, product defaults, frozen first | **40 of 40 calls**, sequential, no retries, no warm-up, nothing pulled; `/api/ps` empty before the first call |
+| `eval:data-questions --check` | exit **2**: **FAIL** (quality), evidence valid: development 90.0 % exact with 1 executable proposal on a clarification case; held-out 85.0 % with 1; technical failures 0 |
+| `git diff --check` | clean |
+
+Interpretation stays off by default. Not verified: physical Safari, hosted CI, real GPS, production. Changes are uncommitted.

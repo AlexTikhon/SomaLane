@@ -1,0 +1,75 @@
+# Runbook: "Ask my data" (ADR-0094)
+
+"Ask my data" is a section on Today. Predefined questions always work and need no model. Typed questions are optional
+and **off by default**. An answer is always one read of the person's own daily overview, weekly review or 28-day activity
+comparison; nothing is stored.
+
+## Modes
+
+| `DATA_QUESTIONS_PROVIDER` | What happens | When |
+|---|---|---|
+| `off` (default) | No provider object is built; `GET …/data-questions/capabilities` answers `{"interpretation":"off"}`; `POST …/interpretations` answers `503 DATA_QUESTION_INTERPRETATION_DISABLED`; the screen shows the predefined questions and a note that typed questions are not available. Plans and answers work. | Every deployment unless an operator decides otherwise |
+| `fake` | A deterministic keyword stand-in, in process. Refused when `APP_ENV=production`. **Never model evidence.** Control words for tests: `[delay=MS]`, `[fail]`, `[unavailable]`, `[invalid]`, `[implied-source]`. | Automated tests, the browser suite, demonstrations |
+| `ollama` | One non-streaming chat call per question to a local Ollama, with the closed JSON schema as `format`. Requires `DATA_QUESTIONS_MODEL` (a local model name; cloud names refused). | Only after a measured, reviewed decision |
+
+## Settings (defaults)
+
+`DATA_QUESTIONS_MODEL` (none), `DATA_QUESTIONS_OLLAMA_BASE_URL` (`http://127.0.0.1:11434`; loopback, private network,
+`host.docker.internal` or a single-label service only), `DATA_QUESTIONS_TIMEOUT_MS` (45 000, at most 55 000; the browser
+waits 60 s), `DATA_QUESTIONS_MAX_CONCURRENT` (1), `DATA_QUESTIONS_USER_RATE_PER_MINUTE` (5),
+`DATA_QUESTIONS_ALLOWANCE` (200 per `DATA_QUESTIONS_ALLOWANCE_WINDOW_MS`, 24 h), `DATA_QUESTIONS_LIMITER_MAX_USERS`
+(1000), `DATA_QUESTIONS_MAX_OUTPUT_TOKENS` (300), `DATA_QUESTIONS_MAX_RESPONSE_BYTES` (32 KiB). These are independent of
+`MEAL_DRAFTS_*`, `WEEKLY_INSIGHTS_*` and `RUN_SEARCH_AI_*`. Limits are per process and reset on restart.
+
+Enabling Ollama locally (synthetic data only):
+
+```
+DATA_QUESTIONS_PROVIDER=ollama
+DATA_QUESTIONS_MODEL=qwen3:8b      # must already be installed: nothing is pulled
+```
+
+The first question after the model was unloaded can take longer than the 45 s deadline on a CPU (a cold load); the person
+then sees "took too long" and can retry. Nothing retries by itself.
+
+## What the model receives
+
+Fixed instructions, one context line with the selected date and the zone, and the question. Never a record, a result, a
+title, a note, an identifier or an earlier question. The answer is a closed set of symbols that the server normalizes and
+resolves into dates itself; an activity comparison needs a source the question names in words. A proposal is only shown;
+the person executes it.
+
+## Failures and what they mean
+
+| Answer | Meaning | Action |
+|---|---|---|
+| `503 DATA_QUESTION_INTERPRETATION_DISABLED` | Off | None needed; predefined questions work |
+| `429 DATA_QUESTION_RATE_LIMITED` / `DATA_QUESTION_IN_PROGRESS` | Per-person rate, or the person's earlier call has not settled (also after a timeout) | Wait |
+| `503 DATA_QUESTION_BUSY` / `DATA_QUESTION_BUDGET_EXHAUSTED` | Concurrency or rolling allowance reached | Wait, or raise the limits deliberately |
+| `504 DATA_QUESTION_TIMEOUT` | The model did not answer within the deadline; its place stays taken until it settles | Check `ollama ps`; a cold load is expected once |
+| `502 DATA_QUESTION_FAILED` `details.reason` | `provider_unavailable`, `provider_error`, `invalid_output`, `incomplete`, `oversized` | Check that Ollama runs and the model is installed |
+| `400 INVALID_REQUEST` on `…/answers` | A plan the service's own rules refuse (a date after today, a forged or misaligned plan) | Ask again |
+
+Logs: `data_question.interpretation`, `data_question.operation_settled`, `data_question.answer` with outcome codes only.
+Metrics: `data_question_interpretation_requests_total`, `data_question_interpretation_seconds`,
+`data_question_answers_total`.
+
+## Measuring a model
+
+```
+npm run eval:data-questions -- --set development --provider fake                         # harness self-check, NOT evidence
+npm run eval:data-questions -- --freeze --model qwen3:8b --out freeze.json                # digests and profile; no inference
+npm run eval:data-questions -- --set development --provider ollama --model qwen3:8b --out dev.json
+npm run eval:data-questions -- --set heldout --provider ollama --model qwen3:8b --out heldout.json
+npm run eval:data-questions -- --check --report dev.json --report heldout.json --out gates.json    # offline
+```
+
+One sequential call per case, no retries, no warm-up, at most 40 calls for both sets; a run stops after three identical
+systemic failures. `--check` is offline: it recomputes the code fingerprint and prompt digest and answers PASS (0), FAIL
+(2) or NOT_RUN (3). Evidence is invalid (NOT_RUN) when a set is missing or incomplete, came from the fake provider, or the
+dataset, prompt, fingerprinted code or execution profile changed since. Thresholds: exact normalized interpretation
+≥ 90 % per set, zero executable proposals on clarification/refusal cases, technical failures ≤ 10 %. A PASS does not turn
+the feature on; that is a separate decision.
+
+The fingerprint covers an explicit file list (`DATA_QUESTION_FINGERPRINT_FILES` in
+`apps/api/src/evaluation/data-question-evaluation.ts`); changing any of them makes earlier reports stale. The datasets are
+frozen by their pinned digests; a changed case is a new version.

@@ -1,0 +1,17 @@
+﻿
+> running-tracker@0.1.0 eval:data-questions
+> npm run eval:data-questions --workspace=@running-tracker/api -- --set heldout --provider ollama --model qwen3:8b --max-calls 20 --out C:\ForMe\Learning\SomaLane\docs\reports\artifacts\ask-my-data-2026-11-19\qwen3-8b-heldout.json
+
+
+> @running-tracker/api@0.1.0 eval:data-questions
+> node --import tsx src/evaluation/data-question-evaluation-main.ts --set heldout --provider ollama --model qwen3:8b --max-calls 20 --out C:\ForMe\Learning\SomaLane\docs\reports\artifacts\ask-my-data-2026-11-19\qwen3-8b-heldout.json
+
+DATA QUESTION EVALUATION (heldout, model run)
+  cases 20/20; calls 20; stopped no
+  exact normalized interpretation 17/20 = 85.0 % (en 8/10, ru 9/10)
+  executable proposals on clarification/refusal cases: 1 of 8
+  technical failures 0/20 = 0.0 %
+  latency mean 3514 ms, p50 3154 ms, p95 4782 ms, max 5798 ms
+  MISMATCH en-ho-week-previous-nutrition: expected proposal, got proposal
+  MISMATCH en-ho-injection-source: expected clarify, got proposal (EXECUTABLE ON A NON-PLAN CASE)
+  MISMATCH ru-ho-injection-sql: expected unsupported, got unsupported:write_action

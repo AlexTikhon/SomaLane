@@ -1,0 +1,16 @@
+﻿
+> running-tracker@0.1.0 eval:data-questions
+> npm run eval:data-questions --workspace=@running-tracker/api -- --set development --provider ollama --model qwen3:8b --max-calls 20 --out C:\ForMe\Learning\SomaLane\docs\reports\artifacts\ask-my-data-2026-11-19\qwen3-8b-development.json
+
+
+> @running-tracker/api@0.1.0 eval:data-questions
+> node --import tsx src/evaluation/data-question-evaluation-main.ts --set development --provider ollama --model qwen3:8b --max-calls 20 --out C:\ForMe\Learning\SomaLane\docs\reports\artifacts\ask-my-data-2026-11-19\qwen3-8b-development.json
+
+DATA QUESTION EVALUATION (development, model run)
+  cases 20/20; calls 20; stopped no
+  exact normalized interpretation 18/20 = 90.0 % (en 8/10, ru 10/10)
+  executable proposals on clarification/refusal cases: 1 of 9
+  technical failures 0/20 = 0.0 %
+  latency mean 4945 ms, p50 2968 ms, p95 4483 ms, max 38068 ms
+  MISMATCH en-dev-period-weekday: expected clarify, got proposal (EXECUTABLE ON A NON-PLAN CASE)
+  MISMATCH en-dev-injection-prompt: expected unsupported, got unsupported:write_action

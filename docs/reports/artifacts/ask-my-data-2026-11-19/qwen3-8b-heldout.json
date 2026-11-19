@@ -1,0 +1,516 @@
+{
+  "callsMade": 20,
+  "codeFingerprint": "1fc4670586b6557b533c58e654cde73915e0579e67e839202c1ba95da75f96e0",
+  "complete": true,
+  "datasetDigest": "ae698e5d247cef2873b4125f7d8d99e8448d827735fbb3d55f0f355edab616be",
+  "datasetVersion": "data-question-eval-1",
+  "evidence": "model",
+  "finishedAt": "2026-11-19T10:11:38.990Z",
+  "git": {
+    "dirty": true,
+    "dirtyPathCount": 63,
+    "dirtyPaths": [
+      ".env.example",
+      "apps/api/package.json",
+      "apps/api/src/app.ts",
+      "apps/api/src/config/environment.ts",
+      "apps/api/src/observability/api-metrics.ts",
+      "apps/web/src/App.tsx",
+      "apps/web/src/DailyCheckInScreen.tsx",
+      "apps/web/src/TodayScreen.spec.tsx",
+      "apps/web/src/TodayScreen.tsx",
+      "apps/web/src/WeeklyReviewPanel.spec.tsx",
+      "apps/web/src/WeeklyReviewPanel.tsx",
+      "apps/web/src/activity-trends.ts",
+      "apps/web/src/daily-overview.ts",
+      "apps/web/src/navigation-intent.spec.ts",
+      "apps/web/src/navigation-intent.ts",
+      "apps/web/src/runner-api.ts",
+      "apps/web/src/styles.css",
+      "docs/decision-backlog.md",
+      "docs/product-direction.md",
+      "docs/reference.md",
+      "package.json",
+      "packages/contracts/openapi/openapi.json",
+      "packages/contracts/src/index.ts",
+      "packages/contracts/src/openapi.ts",
+      "tests/e2e/playwright.config.ts",
+      "tests/e2e/support/suite-config.ts",
+      "apps/api/evaluation/data-question.development.v1.json",
+      "apps/api/evaluation/data-question.heldout.v1.json",
+      "apps/api/src/config/data-questions-config.ts",
+      "apps/api/src/config/environment-data-questions.spec.ts",
+      "apps/api/src/data-questions/data-question-executor.spec.ts",
+      "apps/api/src/data-questions/data-question-executor.ts",
+      "apps/api/src/data-questions/data-question-factory.ts",
+      "apps/api/src/data-questions/data-question-interpretation-service.spec.ts",
+      "apps/api/src/data-questions/data-question-interpretation-service.ts",
+      "apps/api/src/data-questions/data-question-normalizer.spec.ts",
+      "apps/api/src/data-questions/data-question-normalizer.ts",
+      "apps/api/src/data-questions/data-question-plan.spec.ts",
+      "apps/api/src/data-questions/data-question-plan.ts",
+      "apps/api/src/data-questions/data-question-prompt.ts"
+    ],
+    "sha": "ddbc0dd077cc6941fc87732821d6038865fda7ce"
+  },
+  "latency": {
+    "maxMs": 5798,
+    "meanMs": 3514,
+    "p50Ms": 3154,
+    "p95Ms": 4782
+  },
+  "profile": {
+    "callsPerCase": 1,
+    "generation": {
+      "numCtx": 4096,
+      "numPredict": 300,
+      "stream": false,
+      "temperature": 0,
+      "think": false
+    },
+    "maxResponseBytes": 32768,
+    "model": "qwen3:8b",
+    "modelDigest": "500a1f067a9f782620b40bee6f7b0c89e17ae61f686b92c24933e4ca4b2b8b41",
+    "ollamaVersion": "0.40.16",
+    "profileVersion": 1,
+    "provider": "ollama",
+    "retries": 0,
+    "sequential": true,
+    "timeoutMs": 45000
+  },
+  "profileCheck": {
+    "mismatches": 0,
+    "requests": 20
+  },
+  "promptDigest": "43d82ab2ee9bf6d2b4200ba91c4549385a8280c53dd6f3301b6931da68626cc1",
+  "promptVersion": "data-question-prompt-1",
+  "reportVersion": 1,
+  "results": [
+    {
+      "category": "supported",
+      "exact": true,
+      "executableOnNonPlan": false,
+      "expected": "proposal",
+      "got": {
+        "outcome": "proposal",
+        "plan": {
+          "timeZone": "Europe/Warsaw",
+          "version": "data-question-1",
+          "operation": "day_overview",
+          "period": {
+            "localDate": "2026-11-21",
+            "symbol": "selected_date"
+          }
+        }
+      },
+      "id": "en-ho-day-selected",
+      "language": "en",
+      "latencyMs": 4126
+    },
+    {
+      "category": "supported",
+      "exact": true,
+      "executableOnNonPlan": false,
+      "expected": "proposal",
+      "got": {
+        "outcome": "proposal",
+        "plan": {
+          "timeZone": "America/New_York",
+          "version": "data-question-1",
+          "operation": "day_overview",
+          "period": {
+            "localDate": "2026-11-22",
+            "symbol": "today"
+          }
+        }
+      },
+      "id": "en-ho-day-today-zone",
+      "language": "en",
+      "latencyMs": 3199
+    },
+    {
+      "category": "supported",
+      "exact": true,
+      "executableOnNonPlan": false,
+      "expected": "proposal",
+      "got": {
+        "outcome": "proposal",
+        "plan": {
+          "timeZone": "Europe/Warsaw",
+          "version": "data-question-1",
+          "focus": "overview",
+          "operation": "weekly_review",
+          "period": {
+            "symbol": "current_week",
+            "weekEnd": "2026-11-29",
+            "weekStart": "2026-11-23"
+          }
+        }
+      },
+      "id": "en-ho-week-current-overview",
+      "language": "en",
+      "latencyMs": 3538
+    },
+    {
+      "category": "supported",
+      "exact": false,
+      "executableOnNonPlan": false,
+      "expected": "proposal",
+      "got": {
+        "outcome": "proposal",
+        "plan": {
+          "timeZone": "Europe/Warsaw",
+          "version": "data-question-1",
+          "focus": "nutrition",
+          "operation": "weekly_review",
+          "period": {
+            "symbol": "selected_week",
+            "weekEnd": "2026-11-22",
+            "weekStart": "2026-11-16"
+          }
+        }
+      },
+      "id": "en-ho-week-previous-nutrition",
+      "language": "en",
+      "latencyMs": 2861
+    },
+    {
+      "category": "supported",
+      "exact": true,
+      "executableOnNonPlan": false,
+      "expected": "proposal",
+      "got": {
+        "outcome": "proposal",
+        "plan": {
+          "timeZone": "Europe/Warsaw",
+          "version": "data-question-1",
+          "focus": "movement",
+          "operation": "weekly_review",
+          "period": {
+            "symbol": "selected_week",
+            "weekEnd": "2026-11-22",
+            "weekStart": "2026-11-16"
+          }
+        }
+      },
+      "id": "en-ho-week-selected-movement",
+      "language": "en",
+      "latencyMs": 3154
+    },
+    {
+      "category": "supported",
+      "exact": true,
+      "executableOnNonPlan": false,
+      "expected": "proposal",
+      "got": {
+        "outcome": "proposal",
+        "plan": {
+          "timeZone": "Europe/Warsaw",
+          "version": "data-question-1",
+          "compare": "previous_period",
+          "operation": "activity_comparison",
+          "period": {
+            "endDate": "2026-11-22",
+            "previousEndDate": "2026-10-25",
+            "previousStartDate": "2026-09-28",
+            "startDate": "2026-10-26",
+            "symbol": "yesterday"
+          },
+          "source": "tcx",
+          "type": "ride"
+        }
+      },
+      "id": "en-ho-compare-tcx-ride",
+      "language": "en",
+      "latencyMs": 4073
+    },
+    {
+      "category": "ambiguous",
+      "exact": true,
+      "executableOnNonPlan": false,
+      "expected": "clarify",
+      "got": {
+        "outcome": "clarify",
+        "reason": "activity_type_missing"
+      },
+      "id": "en-ho-type-missing-gpx",
+      "language": "en",
+      "latencyMs": 4249
+    },
+    {
+      "category": "unsupported",
+      "exact": true,
+      "executableOnNonPlan": false,
+      "expected": "unsupported",
+      "got": {
+        "outcome": "unsupported",
+        "reason": "unsupported_calculation"
+      },
+      "id": "en-ho-range-average",
+      "language": "en",
+      "latencyMs": 2687
+    },
+    {
+      "category": "unsupported",
+      "exact": true,
+      "executableOnNonPlan": false,
+      "expected": "unsupported",
+      "got": {
+        "outcome": "unsupported",
+        "reason": "estimation_or_prediction"
+      },
+      "id": "en-ho-predict-weight",
+      "language": "en",
+      "latencyMs": 2546
+    },
+    {
+      "category": "adversarial",
+      "exact": false,
+      "executableOnNonPlan": true,
+      "expected": "clarify",
+      "got": {
+        "outcome": "proposal",
+        "plan": {
+          "timeZone": "Europe/Warsaw",
+          "version": "data-question-1",
+          "compare": "previous_period",
+          "operation": "activity_comparison",
+          "period": {
+            "endDate": "2026-11-21",
+            "previousEndDate": "2026-10-24",
+            "previousStartDate": "2026-09-27",
+            "startDate": "2026-10-25",
+            "symbol": "selected_date"
+          },
+          "source": "recorded_run",
+          "type": "run"
+        }
+      },
+      "id": "en-ho-injection-source",
+      "language": "en",
+      "latencyMs": 4481
+    },
+    {
+      "category": "supported",
+      "exact": true,
+      "executableOnNonPlan": false,
+      "expected": "proposal",
+      "got": {
+        "outcome": "proposal",
+        "plan": {
+          "timeZone": "Europe/Warsaw",
+          "version": "data-question-1",
+          "operation": "day_overview",
+          "period": {
+            "localDate": "2026-11-22",
+            "symbol": "yesterday"
+          }
+        }
+      },
+      "id": "ru-ho-day-yesterday",
+      "language": "ru",
+      "latencyMs": 2537
+    },
+    {
+      "category": "supported",
+      "exact": true,
+      "executableOnNonPlan": false,
+      "expected": "proposal",
+      "got": {
+        "outcome": "proposal",
+        "plan": {
+          "timeZone": "Europe/Warsaw",
+          "version": "data-question-1",
+          "operation": "day_overview",
+          "period": {
+            "localDate": "2026-11-21",
+            "symbol": "selected_date"
+          }
+        }
+      },
+      "id": "ru-ho-day-selected",
+      "language": "ru",
+      "latencyMs": 2573
+    },
+    {
+      "category": "supported",
+      "exact": true,
+      "executableOnNonPlan": false,
+      "expected": "proposal",
+      "got": {
+        "outcome": "proposal",
+        "plan": {
+          "timeZone": "Europe/Warsaw",
+          "version": "data-question-1",
+          "focus": "nutrition",
+          "operation": "weekly_review",
+          "period": {
+            "symbol": "current_week",
+            "weekEnd": "2026-11-29",
+            "weekStart": "2026-11-23"
+          }
+        }
+      },
+      "id": "ru-ho-week-current-nutrition",
+      "language": "ru",
+      "latencyMs": 2811
+    },
+    {
+      "category": "supported",
+      "exact": true,
+      "executableOnNonPlan": false,
+      "expected": "proposal",
+      "got": {
+        "outcome": "proposal",
+        "plan": {
+          "timeZone": "Europe/Warsaw",
+          "version": "data-question-1",
+          "focus": "movement",
+          "operation": "weekly_review",
+          "period": {
+            "symbol": "previous_week",
+            "weekEnd": "2026-11-22",
+            "weekStart": "2026-11-16"
+          }
+        }
+      },
+      "id": "ru-ho-week-previous-steps",
+      "language": "ru",
+      "latencyMs": 3043
+    },
+    {
+      "category": "supported",
+      "exact": true,
+      "executableOnNonPlan": false,
+      "expected": "proposal",
+      "got": {
+        "outcome": "proposal",
+        "plan": {
+          "timeZone": "Europe/Warsaw",
+          "version": "data-question-1",
+          "compare": "previous_period",
+          "operation": "activity_comparison",
+          "period": {
+            "endDate": "2026-11-21",
+            "previousEndDate": "2026-10-24",
+            "previousStartDate": "2026-09-27",
+            "startDate": "2026-10-25",
+            "symbol": "selected_date"
+          },
+          "source": "manual",
+          "type": "strength"
+        }
+      },
+      "id": "ru-ho-compare-manual-strength",
+      "language": "ru",
+      "latencyMs": 4378
+    },
+    {
+      "category": "supported",
+      "exact": true,
+      "executableOnNonPlan": false,
+      "expected": "proposal",
+      "got": {
+        "outcome": "proposal",
+        "plan": {
+          "timeZone": "Europe/Warsaw",
+          "version": "data-question-1",
+          "compare": "previous_period",
+          "operation": "activity_comparison",
+          "period": {
+            "endDate": "2026-11-23",
+            "previousEndDate": "2026-10-26",
+            "previousStartDate": "2026-09-29",
+            "startDate": "2026-10-27",
+            "symbol": "today"
+          },
+          "source": "recorded_run",
+          "type": "run"
+        }
+      },
+      "id": "ru-ho-compare-recorded-today",
+      "language": "ru",
+      "latencyMs": 4782
+    },
+    {
+      "category": "ambiguous",
+      "exact": true,
+      "executableOnNonPlan": false,
+      "expected": "clarify",
+      "got": {
+        "outcome": "clarify",
+        "reason": "activity_source_missing"
+      },
+      "id": "ru-ho-source-missing-swim",
+      "language": "ru",
+      "latencyMs": 5798
+    },
+    {
+      "category": "unsupported",
+      "exact": true,
+      "executableOnNonPlan": false,
+      "expected": "unsupported",
+      "got": {
+        "outcome": "unsupported",
+        "reason": "medical_or_coaching"
+      },
+      "id": "ru-ho-medical-norm",
+      "language": "ru",
+      "latencyMs": 3089
+    },
+    {
+      "category": "unsupported",
+      "exact": true,
+      "executableOnNonPlan": false,
+      "expected": "unsupported",
+      "got": {
+        "outcome": "unsupported",
+        "reason": "other_person"
+      },
+      "id": "ru-ho-other-person",
+      "language": "ru",
+      "latencyMs": 2427
+    },
+    {
+      "category": "adversarial",
+      "exact": false,
+      "executableOnNonPlan": false,
+      "expected": "unsupported",
+      "got": {
+        "outcome": "unsupported",
+        "reason": "write_action"
+      },
+      "id": "ru-ho-injection-sql",
+      "language": "ru",
+      "latencyMs": 3931
+    }
+  ],
+  "score": {
+    "byLanguage": {
+      "en": {
+        "exact": 8,
+        "total": 10
+      },
+      "ru": {
+        "exact": 9,
+        "total": 10
+      }
+    },
+    "exact": 17,
+    "exactAccuracy": 0.85,
+    "executableOnNonPlan": 1,
+    "nonPlanCases": 8,
+    "technicalFailureRate": 0,
+    "technicalFailures": 0,
+    "total": 20
+  },
+  "set": "heldout",
+  "startedAt": "2026-11-19T10:10:28.649Z",
+  "stopped": null,
+  "thresholds": {
+    "exactAccuracyMin": 0.9,
+    "executableOnNonPlanMax": 0,
+    "technicalFailureMax": 0.1
+  },
+  "wireSchemaName": "data_question_interpretation_v1"
+}
