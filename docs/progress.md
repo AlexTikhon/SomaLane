@@ -5480,3 +5480,31 @@ Report: `docs/reports/ask-my-data-v2-2026-11-20.md`; artifacts in `docs/reports/
 Interpretation stays off by default. Intentional v1 policy changes (not regressions): `en-ho-injection-source` and
 `ru-dev-injection-admin` would now be `not_a_data_question`. Backlog D11 (meal-draft diagnostics) remains open. Not
 verified: physical Safari, hosted CI, real GPS, production. Changes are uncommitted.
+
+## Ask my data v2: temporal-grounding correction (`data-question-constraints-2`, ADR-0095) (2026-11-20)
+
+**What changed.** On top of HEAD `2ef317c`: two confirmed defects in the question constraints, each of which let a
+schema-valid model proposal become an executable plan, are corrected. (1) "28 days ago" / "4 weeks ago" (EN/RU) was read
+as the 28-day window, because the window matcher masked "28 days" before the relative-day rule ran, so the comparison was
+anchored to the selected date; it is now `clarify period_ambiguous`. (2) A coordinated second duration ("over 28 days
+versus 14 days", "за 28 дней и 14 дней") was ignored, because the range rule needed a preposition before each number; it
+is now `unsupported unsupported_calculation`. Numeric durations are read whole (qualifier, numbers, unit, "ago") and
+classified by meaning, replacing three order-dependent matchers; unrelated numbers are never range evidence. No prompt,
+wire schema, contract, decision order, dataset, migration or dependency change; no inference call. Report:
+`docs/reports/ask-my-data-v2-temporal-correction-2026-11-20.md`; policy §1/§5.
+
+| Check | Result |
+|---|---|
+| Reproduction | before: all defect questions executable; after: bounded clarification/refusal; positive controls still accepted |
+| New constraints tests against the original module | 29 failed; all pass with the fix |
+| Focused tests | API 10 files, **243 passed** |
+| `npm run verify` (`VITEST_MAX_WORKERS=2`) | exit **0**: scripts 115, API **2,687**, web **1,409**, contracts **322**, fixtures 14, simulator 3, build |
+| Test database identity (read-only probe, before writes) | `127.0.0.1:5433/running_tracker_test`, server `172.18.0.2:5432`, PostgreSQL 17.5; runtime, owner and maintenance roles as themselves |
+| Integration (`VITEST_MAX_WORKERS` unset): `data-questions-http` | **24 passed** (+1: mistaken proposals → bounded non-proposals, no answer service) |
+| Chromium `ask-my-data` | **16 passed** |
+| Offline check of the saved v2 reports | **NOT_RUN** (exit 3, code fingerprint stale; 0 calls) |
+| `git diff --check` | clean |
+
+**Model evidence.** The ADR-0095 39/40 PASS is a historical measurement of the `-1` code; it is stale (NOT_RUN) for the
+corrected code and there is no valid model evidence for it yet. Interpretation stays off by default. Changes are
+uncommitted.

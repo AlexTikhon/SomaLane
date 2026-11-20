@@ -211,8 +211,10 @@ never calls the model. Every clarification of a typed question leads into the bu
 English/Russian constraints layer ([policy](data-question-constraints-policy.md)) checks a model's period, source, type,
 view and focus against the question itself and refuses instruction-bearing questions as a whole. A new frozen synthetic
 evaluation (v2) measured `qwen3:8b` on 2026-11-20: PASS (100 % and 95 % exact, no executable proposal on a
-clarification or refusal case). This is an engineering gate written from the same policy, not evidence on real questions,
-so interpretation **stays off by default**; enabling it is a separate decision.
+clarification or refusal case). That measurement predates a same-day correction of the constraints
+(`data-question-constraints-2`: relative dates and coordinated durations), so it is now stale (NOT_RUN) for the current
+code and no valid model evidence exists for it. Either way it is an engineering gate written from the same policy, not
+evidence on real questions, so interpretation **stays off by default**; enabling it is a separate decision.
 
 **HealthKit remains deferred** until macOS/Xcode access exists: reading Apple Health needs a native app, which cannot be
 built or signed from Windows. Nothing in the web pilot depends on it, and phone or watch imports stay a later item of the

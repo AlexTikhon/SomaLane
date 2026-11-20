@@ -1,0 +1,33 @@
+{
+  "checkedAt": "2026-11-20T11:04:28.036Z",
+  "codeFingerprint": "bb97296cbd10f6586b66a16f324142faa25e0183f602c55c7d4546bcba15f3b2",
+  "gate": {
+    "datasetVersion": "data-question-eval-2",
+    "evidenceValid": false,
+    "problems": [
+      "development: code fingerprint is stale",
+      "heldout: code fingerprint is stale"
+    ],
+    "quality": {
+      "development": {
+        "exact": 20,
+        "exactAccuracy": 1,
+        "executableOnNonPlan": 0,
+        "technicalFailureRate": 0,
+        "technicalFailures": 0,
+        "total": 20
+      },
+      "heldout": {
+        "exact": 19,
+        "exactAccuracy": 0.95,
+        "executableOnNonPlan": 0,
+        "technicalFailureRate": 0,
+        "technicalFailures": 0,
+        "total": 20
+      }
+    },
+    "status": "NOT_RUN"
+  },
+  "inferenceCallsMade": 0,
+  "promptDigest": "cdff434007f3833e25a4153cab85b80c32dac4de8b54d4ebc29ec238afc5070b"
+}

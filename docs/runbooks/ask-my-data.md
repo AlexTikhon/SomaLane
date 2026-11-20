@@ -129,6 +129,19 @@ quality lines are always the recomputed ones. Thresholds: exact normalized inter
 proposals on clarification/refusal cases, technical failures ≤ 10 %. A PASS does not turn the feature on; that is a
 separate decision.
 
+**Current model evidence: none valid.** The ADR-0095 v2 measurement (39/40, PASS, `docs/reports/artifacts/ask-my-data-v2-2026-11-20/`)
+was made with `data-question-constraints-1`. Since the `data-question-constraints-2` correction it is stale for the
+current code; recheck from the repository root:
+
+```
+npm run eval:data-questions -- --check --dataset-version v2 --report docs/reports/artifacts/ask-my-data-v2-2026-11-20/qwen3-8b-development.json --report docs/reports/artifacts/ask-my-data-v2-2026-11-20/qwen3-8b-heldout.json
+```
+
+This answers **NOT_RUN** (exit 3, "code fingerprint is stale" for both sets; the dataset digests and prompt are still
+current). The saved reports are kept unchanged as history and still PASS only when judged as measured (their own
+fingerprint, in the tests). A new bounded measurement on the frozen v2 sets would be needed for valid evidence; it is not
+required to keep interpretation off.
+
 The fingerprint covers an explicit file list (`DATA_QUESTION_FINGERPRINT_FILES` in
 `apps/api/src/evaluation/data-question-evaluation.ts`, now including `data-question-constraints.ts`); changing any of them
 makes earlier reports stale. The datasets are frozen by their pinned digests in `DATA_QUESTION_DATASET_REGISTRY`; a changed

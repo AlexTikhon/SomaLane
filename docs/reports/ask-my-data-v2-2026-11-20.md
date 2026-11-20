@@ -6,6 +6,11 @@ at the normalization boundary, interpretation prompt version 2, and a new frozen
 real-model measurement. Chromium on one workstation only; no physical Safari, hosted CI, real GPS or production run.
 Changes are uncommitted.
 
+> Temporal-grounding correction (same day): the constraints were corrected to `data-question-constraints-2` ("28 days
+> ago" was read as the comparison window; a coordinated second duration was ignored). The 39/40 PASS below is the
+> historical measurement of the `-1` code and is **stale (NOT_RUN) for the corrected code**; no model run has been made
+> since. See [ask-my-data-v2-temporal-correction-2026-11-20.md](ask-my-data-v2-temporal-correction-2026-11-20.md).
+
 Baseline: HEAD `844079c` (ADR-0094 review correction docs), clean working tree. Verified before any change: three
 operations, one service read per answer, five predefined questions, interpretation off by default, the ADR-0094 model gate
 FAIL (development 18/20, held-out 17/20, one executable proposal on a clarification case in each), and the stale-question,

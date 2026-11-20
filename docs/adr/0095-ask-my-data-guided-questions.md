@@ -65,8 +65,8 @@ reading only. Duplicate submission, cancellation, Refresh and generation checks 
 
 `data-question-constraints.ts` analyses the original question independently of the model's answer into evidence spans
 with reason codes, and the normalizer applies a fixed decision order. The written policy is
-[docs/data-question-constraints-policy.md](../data-question-constraints-policy.md) (`data-question-constraints-1`).
-Summary:
+[docs/data-question-constraints-policy.md](../data-question-constraints-policy.md) (`data-question-constraints-1` when
+decided; now `data-question-constraints-2`, see the amendment below). Summary:
 
 - **Instruction-bearing questions** (role labels with a colon, override/reveal/role-change phrases, parameter commands,
   snake_case symbols, SQL/code) are refused as a whole: `unsupported not_a_data_question`, whatever the model answered.
@@ -128,6 +128,19 @@ request checked against the profile. The one miss ("Show my check-in, meals and 
 written from the same policy the code enforces, and the constraints decide most non-plan cases by themselves; it is not
 evidence of quality on real questions. **Interpretation stays off by default**; enabling it is a separate decision.
 Details: [the report](../reports/ask-my-data-v2-2026-11-20.md).
+
+### Amendment: `data-question-constraints-2` (2026-11-20, no inference)
+
+Two temporal-grounding defects in the constraints were corrected: "28 days ago" / "4 weeks ago" (EN/RU) was read as the
+28-day window and anchored to the selected date, and a coordinated second duration ("over 28 days versus 14 days", "за 28
+дней и 14 дней") was ignored. Numeric durations are now read whole and classified by meaning (policy §1, §5). The
+decision order, the wire schema, the prompt and the datasets are unchanged; every v2 expectation is decided as before.
+
+**Model evidence status.** The 39/40 PASS above is a **historical measurement of the `-1` code** (fingerprint
+`17284f1f…`). Because the constraints module is fingerprinted, those reports are **stale for the corrected code: the
+offline check answers NOT_RUN** (exit 3, "code fingerprint is stale"); judged as measured they still PASS. No model run has
+been made against the corrected code, so there is currently **no valid model evidence for it**. Interpretation stays off by
+default. Details: [the correction report](../reports/ask-my-data-v2-temporal-correction-2026-11-20.md).
 
 ## Alternatives considered
 
