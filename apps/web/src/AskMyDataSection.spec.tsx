@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { activityTrendsFixture } from './activity-trends-fixtures.js';
 import { AskMyDataView, type AskMyDataHandlers } from './AskMyDataSection.js';
 import type { AskSnapshot, AskState } from './data-question-controller.js';
+import { EMPTY_GUIDED_DRAFT, type GuidedDraft } from './data-question-guided.js';
 import { noMeals, overviewFixture } from './daily-overview-fixtures.js';
 import { mealsFixture, movementFixture, reviewFixture } from './weekly-review-fixtures.js';
 
@@ -18,17 +19,28 @@ const handlers: AskMyDataHandlers = {
   chooseSource: noop,
   dismiss: noop,
   execute: noop,
+  fromClarification: noop,
   interpret: noop,
   newQuestion: noop,
   openSource: noop,
   refresh: noop,
   retry: noop,
+  review: noop,
+  setMode: noop,
   textChange: noop,
+  updateDraft: noop,
 };
 const provenance = { answerVersion: version, computedAt: '2026-11-08T10:00:00.000Z', persisted: false as const, serviceVersion: 'x' };
 
-const render = (state: AskState, capability: AskSnapshot['capability'] = 'available', text = '') =>
-  renderToStaticMarkup(<AskMyDataView handlers={handlers} snapshot={{ capability, context: { selectedDate: '2026-11-05', timeZone: 'Europe/Warsaw' }, state, text }} />);
+const render = (state: AskState, capability: AskSnapshot['capability'] = 'available', text = '', extra: Partial<AskSnapshot> = {}) =>
+  renderToStaticMarkup(
+    <AskMyDataView
+      handlers={handlers}
+      snapshot={{ capability, context: { selectedDate: '2026-11-05', timeZone: 'Europe/Warsaw' }, draft: EMPTY_GUIDED_DRAFT, guidedFocus: null, mode: 'guided', state, text, ...extra }}
+    />,
+  );
+const typed = { mode: 'typed' as const };
+const guided = (draft: Partial<GuidedDraft>) => ({ draft: { ...EMPTY_GUIDED_DRAFT, ...draft } });
 
 const dayPlan: DataQuestionPlan = { operation: 'day_overview', period: { localDate: '2026-11-05', symbol: 'selected_date' }, timeZone: 'Europe/Warsaw', version };
 
@@ -40,15 +52,16 @@ describe('Ask my data: idle', () => {
       expect(html).toContain('Compare my manually entered running with the previous 28 days.');
       expect(html).toContain('data-ask-state="idle"');
     }
-    expect(render({ kind: 'idle' }, 'available')).toContain('Ask in your own words (English or Russian)');
-    expect(render({ kind: 'idle' }, 'off')).not.toContain('Ask in your own words');
-    expect(render({ kind: 'idle' }, 'off')).toContain('the questions below work without them');
+    expect(render({ kind: 'idle' }, 'available', '', typed)).toContain('Ask in your own words (English or Russian)');
+    expect(render({ kind: 'idle' }, 'off', '', typed)).not.toContain('Ask in your own words');
+    expect(render({ kind: 'idle' }, 'off')).toContain('Typed questions are not available here right now');
     // No implementation detail reaches the screen.
+    expect(render({ kind: 'idle' }, 'available', '', typed)).not.toMatch(/ollama|qwen|fake|provider/iu);
     expect(render({ kind: 'idle' }, 'available')).not.toMatch(/ollama|qwen|fake|provider/iu);
   });
 
   it('disables every way to ask while a request is in flight', () => {
-    const html = render({ kind: 'interpreting' }, 'available', 'What did I record?');
+    const html = render({ kind: 'interpreting' }, 'available', 'What did I record?', typed);
     expect(html).toContain('Interpreting your question…');
     expect(html).toContain('>Cancel<');
     expect(html.match(/disabled=""/gu)?.length).toBeGreaterThanOrEqual(7);
@@ -180,5 +193,94 @@ describe('Ask my data: clarifications, refusals and errors', () => {
     const denied = render({ accessDenied: true, kind: 'error', message: 'You no longer have access to this organization.', retryable: false });
     expect(denied).not.toContain('>Retry<');
     expect(denied).not.toContain('aria-label="Answer"');
+  });
+});
+
+describe('Ask my data: the guided builder (ADR-0095)', () => {
+  it('is the whole way to ask when interpretation is off or unavailable: no typed box, no mode switch', () => {
+    for (const capability of ['off', 'unavailable', 'checking'] as const) {
+      const html = render({ kind: 'idle' }, capability);
+      expect(html).toContain('aria-label="Build a question"');
+      expect(html).toContain('<label for="ask-guided-operation">What to read</label>');
+      expect(html).not.toContain('Ask in your own words');
+      expect(html).not.toContain('aria-label="How to ask"');
+      expect(html).toContain('Review question');
+    }
+  });
+
+  it('offers both modes, guided first, only when interpretation is available', () => {
+    const html = render({ kind: 'idle' }, 'available');
+    expect(html).toContain('aria-label="How to ask"');
+    expect(html).toMatch(/<button aria-pressed="true" type="button">Choose a question<\/button><button aria-pressed="false" type="button">Type a question<\/button>/u);
+    expect(html).toContain('aria-label="Build a question"');
+    expect(html).not.toContain('Ask in your own words');
+    const typedHtml = render({ kind: 'idle' }, 'available', '', typed);
+    expect(typedHtml).toContain('Ask in your own words');
+    expect(typedHtml).not.toContain('aria-label="Build a question"');
+  });
+
+  it('starts empty, asks only for the view, and shows no Review until the draft is complete', () => {
+    const html = render({ kind: 'idle' });
+    expect(html).toContain('<option value="" selected="">Choose…</option>');
+    expect(html).not.toContain('id="ask-guided-period"');
+    expect(html).toContain('Still to choose: what to read.');
+    expect(html).toMatch(/<button aria-describedby="ask-guided-status" disabled="" type="submit">Review question<\/button>/u);
+    expect(html).toContain('For another date, change the date at the top of Today.');
+  });
+
+  it('shows the fields of the chosen view with the selected date stated, and lists what is still missing', () => {
+    const day = render({ kind: 'idle' }, 'available', '', guided({ operation: 'day_overview' }));
+    expect(day).toContain('<label for="ask-guided-period">Day</label>');
+    expect(day).toContain('The selected date (Thu, 5 Nov 2026)');
+    expect(day).not.toContain('id="ask-guided-focus"');
+    expect(day).toContain('Still to choose: the period.');
+    const weekly = render({ kind: 'idle' }, 'available', '', guided({ operation: 'weekly_review', period: 'previous_week' }));
+    expect(weekly).toContain('<label for="ask-guided-focus">Part of the week</label>');
+    expect(weekly).toContain('Last week');
+    expect(weekly).toContain('Still to choose: the part of the week.');
+    const comparison = render({ kind: 'idle' }, 'available', '', guided({ operation: 'activity_comparison' }));
+    for (const label of ['28 days ending', 'Records', 'Activity type']) expect(comparison).toContain(label);
+    expect(comparison).toContain('Still to choose: the period, the records and the activity type.');
+    expect(comparison).toContain('Sources are never combined');
+    for (const source of ['Manual entries', 'GPX imports', 'TCX imports', 'Recorded runs']) expect(comparison).toContain(`>${source}</option>`);
+  });
+
+  it('a complete draft can be reviewed; nothing in the builder reads data by itself', () => {
+    const html = render({ kind: 'idle' }, 'available', '', guided({ focus: 'nutrition', operation: 'weekly_review', period: 'current_week' }));
+    expect(html).toContain('Ready to review. Nothing is read until you choose Get answer.');
+    expect(html).toMatch(/<button aria-describedby="ask-guided-status" type="submit">Review question<\/button>/u);
+  });
+
+  it('recorded runs allow only run: other types are disabled, and an incompatible pair is named and blocked', () => {
+    const recorded = render({ kind: 'idle' }, 'available', '', guided({ operation: 'activity_comparison', period: 'today', source: 'recorded_run' }));
+    expect(recorded).toContain('<option value="run">Run</option>');
+    expect(recorded).toContain('<option value="walk" disabled="">Walk</option>');
+    const incompatible = render({ kind: 'idle' }, 'available', '', guided({ operation: 'activity_comparison', period: 'today', source: 'recorded_run', type: 'walk' }));
+    expect(incompatible).toContain('Recorded runs are runs only. Choose Run, or another source.');
+    expect(incompatible).toContain('aria-invalid="true"');
+    expect(incompatible).toMatch(/disabled="" type="submit">Review question/u);
+  });
+
+  it('disables every choice while a request is in flight, and says a plan is being prepared without reading', () => {
+    const html = render({ kind: 'resolving' }, 'off', '', guided({ operation: 'day_overview', period: 'today' }));
+    expect(html).toContain('Preparing the plan… nothing is read yet.');
+    expect(html).toContain('>Cancel<');
+    expect(html).toMatch(/<select disabled="" id="ask-guided-operation"/u);
+    expect(html).toMatch(/<select disabled="" id="ask-guided-period"/u);
+    expect(html).toContain('data-ask-state="resolving"');
+  });
+
+  it('every clarification offers the way into the builder at the field to choose', () => {
+    const labels = {
+      activity_source_missing: 'Choose the source',
+      activity_type_missing: 'Choose the activity type',
+      operation_ambiguous: 'Choose the view',
+      period_ambiguous: 'Choose a period',
+    } as const;
+    for (const [reason, label] of Object.entries(labels)) {
+      const html = render({ kind: 'clarify', reason: reason as keyof typeof labels, sourceChoice: null }, 'available', 'x', typed);
+      expect(html, reason).toContain(`>${label}</button>`);
+    }
+    expect(render({ kind: 'clarify', reason: 'period_ambiguous', sourceChoice: null }, 'available', 'x', typed)).toContain('change the date at the top of Today');
   });
 });

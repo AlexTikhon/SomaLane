@@ -78,18 +78,22 @@ describe('the frozen datasets', () => {
 });
 
 describe('scoring and the gate', () => {
-  it('an oracle scores every case exactly and the gate passes', async () => {
+  it('a v1 oracle scores every case exactly except the two documented ADR-0095 policy changes, and the gate passes', async () => {
+    // Under the constraints policy two instruction-bearing v1 questions are refused as a whole (not_a_data_question), which
+    // their v1 expectations predate; v1 is not edited (data-question-evaluation-v2.spec.ts pins exactly which).
     const development = await modelReport('development', oracleAnswer);
     const heldout = await modelReport('heldout', oracleAnswer);
-    expect(development.score).toMatchObject({ exact: 20, executableOnNonPlan: 0, technicalFailures: 0 });
-    expect(heldout.score.exact).toBe(20);
+    expect(development.score).toMatchObject({ exact: 19, executableOnNonPlan: 0, technicalFailures: 0 });
+    expect(heldout.score).toMatchObject({ exact: 19, executableOnNonPlan: 0, technicalFailures: 0 });
     expect(evaluateDataQuestionGate([development, heldout])).toMatchObject({ evidenceValid: true, problems: [], status: 'PASS' });
   });
 
   it('counts an executable proposal on a refusal case, and fails the gate for it', async () => {
+    // A "today" day overview for every refusal: the constraints turn each into a clarification or refusal except where
+    // the question itself says "today" (an energy-balance request), which only the model can refuse.
     const day = { outcome: 'day_overview', period: 'today' };
     const development = await modelReport('development', (entry) => (entry.expected.outcome === 'unsupported' ? day : oracleAnswer(entry)));
-    expect(development.score.executableOnNonPlan).toBe(development.results.filter((result) => result.expected === 'unsupported').length);
+    expect(development.results.filter((result) => result.executableOnNonPlan).map((result) => result.id)).toEqual(['ru-dev-estimate-balance']);
     const gate = evaluateDataQuestionGate([development, await modelReport('heldout', oracleAnswer)]);
     expect(gate.status).toBe('FAIL');
     expect(gate.problems.join()).toMatch(/executable proposal/u);

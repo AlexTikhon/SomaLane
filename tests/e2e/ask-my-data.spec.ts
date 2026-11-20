@@ -39,6 +39,14 @@ async function openAsk(page: Page): Promise<{ ask: Locator; screen: Locator; sta
   return { ask, screen, state: screen.locator('[data-ask-state]') };
 }
 
+/** The typed question box (ADR-0095): offered only when the server interprets questions, after "Type a question". */
+async function typedInput(ask: Locator): Promise<Locator> {
+  await ask.getByRole('group', { name: 'How to ask' }).getByRole('button', { name: 'Type a question' }).click();
+  const input = ask.getByLabel('Ask in your own words (English or Russian)');
+  await expect(input).toBeVisible();
+  return input;
+}
+
 function stableToday(): string {
   const today = dateIn(timeZone, Date.now());
   test.skip(dateIn(timeZone, Date.now() + 600_000) !== today, 'Too close to midnight in Warsaw for a stable "today"');
@@ -50,8 +58,10 @@ test('1. a predefined question works with interpretation off, and the section fi
   await page.setViewportSize({ height: 844, width: 390 });
   await signIn(page, environment.reviewWebOrigin, demoScenario.runnerUserId, demoScenario.orgId);
   const { ask, state } = await openAsk(page);
-  await expect(ask.getByText('Typed questions are not available here right now; the questions below work without them.')).toBeVisible();
+  await expect(ask.getByText('Typed questions are not available here right now; build the question above, or use a shortcut below.')).toBeVisible();
   await expect(ask.getByLabel('Ask in your own words (English or Russian)')).toHaveCount(0);
+  await expect(ask.getByRole('group', { name: 'How to ask' })).toHaveCount(0);
+  await expect(ask.getByRole('form', { name: 'Build a question' })).toBeVisible();
 
   let interpretations = 0;
   page.on('request', (request) => {
@@ -85,7 +95,7 @@ test('2. fake interpretation: the plan is reviewed first, then executed once int
     if (request.url().endsWith('/data-questions/interpretations')) counts.interpretations += 1;
   });
 
-  const input = ask.getByLabel('Ask in your own words (English or Russian)');
+  const input = await typedInput(ask);
   await input.fill('Show my recorded nutrition for this week');
   await input.press('Enter');
   await expect(state).toHaveAttribute('data-ask-state', 'proposal');
@@ -110,7 +120,7 @@ test('3. an ambiguous source asks for an explicit choice, which becomes a plan t
   stableToday();
   await signIn(page, environment.demoWebOrigin, demoScenario.runnerUserId, demoScenario.orgId);
   const { ask, state } = await openAsk(page);
-  await ask.getByLabel('Ask in your own words (English or Russian)').fill('Compare my running with the previous 28 days');
+  await (await typedInput(ask)).fill('Compare my running with the previous 28 days');
   await ask.getByRole('button', { name: 'Interpret question' }).click();
   await expect(state).toHaveAttribute('data-ask-state', 'clarify');
   await expect(ask.getByText(/never combined, so choose one/u)).toBeVisible();
@@ -170,7 +180,7 @@ test('5. a pending interpretation is dropped on a date change and on sign-out; n
   };
 
   // A date change while the question is being interpreted: back to idle with an empty question, the late answer is ignored.
-  const input = ask.getByLabel('Ask in your own words (English or Russian)');
+  const input = await typedInput(ask);
   await input.fill('What did I record today?');
   await ask.getByRole('button', { name: 'Interpret question' }).click();
   await expect(state).toHaveAttribute('data-ask-state', 'interpreting');
@@ -201,7 +211,9 @@ test('5. a pending interpretation is dropped on a date change and on sign-out; n
   await expectSignedIn(page, demoScenario.runnerUserId);
   ({ ask, state } = await openAsk(page));
   await expect(state).toHaveAttribute('data-ask-state', 'idle');
-  await expect(ask.getByLabel('Ask in your own words (English or Russian)')).toHaveValue('');
+  // A new session starts in guided mode with nothing kept; the typed box is empty too.
+  await expect(ask.getByRole('form', { name: 'Build a question' }).getByLabel('What to read')).toHaveValue('');
+  await expect(await typedInput(ask)).toHaveValue('');
   await expect(ask.getByRole('region', { name: 'Review the question before reading' })).toHaveCount(0);
 });
 
@@ -225,7 +237,7 @@ test('6. editing a proposed question removes its plan; only the replacement is i
   await signIn(page, environment.demoWebOrigin, demoScenario.runnerUserId, demoScenario.orgId);
   const { ask, state } = await openAsk(page);
   const seen = recordQuestionRequests(page);
-  const input = ask.getByLabel('Ask in your own words (English or Russian)');
+  const input = await typedInput(ask);
   const review = ask.getByRole('region', { name: 'Review the question before reading' });
 
   await input.fill('What did I record today?');
@@ -266,7 +278,7 @@ test('7. editing after an error cannot retry the previous question', async ({ de
   await signIn(page, environment.demoWebOrigin, demoScenario.runnerUserId, demoScenario.orgId);
   const { ask, state } = await openAsk(page);
   const seen = recordQuestionRequests(page);
-  const input = ask.getByLabel('Ask in your own words (English or Russian)');
+  const input = await typedInput(ask);
 
   await page.route(INTERPRETATIONS, (route) => route.abort('failed'));
   await input.fill('What did I record today?');
@@ -293,7 +305,7 @@ test('8. a new date or time zone clears the question text and everything derived
   const opened = await openAsk(page);
   const { screen } = opened;
   let { ask, state } = opened;
-  let input = ask.getByLabel('Ask in your own words (English or Russian)');
+  let input = await typedInput(ask);
 
   await input.fill('What did I record today?');
   await ask.getByRole('button', { name: 'Interpret question' }).click();
@@ -316,7 +328,7 @@ test('8. a new date or time zone clears the question text and everything derived
     await moved.goto(environment.demoWebOrigin);
     await expectSignedIn(moved, demoScenario.runnerUserId);
     ({ ask, state } = await openAsk(moved));
-    input = ask.getByLabel('Ask in your own words (English or Russian)');
+    input = await typedInput(ask);
     await expect(ask.getByText(/in America\/New_York\./u)).toBeVisible();
     await expect(state).toHaveAttribute('data-ask-state', 'idle');
     await expect(input).toHaveValue('');
@@ -331,7 +343,7 @@ test('9. late responses of a cancelled and then edited question stay ignored', a
   stableToday();
   await signIn(page, environment.demoWebOrigin, demoScenario.runnerUserId, demoScenario.orgId);
   const { ask, state } = await openAsk(page);
-  const input = ask.getByLabel('Ask in your own words (English or Russian)');
+  const input = await typedInput(ask);
   const held: Route[] = [];
   const releaseAll = async () => {
     for (const route of held.splice(0)) await route.continue().catch(() => undefined);
@@ -369,4 +381,299 @@ test('9. late responses of a cancelled and then edited question stay ignored', a
   await page.waitForTimeout(300);
   await expect(state).toHaveAttribute('data-ask-state', 'idle');
   await expect(ask.getByRole('region', { name: 'Answer' })).toHaveCount(0);
+});
+
+// Guided questions (ADR-0095): closed choices → explicit "Review question" → the server's plan → "Get answer", through the
+// existing plan and answer routes, with zero interpretation requests. The review origin runs with interpretation OFF (the
+// product default); the demo origin's fake interpreter is used only to produce a clarification.
+
+const PLANS = '**/api/orgs/*/data-questions/plans';
+
+function recordGuidedRequests(page: Page): { answers: Array<{ operation: string; period: { symbol: string } }>; interpretations: number; plans: Array<Record<string, string>> } {
+  const seen = { answers: [] as Array<{ operation: string; period: { symbol: string } }>, interpretations: 0, plans: [] as Array<Record<string, string>> };
+  page.on('request', (request) => {
+    if (request.method() !== 'POST') return;
+    if (request.url().endsWith('/data-questions/interpretations')) seen.interpretations += 1;
+    if (request.url().endsWith('/data-questions/plans')) seen.plans.push((request.postDataJSON() as { intent: Record<string, string> }).intent);
+    if (request.url().endsWith('/data-questions/answers')) seen.answers.push((request.postDataJSON() as { plan: { operation: string; period: { symbol: string } } }).plan);
+  });
+  return seen;
+}
+
+const builder = (ask: Locator) => ask.getByRole('form', { name: 'Build a question' });
+
+test('10. guided weekly nutrition with interpretation off: choices, review, then one read', async ({ demoScenario, environment, page }) => {
+  stableToday();
+  await signIn(page, environment.reviewWebOrigin, demoScenario.runnerUserId, demoScenario.orgId);
+  const { ask, state } = await openAsk(page);
+  const seen = recordGuidedRequests(page);
+  const form = builder(ask);
+  const review = form.getByRole('button', { name: 'Review question' });
+
+  await expect(form.getByText('Still to choose: what to read.')).toBeVisible();
+  await expect(review).toBeDisabled();
+  await form.getByLabel('What to read').selectOption({ label: 'One week: the weekly review' });
+  await expect(form.getByText('Still to choose: the period and the part of the week.')).toBeVisible();
+  await form.getByLabel('Week', { exact: true }).selectOption({ label: 'This week' });
+  await form.getByLabel('Part of the week').selectOption({ label: 'Recorded nutrition' });
+  await expect(form.getByText('Ready to review. Nothing is read until you choose Get answer.')).toBeVisible();
+  expect(seen.plans).toEqual([]);
+
+  await review.click();
+  await expect(state).toHaveAttribute('data-ask-state', 'proposal');
+  const proposal = ask.getByRole('region', { name: 'Review the question before reading' });
+  await expect(proposal.getByText('Nothing has been read yet.')).toBeVisible();
+  await expect(proposal.getByText('The weekly review: recorded nutrition')).toBeVisible();
+  await expect(proposal.getByText(/\(this week, Monday to Sunday\), time zone Europe\/Warsaw/u)).toBeVisible();
+  expect(seen.plans).toEqual([{ focus: 'nutrition', operation: 'weekly_review', period: 'current_week' }]);
+  expect(seen.answers).toEqual([]);
+
+  await proposal.getByRole('button', { name: 'Get answer' }).click();
+  await expect(state).toHaveAttribute('data-ask-state', 'ready');
+  const answer = ask.getByRole('region', { name: 'Answer' });
+  await expect(answer.getByText('No meals were logged in this week.')).toBeVisible();
+  expect(seen.answers.map((plan) => [plan.operation, plan.period.symbol])).toEqual([['weekly_review', 'current_week']]);
+  expect(seen.interpretations).toBe(0);
+  await answer.getByRole('button', { name: 'Open the weekly review' }).click();
+  await expect(page.getByRole('heading', { level: 2, name: 'Weekly review' })).toBeFocused();
+});
+
+test('11. guided GPX then TCX comparison with an explicit source and type; changing the source drops the reviewed plan', async ({ demoScenario, environment, page }) => {
+  stableToday();
+  await signIn(page, environment.reviewWebOrigin, demoScenario.runnerUserId, demoScenario.orgId);
+  const { ask, state } = await openAsk(page);
+  const seen = recordGuidedRequests(page);
+  const form = builder(ask);
+
+  await form.getByLabel('What to read').selectOption({ label: 'One activity over 28 days, compared with the 28 days before' });
+  await expect(form.getByText('Still to choose: the period, the records and the activity type.')).toBeVisible();
+  await expect(form.getByText('Sources are never combined: choose one.')).toBeVisible();
+  await form.getByLabel('28 days ending').selectOption({ label: 'Yesterday' });
+  await form.getByLabel('Records').selectOption({ label: 'GPX imports' });
+  await form.getByLabel('Activity type').selectOption({ label: 'Walk' });
+  await form.getByRole('button', { name: 'Review question' }).click();
+  await expect(state).toHaveAttribute('data-ask-state', 'proposal');
+  await expect(ask.getByText('Comparison: GPX imports of type walk')).toBeVisible();
+  await expect(ask.getByText(/GPX imports only, never combined with another source/u)).toBeVisible();
+  await ask.getByRole('button', { name: 'Get answer' }).click();
+  await expect(state).toHaveAttribute('data-ask-state', 'ready');
+  await expect(ask.getByRole('region', { name: 'Answer' }).getByText('This period: 0 (None logged)')).toBeVisible();
+
+  await form.getByLabel('Records').selectOption({ label: 'TCX imports' });
+  await expect(state).toHaveAttribute('data-ask-state', 'idle');
+  await expect(ask.getByRole('region', { name: 'Answer' })).toHaveCount(0);
+  await form.getByRole('button', { name: 'Review question' }).click();
+  await expect(state).toHaveAttribute('data-ask-state', 'proposal');
+  await expect(ask.getByText(/TCX imports only, never combined with another source/u)).toBeVisible();
+  await ask.getByRole('button', { name: 'Get answer' }).click();
+  await expect(state).toHaveAttribute('data-ask-state', 'ready');
+  expect(seen.plans).toEqual([
+    { operation: 'activity_comparison', period: 'yesterday', source: 'gpx', type: 'walk' },
+    { operation: 'activity_comparison', period: 'yesterday', source: 'tcx', type: 'walk' },
+  ]);
+  expect(seen.answers.map((plan) => plan.operation)).toEqual(['activity_comparison', 'activity_comparison']);
+  expect(seen.interpretations).toBe(0);
+});
+
+test('12. recorded runs with another activity type are prevented, never silently changed', async ({ demoScenario, environment, page }) => {
+  stableToday();
+  await signIn(page, environment.reviewWebOrigin, demoScenario.runnerUserId, demoScenario.orgId);
+  const { ask, state } = await openAsk(page);
+  const seen = recordGuidedRequests(page);
+  const form = builder(ask);
+  const type = form.getByLabel('Activity type');
+  const review = form.getByRole('button', { name: 'Review question' });
+
+  await form.getByLabel('What to read').selectOption({ label: 'One activity over 28 days, compared with the 28 days before' });
+  await form.getByLabel('28 days ending').selectOption({ label: 'Today' });
+  await type.selectOption({ label: 'Walk' });
+  await form.getByLabel('Records').selectOption({ label: 'Recorded runs' });
+  await expect(form.getByText('Recorded runs are runs only. Choose Run, or another source.')).toBeVisible();
+  await expect(type).toHaveAttribute('aria-invalid', 'true');
+  await expect(type).toHaveValue('walk');
+  await expect(type.locator('option[value="swim"]')).toBeDisabled();
+  await expect(review).toBeDisabled();
+  await form.press('Enter').catch(() => undefined);
+  expect(seen.plans).toEqual([]);
+
+  await type.selectOption({ label: 'Run' });
+  await expect(type).toHaveAttribute('aria-invalid', 'false');
+  await review.click();
+  await expect(state).toHaveAttribute('data-ask-state', 'proposal');
+  await expect(ask.getByText('Comparison: recorded runs')).toBeVisible();
+  expect(seen.plans).toEqual([{ operation: 'activity_comparison', period: 'today', source: 'recorded_run', type: 'run' }]);
+});
+
+test('13. editing a reviewed guided question removes its old execution path, and a late plan cannot restore it', async ({ demoScenario, environment, page }) => {
+  stableToday();
+  await signIn(page, environment.reviewWebOrigin, demoScenario.runnerUserId, demoScenario.orgId);
+  const { ask, state } = await openAsk(page);
+  const seen = recordGuidedRequests(page);
+  const form = builder(ask);
+  const day = form.getByLabel('Day', { exact: true });
+
+  await form.getByLabel('What to read').selectOption({ label: 'One day: everything recorded' });
+  await day.selectOption({ label: 'Today' });
+  await form.getByRole('button', { name: 'Review question' }).click();
+  await expect(state).toHaveAttribute('data-ask-state', 'proposal');
+  await day.selectOption({ label: 'Yesterday' });
+  await expect(state).toHaveAttribute('data-ask-state', 'idle');
+  await expect(ask.getByRole('button', { name: 'Get answer' })).toHaveCount(0);
+
+  // A review held in flight, then an edit: the late plan is ignored.
+  const held: Route[] = [];
+  await page.route(PLANS, (route) => {
+    held.push(route);
+  });
+  await form.getByRole('button', { name: 'Review question' }).click();
+  await expect(state).toHaveAttribute('data-ask-state', 'resolving');
+  await expect(ask.getByText('Preparing the plan… nothing is read yet.')).toBeVisible();
+  await expect(day).toBeDisabled();
+  await ask.getByRole('button', { name: 'Cancel' }).click();
+  await day.selectOption({ label: 'Today' });
+  for (const route of held.splice(0)) await route.continue().catch(() => undefined);
+  await page.unroute(PLANS);
+  await page.waitForTimeout(300);
+  await expect(state).toHaveAttribute('data-ask-state', 'idle');
+
+  await day.selectOption({ label: 'Yesterday' });
+  await form.getByRole('button', { name: 'Review question' }).click();
+  await expect(state).toHaveAttribute('data-ask-state', 'proposal');
+  await expect(ask.getByText(/\(yesterday\), time zone Europe\/Warsaw/u)).toBeVisible();
+  await ask.getByRole('button', { name: 'Get answer' }).click();
+  await expect(state).toHaveAttribute('data-ask-state', 'ready');
+  expect(seen.answers.map((plan) => plan.period.symbol)).toEqual(['yesterday']);
+  expect(seen.interpretations).toBe(0);
+});
+
+test('14. a clarification leads to the builder, prefilled only with the verified choice, and the guided question completes', async ({ demoScenario, environment, page }) => {
+  stableToday();
+  await signIn(page, environment.demoWebOrigin, demoScenario.runnerUserId, demoScenario.orgId);
+  const { ask, state } = await openAsk(page);
+  const seen = recordGuidedRequests(page);
+  const input = await typedInput(ask);
+
+  await input.fill('Compare my walking up to yesterday with the previous 28 days');
+  await input.press('Enter');
+  await expect(state).toHaveAttribute('data-ask-state', 'clarify');
+  await ask.getByRole('button', { name: 'Choose the source' }).click();
+  await expect(state).toHaveAttribute('data-ask-state', 'idle');
+  const form = builder(ask);
+  await expect(form.getByLabel('Records')).toBeFocused();
+  await expect(form.getByLabel('What to read')).toHaveValue('activity_comparison');
+  await expect(form.getByLabel('28 days ending')).toHaveValue('yesterday');
+  await expect(form.getByLabel('Activity type')).toHaveValue('walk');
+  await expect(form.getByLabel('Records')).toHaveValue('');
+  await form.getByLabel('Records').selectOption({ label: 'Manual entries' });
+  await form.getByRole('button', { name: 'Review question' }).click();
+  await expect(state).toHaveAttribute('data-ask-state', 'proposal');
+  await expect(ask.getByText('Comparison: manually entered activities of type walk')).toBeVisible();
+  await ask.getByRole('button', { name: 'Get answer' }).click();
+  await expect(state).toHaveAttribute('data-ask-state', 'ready');
+  expect(seen.interpretations).toBe(1);
+  expect(seen.plans).toEqual([{ operation: 'activity_comparison', period: 'yesterday', source: 'manual', type: 'walk' }]);
+
+  // An unsupported period routes to the view, with nothing prefilled from the model's guess.
+  await ask.getByRole('button', { name: 'New question' }).click();
+  const again = await typedInput(ask);
+  await again.fill('What did I record last Tuesday?');
+  await again.press('Enter');
+  await expect(state).toHaveAttribute('data-ask-state', 'clarify');
+  await expect(ask.getByText(/change the date at the top of Today/u)).toBeVisible();
+  await ask.getByRole('button', { name: 'Choose a period' }).click();
+  await expect(form.getByLabel('What to read')).toBeFocused();
+  await expect(form.getByLabel('What to read')).toHaveValue('');
+  expect(seen.interpretations).toBe(2);
+});
+
+test('15. a date change and a sign-out drop pending guided work; the next session starts empty', async ({ demoScenario, environment, page }) => {
+  const today = stableToday();
+  await signIn(page, environment.reviewWebOrigin, demoScenario.runnerUserId, demoScenario.orgId);
+  const opened = await openAsk(page);
+  const { screen } = opened;
+  let { ask, state } = opened;
+  const form = builder(ask);
+  const held: Route[] = [];
+  const releaseAll = async () => {
+    for (const route of held.splice(0)) await route.continue().catch(() => undefined);
+  };
+
+  await form.getByLabel('What to read').selectOption({ label: 'One day: everything recorded' });
+  await form.getByLabel('Day', { exact: true }).selectOption('selected_date');
+  await page.route(PLANS, (route) => {
+    held.push(route);
+  });
+  await form.getByRole('button', { name: 'Review question' }).click();
+  await expect(state).toHaveAttribute('data-ask-state', 'resolving');
+  const earlier = daysBefore(today, 3);
+  await screen.getByLabel('Date').fill(earlier);
+  await expect(state).toHaveAttribute('data-ask-state', 'idle');
+  // The symbolic choices stay; they are reviewed again under the new date.
+  await expect(form.getByLabel('Day', { exact: true })).toHaveValue('selected_date');
+  await releaseAll();
+  await page.unroute(PLANS);
+  await page.waitForTimeout(300);
+  await expect(state).toHaveAttribute('data-ask-state', 'idle');
+  await form.getByRole('button', { name: 'Review question' }).click();
+  await expect(state).toHaveAttribute('data-ask-state', 'proposal');
+  const [year, month, dayOfMonth] = earlier.split('-').map(Number);
+  const earlierText = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC', weekday: 'short', year: 'numeric' }).format(new Date(Date.UTC(year!, month! - 1, dayOfMonth)));
+  await expect(ask.getByRole('region', { name: 'Review the question before reading' }).getByText(`${earlierText} (the selected date), time zone ${timeZone}`)).toBeVisible();
+
+  // Sign-out while a review is pending: nothing survives into the next session.
+  await form.getByLabel('Day', { exact: true }).selectOption({ label: 'Today' });
+  await page.route(PLANS, (route) => {
+    held.push(route);
+  });
+  await form.getByRole('button', { name: 'Review question' }).click();
+  await expect(state).toHaveAttribute('data-ask-state', 'resolving');
+  await page.getByRole('button', { name: 'Sign out' }).click();
+  await expectSignedOut(page);
+  await releaseAll();
+  await page.unroute(PLANS);
+  await page.getByRole('region', { name: 'Local demo sign-in' }).getByRole('button', { name: 'Demo runner' }).click();
+  await expectSignedIn(page, demoScenario.runnerUserId);
+  ({ ask, state } = await openAsk(page));
+  await expect(state).toHaveAttribute('data-ask-state', 'idle');
+  await expect(builder(ask).getByLabel('What to read')).toHaveValue('');
+  await expect(ask.getByRole('region', { name: 'Review the question before reading' })).toHaveCount(0);
+});
+
+test('16. the builder works with the keyboard alone and fits a 390 px screen', async ({ demoScenario, environment, page }) => {
+  stableToday();
+  await page.setViewportSize({ height: 844, width: 390 });
+  await signIn(page, environment.reviewWebOrigin, demoScenario.runnerUserId, demoScenario.orgId);
+  const { ask, state } = await openAsk(page);
+  const form = builder(ask);
+  const operation = form.getByLabel('What to read');
+
+  await operation.focus();
+  await page.keyboard.press('ArrowDown');
+  await expect(operation).toHaveValue('day_overview');
+  await page.keyboard.press('Tab');
+  const day = form.getByLabel('Day', { exact: true });
+  await expect(day).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('ArrowDown');
+  await expect(day).toHaveValue('today');
+  await page.keyboard.press('Tab');
+  await expect(form.getByRole('button', { name: 'Review question' })).toBeFocused();
+  expect(await fitsWidth(page)).toBe(true);
+  await page.keyboard.press('Enter');
+  await expect(state).toHaveAttribute('data-ask-state', 'proposal');
+  const getAnswer = ask.getByRole('button', { name: 'Get answer' });
+  await getAnswer.focus();
+  await page.keyboard.press('Enter');
+  await expect(state).toHaveAttribute('data-ask-state', 'ready');
+  expect(await fitsWidth(page)).toBe(true);
+
+  // Every field of the widest view stays inside the screen.
+  await ask.getByRole('button', { name: 'New question' }).click();
+  await operation.selectOption('activity_comparison');
+  for (const label of ['What to read', '28 days ending', 'Records', 'Activity type']) {
+    const box = await form.getByLabel(label).boundingBox();
+    expect(box, label).not.toBeNull();
+    expect(box!.x + box!.width, label).toBeLessThanOrEqual(390);
+  }
+  expect(await fitsWidth(page)).toBe(true);
 });

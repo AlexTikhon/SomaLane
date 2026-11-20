@@ -10,16 +10,18 @@ import { FakeDataQuestionProvider } from '../data-questions/fake-data-question-p
 import { OllamaProvider } from '../insights/ollama-provider.js';
 import {
   buildDataQuestionReport,
-  DATA_QUESTION_DATASET_DIGESTS,
+  DATA_QUESTION_DATASET_REGISTRY,
   DATA_QUESTION_EVAL_MAX_CALLS,
   DATA_QUESTION_EVAL_SETS,
   DATA_QUESTION_FINGERPRINT_FILES,
   DATA_QUESTION_THRESHOLDS,
   dataQuestionCodeFingerprint,
+  dataQuestionDatasetDigests,
   evaluateDataQuestionGate,
   formatDataQuestionGate,
   formatDataQuestionReport,
   loadDataQuestionDataset,
+  parseDataQuestionDatasetVersion,
   runDataQuestionEvaluation,
   type DataQuestionEvalSet,
   type DataQuestionGate,
@@ -35,6 +37,9 @@ import { buildExecutionProfile, createProfileGuard } from './meal-draft-profile.
 //   npm run eval:data-questions -- --set development --provider ollama --model qwen3:8b --out dev.json
 //   npm run eval:data-questions -- --check --report dev.json --report heldout.json --out gates.json   offline
 //
+// Every form takes --dataset-version v1|v2 (v1 by default, so earlier commands keep their meaning): the frozen sets run,
+// frozen or judged. A check judges exactly the one selected version; reports of another version are refused.
+//
 // User-supplied relative --report and --out paths mean the directory the command was typed in: npm's INIT_CWD (npm starts
 // the script inside apps/api), else the process's working directory (direct invocation). Absolute paths stay as typed. The
 // frozen datasets are repository-owned and always read from the repository.
@@ -45,7 +50,7 @@ import { buildExecutionProfile, createProfileGuard } from './meal-draft-profile.
 
 export interface DataQuestionCliDependencies {
   /** The code and prompt to judge reports against (default: the current ones). Tests only. */
-  current?: { codeFingerprint: string; promptDigest: string };
+  current?: { codeFingerprint: string; promptDigest: string; promptVersion?: string };
   /** The only network: Ollama metadata, and inference under the profile guard. */
   fetch: typeof fetch;
   gitState?: () => GitState;
@@ -96,6 +101,7 @@ export async function runDataQuestionEvaluationCli(argv: readonly string[], deps
     options: {
       'base-url': { type: 'string' },
       check: { type: 'boolean' },
+      'dataset-version': { type: 'string' },
       freeze: { type: 'boolean' },
       'max-calls': { type: 'string' },
       model: { type: 'string' },
@@ -106,6 +112,7 @@ export async function runDataQuestionEvaluationCli(argv: readonly string[], deps
     },
     strict: true,
   });
+  const datasetVersion = parseDataQuestionDatasetVersion(values['dataset-version']);
   const now = deps.now ?? (() => new Date());
   const gitState = deps.gitState ?? (() => readGitState());
   const at = (path: string) => resolve(deps.invocationDirectory, path);
@@ -118,7 +125,7 @@ export async function runDataQuestionEvaluationCli(argv: readonly string[], deps
 
   if (values.check === true) {
     const read = readReports(values.report ?? [], at);
-    const judged = evaluateDataQuestionGate(read.reports, deps.current === undefined ? {} : { current: deps.current });
+    const judged = evaluateDataQuestionGate(read.reports, { datasetVersion, ...(deps.current === undefined ? {} : { current: deps.current }) });
     const gate: DataQuestionGate =
       read.problems.length === 0 ? judged : { ...judged, evidenceValid: false, problems: [...read.problems, ...judged.problems], status: 'NOT_RUN' };
     deps.info(formatDataQuestionGate(gate));
@@ -146,10 +153,11 @@ export async function runDataQuestionEvaluationCli(argv: readonly string[], deps
   if (values.freeze === true) {
     const model = values.model ?? '';
     if (!isLocalOllamaModel(model)) throw new Error('--model must name a local Ollama model');
-    for (const set of DATA_QUESTION_EVAL_SETS) loadDataQuestionDataset(set);
+    for (const set of DATA_QUESTION_EVAL_SETS) loadDataQuestionDataset(set, undefined, datasetVersion);
     const freeze = {
       codeFingerprint: dataQuestionCodeFingerprint(),
-      datasetDigests: DATA_QUESTION_DATASET_DIGESTS,
+      datasetDigests: dataQuestionDatasetDigests(datasetVersion),
+      datasetVersion: DATA_QUESTION_DATASET_REGISTRY[datasetVersion].name,
       fingerprintFiles: DATA_QUESTION_FINGERPRINT_FILES,
       frozenAt: now().toISOString(),
       git: gitState(),
@@ -169,7 +177,7 @@ export async function runDataQuestionEvaluationCli(argv: readonly string[], deps
   if (set === undefined || !DATA_QUESTION_EVAL_SETS.includes(set)) throw new Error('--set must be development or heldout');
   const maxCalls = Number(values['max-calls'] ?? 20);
   if (!Number.isInteger(maxCalls) || maxCalls < 1 || maxCalls > DATA_QUESTION_EVAL_MAX_CALLS) throw new Error('--max-calls must be 1 to 40');
-  const { dataset, digest } = loadDataQuestionDataset(set);
+  const { dataset, digest } = loadDataQuestionDataset(set, undefined, datasetVersion);
   const startedAt = now().toISOString();
 
   if (values.provider === 'fake') {

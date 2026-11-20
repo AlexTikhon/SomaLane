@@ -3,14 +3,19 @@ import type {
   ActivityType,
   DataQuestionAnswer,
   DataQuestionClarificationReason,
+  DataQuestionDayPeriod,
   DataQuestionIntent,
+  DataQuestionOperation,
   DataQuestionPlan,
   DataQuestionUnsupportedReason,
+  DataQuestionWeekPeriod,
+  DataQuestionWeeklyFocus,
 } from '@running-tracker/contracts';
 
 import { activityTrendTypesFor, selectionLabel } from './activity-trends.js';
 import { formatCheckInDate } from './daily-checkin.js';
 import type { TodayAction } from './daily-overview.js';
+import type { GuidedProblem } from './data-question-guided.js';
 
 // Pure helpers of "Ask my data" on Today (ADR-0094): the predefined questions, the plan preview, the fixed wording of
 // every reason code, and the typed source action of an answer. No model text ever reaches the screen; every sentence here
@@ -93,8 +98,69 @@ export const clarificationText: Readonly<Record<DataQuestionClarificationReason,
   activity_type_missing: 'Which activity type should be compared? Name one, such as running or walking, or use a predefined question.',
   operation_ambiguous: 'This could mean more than one view. Ask about one day, one week, or a 28-day comparison of one activity.',
   period_ambiguous:
-    'Which day or week? Questions can use the selected date, today, yesterday, this week, last week or the week of the selected date. Choose a date above and ask about "the selected day".',
+    'Which day or week? Questions can use the selected date, today, yesterday, this week, last week or the week of the selected date. For another date, change the date at the top of Today and choose "the selected date".',
 };
+
+/** The way from each clarification into the guided builder (ADR-0095): the field the person chooses next. */
+export const clarificationRouteLabels: Readonly<Record<DataQuestionClarificationReason, string>> = {
+  activity_source_missing: 'Choose the source',
+  activity_type_missing: 'Choose the activity type',
+  operation_ambiguous: 'Choose the view',
+  period_ambiguous: 'Choose a period',
+};
+
+/** The guided builder's views, in words. */
+export const guidedOperationLabels: Readonly<Record<DataQuestionOperation, string>> = {
+  activity_comparison: 'One activity over 28 days, compared with the 28 days before',
+  day_overview: 'One day: everything recorded',
+  weekly_review: 'One week: the weekly review',
+};
+
+/** The period field's label for a view. */
+export function guidedPeriodLabel(operation: DataQuestionOperation): string {
+  return operation === 'weekly_review' ? 'Week' : operation === 'day_overview' ? 'Day' : '28 days ending';
+}
+
+/** A period choice in words, the selected date stated so the person sees which date "selected" means. */
+export function guidedPeriodChoiceLabel(period: DataQuestionDayPeriod | DataQuestionWeekPeriod, selectedDate: string): string {
+  switch (period) {
+    case 'selected_date':
+      return `The selected date (${formatCheckInDate(selectedDate)})`;
+    case 'today':
+      return 'Today';
+    case 'yesterday':
+      return 'Yesterday';
+    case 'selected_week':
+      return `The week of the selected date (${formatCheckInDate(selectedDate)})`;
+    case 'current_week':
+      return 'This week';
+    case 'previous_week':
+      return 'Last week';
+  }
+}
+
+export const guidedFocusLabels: Readonly<Record<DataQuestionWeeklyFocus, string>> = {
+  movement: 'Steps and active energy',
+  nutrition: 'Recorded nutrition',
+  overview: 'Overview of the week',
+};
+
+const missingWords: Readonly<Record<Exclude<GuidedProblem, 'type_incompatible'>, string>> = {
+  focus: 'the part of the week',
+  operation: 'what to read',
+  period: 'the period',
+  source: 'the records',
+  type: 'the activity type',
+};
+
+/** The builder's status line: what is still missing, why a pair is refused, or that the draft is ready to review. */
+export function guidedStatusText(problems: readonly GuidedProblem[]): string {
+  if (problems.includes('type_incompatible')) return 'Recorded runs are runs only. Choose Run, or another source.';
+  if (problems.length === 0) return 'Ready to review. Nothing is read until you choose Get answer.';
+  const words = problems.map((problem) => missingWords[problem as Exclude<GuidedProblem, 'type_incompatible'>]);
+  const list = words.length === 1 ? words[0]! : `${words.slice(0, -1).join(', ')} and ${words.at(-1)!}`;
+  return `Still to choose: ${list}.`;
+}
 
 export const unsupportedText: Readonly<Record<DataQuestionUnsupportedReason, string>> = {
   estimation_or_prediction: 'Estimates, energy balance, predictions and explanations of why are not offered. Answers show only what you recorded.',

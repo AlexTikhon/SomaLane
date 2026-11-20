@@ -54,7 +54,7 @@ const artifact = (name: string) =>
   JSON.parse(readFileSync(new URL(`../../../../docs/reports/artifacts/ask-my-data-2026-11-19/${name}`, import.meta.url), 'utf8')) as DataQuestionEvalReport;
 const originals = () => ({ development: artifact('qwen3-8b-development.json'), heldout: artifact('qwen3-8b-heldout.json') });
 /** The code and prompt the saved reports were measured with, so these tests judge the gate, not the code's currency. */
-const measured = (report: DataQuestionEvalReport) => ({ current: { codeFingerprint: report.codeFingerprint, promptDigest: report.promptDigest } });
+const measured = (report: DataQuestionEvalReport) => ({ current: { codeFingerprint: report.codeFingerprint, promptDigest: report.promptDigest, promptVersion: report.promptVersion } });
 
 const passingScore = (report: DataQuestionEvalReport): DataQuestionEvalReport => ({
   ...report,
@@ -212,7 +212,8 @@ describe('structure, provenance and bounded diagnostics', () => {
   it('valid passing evidence still passes', async () => {
     const gate = evaluateDataQuestionGate([await oracleReport('development'), await oracleReport('heldout')]);
     expect(gate).toMatchObject({ evidenceValid: true, problems: [], status: 'PASS' });
-    expect(gate.quality.development).toMatchObject({ exact: 20, total: 20 });
+    // 19: the v1 oracle differs from the current policy on one instruction-bearing case per set (ADR-0095), still ≥ 90 %.
+    expect(gate.quality.development).toMatchObject({ exact: 19, total: 20 });
   });
 
   it('diagnostics stay bounded however much of the evidence is contradictory', async () => {

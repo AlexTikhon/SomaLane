@@ -9,6 +9,7 @@ import type {
 import { describe, expect, it } from 'vitest';
 
 import { DataQuestionController, type AskSnapshot, type DataQuestionApi } from './data-question-controller.js';
+import { EMPTY_GUIDED_DRAFT, type GuidedField } from './data-question-guided.js';
 import { overviewFixture } from './daily-overview-fixtures.js';
 import { RunnerApiError } from './runner-api.js';
 
@@ -96,6 +97,16 @@ function setup(options: { signal?: AbortSignal } = {}) {
   return { api, controller, snapshots, state: () => controller.snapshot.state };
 }
 
+/** A controller in typed mode: interpretation reported available, then the person chose "Type a question". */
+async function typedSetup(options: { signal?: AbortSignal } = {}) {
+  const created = setup(options);
+  created.controller.start();
+  created.api.last('capabilities').deferred.resolve({ interpretation: 'available', version });
+  await tick();
+  created.controller.setMode('typed');
+  return created;
+}
+
 describe('capability', () => {
   it('reports interpretation available or off without blocking predefined questions', async () => {
     const { api, controller } = setup();
@@ -158,7 +169,7 @@ describe('a predefined question', () => {
 
 describe('an interpreted question', () => {
   it('shows the proposal for review and reads nothing until the person executes it', async () => {
-    const { api, controller, state } = setup();
+    const { api, controller, state } = await typedSetup();
     controller.setText('  What did I record?  ');
     controller.interpret();
     expect(state()).toEqual({ kind: 'interpreting' });
@@ -178,7 +189,7 @@ describe('an interpreted question', () => {
   });
 
   it('a source clarification offers a choice, which becomes a plan to review, not an answer', async () => {
-    const { api, controller, state } = setup();
+    const { api, controller, state } = await typedSetup();
     controller.setText('Compare my running');
     controller.interpret();
     const choice = { operation: 'activity_comparison', period: 'selected_date', type: 'run' } as const;
@@ -203,7 +214,7 @@ describe('an interpreted question', () => {
   });
 
   it('an unsupported request shows its bounded reason', async () => {
-    const { api, controller, state } = setup();
+    const { api, controller, state } = await typedSetup();
     controller.setText('Diagnose me');
     controller.interpret();
     api.last('interpret').deferred.resolve({ outcome: 'unsupported', reason: 'medical_or_coaching', version });
@@ -212,30 +223,36 @@ describe('an interpreted question', () => {
   });
 
   it('maps a disabled server to capability off, and refusals and failures to fixed sentences', async () => {
-    const { api, controller, state } = setup();
+    const { api, controller, state } = await typedSetup();
     controller.setText('x');
     controller.interpret();
     api.last('interpret').deferred.reject(new RunnerApiError('off', 503, 'DATA_QUESTION_INTERPRETATION_DISABLED', null));
     await tick();
     expect(controller.snapshot.capability).toBe('off');
+    // Typed questions are no longer possible: the guided builder takes over, the error stays visible until dismissed.
+    expect(controller.snapshot.mode).toBe('guided');
     expect(state()).toMatchObject({ kind: 'error', retryable: false });
+    controller.setMode('typed');
+    expect(controller.snapshot.mode).toBe('guided');
+    const { api: otherApi, controller: other, state: otherState } = await typedSetup();
+    other.setText('x');
     for (const [code, status, retryable] of [
       ['DATA_QUESTION_TIMEOUT', 504, true],
       ['DATA_QUESTION_FAILED', 502, true],
       ['DATA_QUESTION_IN_PROGRESS', 429, true],
       ['DATA_QUESTION_BUSY', 503, true],
     ] as const) {
-      controller.dismiss();
-      controller.interpret();
-      api.last('interpret').deferred.reject(new RunnerApiError('server text', status, code, null));
+      other.dismiss();
+      other.interpret();
+      otherApi.last('interpret').deferred.reject(new RunnerApiError('server text', status, code, null));
       await tick();
-      expect(state(), code).toMatchObject({ kind: 'error', retryable });
-      expect((state() as { message: string }).message, code).not.toContain('server text');
+      expect(otherState(), code).toMatchObject({ kind: 'error', retryable });
+      expect((otherState() as { message: string }).message, code).not.toContain('server text');
     }
   });
 
   it('a lost session or membership shows the access state and offers no retry', async () => {
-    const { api, controller, state } = setup();
+    const { api, controller, state } = await typedSetup();
     controller.setText('x');
     controller.interpret();
     api.last('interpret').deferred.reject(new RunnerApiError('No access', 403, 'ORG_ACCESS_DENIED', null));
@@ -246,7 +263,7 @@ describe('an interpreted question', () => {
 
 describe('cancellation and late responses', () => {
   it('cancel aborts the interpretation and drops its late answer', async () => {
-    const { api, controller, state } = setup();
+    const { api, controller, state } = await typedSetup();
     controller.setText('What did I record?');
     controller.interpret();
     const pending = api.last('interpret');
@@ -259,7 +276,7 @@ describe('cancellation and late responses', () => {
   });
 
   it('cancelling an execution returns to the reviewed proposal', async () => {
-    const { api, controller, state } = setup();
+    const { api, controller, state } = await typedSetup();
     controller.setText('What did I record?');
     controller.interpret();
     api.last('interpret').deferred.resolve({ outcome: 'proposal', plan: dayPlan(), version });
@@ -274,7 +291,7 @@ describe('cancellation and late responses', () => {
   });
 
   it('a date or zone change clears the proposal and answer and drops responses for the old context', async () => {
-    const { api, controller, state } = setup();
+    const { api, controller, state } = await typedSetup();
     controller.ask({ operation: 'day_overview', period: 'selected_date' });
     api.last('plan').deferred.resolve(dayPlan());
     await tick();
@@ -297,7 +314,7 @@ describe('cancellation and late responses', () => {
   });
 
   it('disposal aborts and silences: a late answer never reaches the next session', async () => {
-    const { api, controller, snapshots } = setup();
+    const { api, controller, snapshots } = await typedSetup();
     controller.ask({ operation: 'day_overview', period: 'selected_date' });
     const pending = api.last('plan');
     controller.dispose();
@@ -313,7 +330,7 @@ describe('cancellation and late responses', () => {
 
   it('ending the session disposes the controller', async () => {
     const session = new AbortController();
-    const { api, controller, snapshots } = setup({ signal: session.signal });
+    const { api, controller, snapshots } = await typedSetup({ signal: session.signal });
     controller.setText('What did I record?');
     controller.interpret();
     const pending = api.last('interpret');
@@ -327,7 +344,7 @@ describe('cancellation and late responses', () => {
   });
 
   it('an answer for a plan other than the one executed is refused', async () => {
-    const { api, controller, state } = setup();
+    const { api, controller, state } = await typedSetup();
     controller.ask({ operation: 'day_overview', period: 'selected_date' });
     api.last('plan').deferred.resolve(dayPlan());
     await tick();
@@ -347,7 +364,7 @@ describe('the question text owns everything derived from it (ADR-0094 review cor
   };
 
   async function proposed(text = 'What did I record today?') {
-    const created = setup();
+    const created = await typedSetup();
     created.controller.setText(text);
     created.controller.interpret();
     created.api.last('interpret').deferred.resolve({ outcome: 'proposal', plan: dayPlan(), version });
@@ -385,7 +402,7 @@ describe('the question text owns everything derived from it (ADR-0094 review cor
   });
 
   it('editing after an error cannot retry the previous question; a retry then repeats the new one', async () => {
-    const { api, controller, state } = setup();
+    const { api, controller, state } = await typedSetup();
     controller.setText('What did I record today?');
     controller.interpret();
     api.last('interpret').deferred.reject(new RunnerApiError('timeout', 504, 'DATA_QUESTION_TIMEOUT', null));
@@ -415,7 +432,7 @@ describe('the question text owns everything derived from it (ADR-0094 review cor
   });
 
   it('editing during a source clarification drops the choice', async () => {
-    const { api, controller, state } = setup();
+    const { api, controller, state } = await typedSetup();
     controller.setText('Compare my running');
     controller.interpret();
     api.last('interpret').deferred.resolve({
@@ -432,7 +449,7 @@ describe('the question text owns everything derived from it (ADR-0094 review cor
   });
 
   it('late responses of an invalidated question never restore its state', async () => {
-    const { api, controller, state } = setup();
+    const { api, controller, state } = await typedSetup();
     controller.setText('What did I record today?');
     controller.interpret();
     const interpretation = api.last('interpret');
@@ -452,7 +469,7 @@ describe('the question text owns everything derived from it (ADR-0094 review cor
     await tick();
     expect(state()).toEqual({ kind: 'idle' });
 
-    const failing = setup();
+    const failing = await typedSetup();
     failing.controller.setText('x');
     failing.controller.interpret();
     const failed = failing.api.last('interpret');
@@ -460,7 +477,9 @@ describe('the question text owns everything derived from it (ADR-0094 review cor
     failed.deferred.reject(new RunnerApiError('off', 503, 'DATA_QUESTION_INTERPRETATION_DISABLED', null));
     await tick();
     expect(failing.state()).toEqual({ kind: 'idle' });
-    expect(failing.controller.snapshot.capability).toBe('checking');
+    // The late "disabled" answer to the old text changes nothing: the capability and the mode stay as they were.
+    expect(failing.controller.snapshot.capability).toBe('available');
+    expect(failing.controller.snapshot.mode).toBe('typed');
   });
 
   it('the same text again keeps the proposal; an empty text interprets nothing', async () => {
@@ -499,5 +518,292 @@ describe('the question text owns everything derived from it (ADR-0094 review cor
     controller.retry();
     controller.refresh();
     expect(api.count('answer')).toBe(1);
+  });
+});
+
+// ADR-0095: the guided builder lives in the same controller. Mode, typed text, guided draft and the state derived from
+// them are one snapshot; every change of an input invalidates the proposal, answer, clarification, retry and request.
+describe('guided questions (ADR-0095)', () => {
+  const weekPlan = (symbol: 'current_week' | 'previous_week' | 'selected_week' = 'current_week'): DataQuestionPlan => ({
+    focus: 'nutrition',
+    operation: 'weekly_review',
+    period: { symbol, weekEnd: '2026-11-22', weekStart: '2026-11-16' },
+    timeZone: 'Europe/Warsaw',
+    version,
+  });
+  const gpxPlan: DataQuestionPlan = {
+    compare: 'previous_period',
+    operation: 'activity_comparison',
+    period: { endDate: '2026-11-17', previousEndDate: '2026-10-20', previousStartDate: '2026-09-23', startDate: '2026-10-21', symbol: 'yesterday' },
+    source: 'gpx',
+    timeZone: 'Europe/Warsaw',
+    type: 'walk',
+    version,
+  };
+  const choose = (controller: DataQuestionController, choices: Array<[GuidedField, string | null]>) => {
+    for (const [field, value] of choices) controller.updateDraft(field, value);
+  };
+
+  it('starts in guided mode with an empty draft, before and whatever the capability', async () => {
+    const { api, controller } = setup();
+    expect(controller.snapshot).toMatchObject({ draft: EMPTY_GUIDED_DRAFT, mode: 'guided', state: { kind: 'idle' }, text: '' });
+    controller.start();
+    api.last('capabilities').deferred.resolve({ interpretation: 'off', version });
+    await tick();
+    expect(controller.snapshot).toMatchObject({ capability: 'off', mode: 'guided' });
+    controller.setMode('typed');
+    expect(controller.snapshot.mode).toBe('guided');
+  });
+
+  it('with interpretation off: choices, an explicit review (a plan, nothing read), then Get answer; never an interpretation', async () => {
+    const { api, controller, state } = setup();
+    controller.start();
+    api.last('capabilities').deferred.resolve({ interpretation: 'off', version });
+    await tick();
+    choose(controller, [['operation', 'weekly_review'], ['period', 'current_week'], ['focus', 'nutrition']]);
+    expect(api.count('plan')).toBe(0);
+    controller.review();
+    expect(state()).toEqual({ kind: 'resolving' });
+    expect(api.last('plan').args).toEqual([context, { focus: 'nutrition', operation: 'weekly_review', period: 'current_week' }]);
+    controller.review();
+    expect(api.count('plan')).toBe(1);
+    api.last('plan').deferred.resolve(weekPlan());
+    await tick();
+    expect(state()).toEqual({ kind: 'proposal', plan: weekPlan() });
+    expect(api.count('answer')).toBe(0);
+    controller.execute();
+    expect(state()).toEqual({ kind: 'answering', plan: weekPlan(), returnTo: 'proposal' });
+    expect(api.last('answer').args).toEqual([weekPlan()]);
+    expect(api.count('interpret')).toBe(0);
+  });
+
+  it('every operation family goes through the same plan route, and a comparison carries the explicit source and type', async () => {
+    const { api, controller } = setup();
+    choose(controller, [['operation', 'day_overview'], ['period', 'yesterday']]);
+    controller.review();
+    expect(api.last('plan').args[1]).toEqual({ operation: 'day_overview', period: 'yesterday' });
+    controller.cancel();
+    choose(controller, [['operation', 'activity_comparison'], ['period', 'yesterday'], ['source', 'gpx'], ['type', 'walk']]);
+    controller.review();
+    expect(api.last('plan').args[1]).toEqual({ operation: 'activity_comparison', period: 'yesterday', source: 'gpx', type: 'walk' });
+    api.last('plan').deferred.resolve(gpxPlan);
+    await tick();
+    expect(controller.snapshot.state).toEqual({ kind: 'proposal', plan: gpxPlan });
+    expect(api.count('interpret')).toBe(0);
+  });
+
+  it('an incomplete or incompatible draft is never sent', () => {
+    const { api, controller, state } = setup();
+    controller.review();
+    choose(controller, [['operation', 'weekly_review'], ['period', 'previous_week']]);
+    controller.review();
+    choose(controller, [['operation', 'activity_comparison'], ['period', 'today'], ['source', 'recorded_run'], ['type', 'walk']]);
+    controller.review();
+    expect(api.count('plan')).toBe(0);
+    expect(state()).toEqual({ kind: 'idle' });
+    // Choosing recorded runs did not change the type behind the person's back.
+    expect(controller.snapshot.draft).toMatchObject({ source: 'recorded_run', type: 'walk' });
+  });
+
+  it.each([
+    ['the view', 'operation', 'day_overview'],
+    ['the period', 'period', 'previous_week'],
+    ['the focus', 'focus', 'movement'],
+  ] as const)('changing %s after a review removes the proposal and its Get answer, and drops the late plan', async (_name, field, value) => {
+    const { api, controller, state } = setup();
+    choose(controller, [['operation', 'weekly_review'], ['period', 'current_week'], ['focus', 'nutrition']]);
+    controller.review();
+    api.last('plan').deferred.resolve(weekPlan());
+    await tick();
+    expect(state().kind).toBe('proposal');
+    controller.updateDraft(field, value);
+    expect(state()).toEqual({ kind: 'idle' });
+    controller.execute();
+    expect(api.count('answer')).toBe(0);
+    // A review in flight is abandoned by an edit too, and its late plan is ignored.
+    controller.updateDraft(field, field === 'operation' ? 'weekly_review' : value === 'movement' ? 'overview' : 'current_week');
+    choose(controller, [['operation', 'weekly_review'], ['period', 'current_week'], ['focus', 'nutrition']]);
+    controller.review();
+    const pending = api.last('plan');
+    controller.updateDraft('focus', 'overview');
+    expect(pending.deferred.signal.aborted).toBe(true);
+    pending.deferred.resolve(weekPlan());
+    await tick();
+    expect(state()).toEqual({ kind: 'idle' });
+  });
+
+  it('changing the source or the type removes a comparison proposal; the same value changes nothing', async () => {
+    const { api, controller, state } = setup();
+    choose(controller, [['operation', 'activity_comparison'], ['period', 'yesterday'], ['source', 'gpx'], ['type', 'walk']]);
+    controller.review();
+    api.last('plan').deferred.resolve(gpxPlan);
+    await tick();
+    controller.updateDraft('source', 'gpx');
+    controller.updateDraft('nonsense' as GuidedField, 'x');
+    expect(state()).toEqual({ kind: 'proposal', plan: gpxPlan });
+    controller.updateDraft('source', 'tcx');
+    expect(state()).toEqual({ kind: 'idle' });
+    controller.review();
+    api.last('plan').deferred.resolve({ ...gpxPlan, source: 'tcx' });
+    await tick();
+    controller.updateDraft('type', 'hike');
+    expect(state()).toEqual({ kind: 'idle' });
+  });
+
+  it('an edit after an answer removes the answer, and after an error removes the retry', async () => {
+    const { api, controller, state } = setup();
+    choose(controller, [['operation', 'day_overview'], ['period', 'selected_date']]);
+    controller.review();
+    api.last('plan').deferred.resolve(dayPlan());
+    await tick();
+    controller.execute();
+    api.last('answer').deferred.resolve(dayAnswer());
+    await tick();
+    expect(state().kind).toBe('ready');
+    controller.updateDraft('period', 'today');
+    expect(state()).toEqual({ kind: 'idle' });
+    controller.review();
+    api.last('plan').deferred.reject(new RunnerApiError('Database unavailable', 503, 'DATABASE_UNAVAILABLE', null));
+    await tick();
+    expect(state()).toMatchObject({ kind: 'error', retryable: true });
+    controller.updateDraft('period', 'yesterday');
+    expect(state()).toEqual({ kind: 'idle' });
+    controller.retry();
+    expect(api.count('plan')).toBe(2);
+  });
+
+  it('switching between typed and guided modes drops what the other mode produced, keeping both drafts', async () => {
+    const { api, controller, state } = await typedSetup();
+    controller.setText('What did I record today?');
+    controller.interpret();
+    api.last('interpret').deferred.resolve({ outcome: 'proposal', plan: dayPlan(), version });
+    await tick();
+    controller.setMode('guided');
+    expect(controller.snapshot).toMatchObject({ mode: 'guided', state: { kind: 'idle' }, text: 'What did I record today?' });
+    controller.execute();
+    expect(api.count('answer')).toBe(0);
+    choose(controller, [['operation', 'day_overview'], ['period', 'today']]);
+    controller.review();
+    const pending = api.last('plan');
+    controller.setMode('typed');
+    expect(pending.deferred.signal.aborted).toBe(true);
+    expect(controller.snapshot).toMatchObject({ draft: { operation: 'day_overview', period: 'today' }, mode: 'typed', state: { kind: 'idle' } });
+    pending.deferred.resolve(dayPlan());
+    await tick();
+    expect(state()).toEqual({ kind: 'idle' });
+    // Each mode acts only on its own draft.
+    controller.review();
+    expect(api.count('plan')).toBe(1);
+    controller.updateDraft('period', 'yesterday');
+    expect(controller.snapshot.draft.period).toBe('today');
+    controller.setMode('guided');
+    controller.interpret();
+    expect(api.count('interpret')).toBe(1);
+  });
+
+  it('a new date or zone drops the guided proposal and pending review but keeps the symbolic choices for a new review', async () => {
+    const { api, controller, state } = setup();
+    choose(controller, [['operation', 'day_overview'], ['period', 'selected_date']]);
+    controller.review();
+    const pending = api.last('plan');
+    controller.setContext({ selectedDate: '2026-11-10', timeZone: 'Europe/Warsaw' });
+    expect(pending.deferred.signal.aborted).toBe(true);
+    expect(controller.snapshot).toMatchObject({ draft: { operation: 'day_overview', period: 'selected_date' }, state: { kind: 'idle' } });
+    pending.deferred.resolve(dayPlan());
+    await tick();
+    expect(state()).toEqual({ kind: 'idle' });
+    controller.review();
+    expect(api.last('plan').args[0]).toEqual({ selectedDate: '2026-11-10', timeZone: 'Europe/Warsaw' });
+    api.last('plan').deferred.resolve(dayPlan('2026-11-10'));
+    await tick();
+    controller.setContext({ selectedDate: '2026-11-10', timeZone: 'America/New_York' });
+    expect(state()).toEqual({ kind: 'idle' });
+  });
+
+  it('New question empties the typed text and the guided draft', async () => {
+    const { controller } = await typedSetup();
+    controller.setText('What did I record?');
+    controller.setMode('guided');
+    choose(controller, [['operation', 'day_overview']]);
+    controller.newQuestion();
+    expect(controller.snapshot).toMatchObject({ draft: EMPTY_GUIDED_DRAFT, guidedFocus: null, state: { kind: 'idle' }, text: '' });
+  });
+
+  it('cancel, disposal and the session end drop a pending review', async () => {
+    const session = new AbortController();
+    const { api, controller, snapshots, state } = setup({ signal: session.signal });
+    choose(controller, [['operation', 'day_overview'], ['period', 'today']]);
+    controller.review();
+    controller.cancel();
+    expect(api.last('plan').deferred.signal.aborted).toBe(true);
+    expect(state()).toEqual({ kind: 'idle' });
+    api.last('plan').deferred.resolve(dayPlan());
+    await tick();
+    expect(state()).toEqual({ kind: 'idle' });
+    controller.review();
+    const pending = api.last('plan');
+    session.abort();
+    expect(pending.deferred.signal.aborted).toBe(true);
+    const seen = snapshots.length;
+    pending.deferred.resolve(dayPlan());
+    await tick();
+    expect(snapshots).toHaveLength(seen);
+  });
+
+  it('a clarification opens the builder at the field to choose, prefilled only with the verified source choice; the guided query completes', async () => {
+    const { api, controller, state } = await typedSetup();
+    controller.setText('Compare my walking up to yesterday with the previous 28 days');
+    controller.interpret();
+    const choice = { operation: 'activity_comparison', period: 'yesterday', type: 'walk' } as const;
+    api.last('interpret').deferred.resolve({ outcome: 'clarify', reason: 'activity_source_missing', sourceChoice: choice, version });
+    await tick();
+    controller.fromClarification();
+    expect(controller.snapshot).toMatchObject({
+      draft: { focus: null, operation: 'activity_comparison', period: 'yesterday', source: null, type: 'walk' },
+      guidedFocus: 'source',
+      mode: 'guided',
+      state: { kind: 'idle' },
+    });
+    controller.review();
+    expect(api.count('plan')).toBe(0);
+    controller.updateDraft('source', 'gpx');
+    expect(controller.snapshot.guidedFocus).toBeNull();
+    controller.review();
+    expect(api.last('plan').args[1]).toEqual({ operation: 'activity_comparison', period: 'yesterday', source: 'gpx', type: 'walk' });
+    api.last('plan').deferred.resolve(gpxPlan);
+    await tick();
+    controller.execute();
+    expect(api.last('answer').args).toEqual([gpxPlan]);
+    expect(api.count('interpret')).toBe(1);
+    expect(state().kind).toBe('answering');
+  });
+
+  it.each([
+    ['activity_type_missing', { ...EMPTY_GUIDED_DRAFT, operation: 'activity_comparison' }, 'type'],
+    ['period_ambiguous', EMPTY_GUIDED_DRAFT, 'operation'],
+    ['operation_ambiguous', EMPTY_GUIDED_DRAFT, 'operation'],
+  ] as const)('a %s clarification routes to the builder without a guess', async (reason, draft, focus) => {
+    const { api, controller } = await typedSetup();
+    controller.setText('Something');
+    controller.interpret();
+    api.last('interpret').deferred.resolve({ outcome: 'clarify', reason, sourceChoice: null, version });
+    await tick();
+    controller.fromClarification();
+    expect(controller.snapshot).toMatchObject({ draft, guidedFocus: focus, mode: 'guided', state: { kind: 'idle' } });
+    // Nothing happens outside a clarification.
+    controller.fromClarification();
+    expect(controller.snapshot.guidedFocus).toBe(focus);
+  });
+
+  it('choosing a source after a clarification resolves a plan without claiming to read records', async () => {
+    const { api, controller, state } = await typedSetup();
+    controller.setText('Compare my running');
+    controller.interpret();
+    api.last('interpret').deferred.resolve({ outcome: 'clarify', reason: 'activity_source_missing', sourceChoice: { operation: 'activity_comparison', period: 'selected_date', type: 'run' }, version });
+    await tick();
+    controller.chooseSource('manual');
+    expect(state()).toEqual({ kind: 'resolving' });
+    controller.cancel();
+    expect(state()).toEqual({ kind: 'idle' });
   });
 });

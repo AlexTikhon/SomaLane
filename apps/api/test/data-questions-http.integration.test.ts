@@ -114,6 +114,108 @@ describe('ADR-0094 data questions with interpretation off (the product default)'
   });
 });
 
+// ADR-0095: the guided builder offers exactly the intents the contracts accept, and each one goes through the existing
+// plan and answer routes with interpretation OFF (the product default): no provider exists, nothing is interpreted, and
+// every answer is the existing service's answer for the same request.
+describe('ADR-0095 guided questions with interpretation off: every combination', () => {
+  const SELECTED = '2026-11-10';
+  const guidedIntents: Array<Record<string, string>> = [
+    ...['selected_date', 'today', 'yesterday'].map((period) => ({ operation: 'day_overview', period })),
+    ...['selected_week', 'current_week', 'previous_week'].flatMap((period) => ['overview', 'movement', 'nutrition'].map((focus) => ({ focus, operation: 'weekly_review', period }))),
+    ...['selected_date', 'today', 'yesterday'].flatMap((period) =>
+      ['manual', 'gpx', 'tcx', 'recorded_run'].flatMap((source) =>
+        ['run', 'walk', 'ride', 'hike', 'swim', 'strength', 'other']
+          .filter((type) => source !== 'recorded_run' || type === 'run')
+          .map((type) => ({ operation: 'activity_comparison', period, source, type })),
+      ),
+    ),
+  ];
+
+  it('resolves and answers all 78 guided intents exactly as the existing services answer them', async () => {
+    expect(guidedIntents).toHaveLength(78);
+    const config = configuration({});
+    expect(config.DATA_QUESTIONS).toBeUndefined();
+    const pool = createDatabasePool({ ...config, DB_POOL_MAX: 2 });
+    const ownerPool = new Pool({ connectionString: loadIntegrationTestConfiguration().migration.connectionString, max: 1 });
+    const logLines: string[] = [];
+    try {
+      await prepareTenantIsolationFixtures(ownerPool, loadIntegrationTestConfiguration().migration);
+      for (const table of ['meals', 'daily_movement', 'activities']) await ownerPool.query(`DELETE FROM ${table}`);
+      const app = createApp({
+        clock,
+        config,
+        logger: createLogger({ clock, write: (_level, line) => logLines.push(line) }),
+        pool,
+        sessionManager: new SessionManager({ clock, store: new InMemorySessionStore(100), ttlMs: config.SESSION_TTL_MS }),
+      });
+      const login = await request(app).post('/api/session').set('Origin', allowedOrigin).type('application/json').send({ userId: ids.userDual }).expect(201);
+      const who = { cookie: (login.headers['set-cookie'] as unknown as string[])[0]!.split(';', 1)[0]!, csrf: (login.body as { csrf: { token: string } }).csrf.token };
+      const send = (method: 'post' | 'put', path: string, body: unknown) =>
+        request(app)[method](`/api/orgs/${ids.orgA}/${path}`).set('Cookie', who.cookie).set('Origin', allowedOrigin).set(csrfHeaderName, who.csrf).type('application/json').send(body as object);
+      const read = (path: string) => request(app).get(`/api/orgs/${ids.orgA}/${path}`).set('Cookie', who.cookie).expect(200);
+      // A few of the person's own records, so the answers are not all empty: meals with a recorded 0 and a missing value,
+      // movement with a recorded 0, and manual activities of two types inside and before the comparison ranges.
+      await send('post', 'meals', { energyKcal: 500, idempotencyKey: randomUUID(), localDate: SELECTED, mealType: 'lunch', timeZone: ZONE, title: 'Soup' }).expect(201);
+      await send('post', 'meals', { energyKcal: 0, idempotencyKey: randomUUID(), localDate: '2026-11-17', mealType: 'snack', timeZone: ZONE, title: 'Tea' }).expect(201);
+      await send('put', `daily-movement/${SELECTED}`, { activeEnergyKcal: 0, steps: 4200, timeZone: ZONE }).expect((response) => expect([200, 201]).toContain(response.status));
+      for (const [startedAt, type] of [['2026-11-03T07:00:00.000Z', 'run'], ['2026-11-16T07:00:00.000Z', 'walk'], ['2026-10-01T07:00:00.000Z', 'run']] as const) {
+        await send('put', `activities/${randomUUID()}`, { durationS: 1800, idempotencyKey: randomUUID(), startedAt, type }).expect(201);
+      }
+
+      for (const intent of guidedIntents) {
+        const label = JSON.stringify(intent);
+        const planned = await send('post', 'data-questions/plans', { intent, selectedDate: SELECTED, timeZone: ZONE, version: 'data-question-1' }).expect(200);
+        expect(planned.headers['cache-control'], label).toBe('no-store');
+        const plan = dataQuestionPlanResponseSchema.parse(planned.body).plan;
+        expect(plan.period.symbol, label).toBe(intent['period']);
+        const answered = await send('post', 'data-questions/answers', { plan, version: 'data-question-1' }).expect(200);
+        expect(answered.headers['cache-control'], label).toBe('no-store');
+        const answer = dataQuestionAnswerSchema.parse(answered.body);
+        expect(answer.provenance.persisted, label).toBe(false);
+        if (answer.operation === 'day_overview') {
+          const overview = dailyOverviewSchema.parse((await read(`daily-overview/${answer.plan.period.localDate}?timeZone=${ZONE}`)).body);
+          expect(answer.result, label).toEqual(overview);
+        } else if (answer.operation === 'weekly_review') {
+          const review = weeklyReviewSchema.parse((await read(`weekly-review?weekStart=${answer.plan.period.weekStart}&timeZone=${ZONE}`)).body);
+          expect(answer.result.week, label).toEqual(review.week);
+          expect(answer.result.statements, label).toEqual(weeklyReviewStatementsFor(answer.result.focus, review.statements));
+          if (answer.result.focus === 'nutrition') expect(answer.result.meals, label).toEqual(review.meals);
+          if (answer.result.focus === 'movement') expect(answer.result.movement, label).toEqual(review.movement);
+          if (answer.result.focus === 'overview') expect(answer.result.coverage, label).toEqual(review.coverage);
+        } else {
+          const { endDate } = answer.plan.period;
+          const trends = activityTrendsSchema.parse(
+            (await read(`activity-trends?endDate=${endDate}&timeZone=${ZONE}&source=${answer.plan.source}&type=${answer.plan.type}&compare=previous_period`)).body,
+          );
+          expect(answer.result.source, label).toBe(intent['source']);
+          expect(answer.result.range, label).toEqual(trends.range);
+          expect(answer.result.summary, label).toEqual(trends.summary);
+          expect(answer.result.comparison, label).toEqual(trends.comparison);
+        }
+      }
+      // Nothing was interpreted: no interpretation was logged, and the off route still refuses.
+      expect(logLines.some((line) => line.includes('data_question.interpretation'))).toBe(false);
+      expect(logLines.filter((line) => line.includes('data_question.answer')).length).toBe(78);
+      expect(codeOf(await send('post', 'data-questions/interpretations', { selectedDate: SELECTED, text: 'What did I record?', timeZone: ZONE, version: 'data-question-1' }).expect(503))).toBe(
+        'DATA_QUESTION_INTERPRETATION_DISABLED',
+      );
+      // A malformed guided intent never becomes a plan: recorded runs of another type, a week period on a day, an unknown field.
+      for (const intent of [
+        { operation: 'activity_comparison', period: 'today', source: 'recorded_run', type: 'walk' },
+        { operation: 'day_overview', period: 'current_week' },
+        { operation: 'weekly_review', period: 'current_week' },
+        { operation: 'day_overview', period: 'today', source: 'manual' },
+      ]) {
+        expect(codeOf(await send('post', 'data-questions/plans', { intent, selectedDate: SELECTED, timeZone: ZONE, version: 'data-question-1' }).expect(400)), JSON.stringify(intent)).toBe('INVALID_REQUEST');
+      }
+    } finally {
+      for (const table of ['meals', 'daily_movement', 'activities', 'erasure_ledger']) await ownerPool.query(`DELETE FROM ${table}`).catch(() => undefined);
+      await pool.end();
+      await ownerPool.end();
+    }
+  }, 120_000);
+});
+
 describe('ADR-0094 data questions under the runtime role', () => {
   let app: ReturnType<typeof createApp>;
   let ownerPool: Pool;

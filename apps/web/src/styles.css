@@ -521,6 +521,16 @@ h1 { max-width: 11ch; margin: 0; font-size: clamp(3.1rem, 7.2vw, 6.2rem); line-h
 .ask-plan dd, .ask-comparison dd { margin: 0; overflow-wrap: anywhere; }
 .ask-answer { display: grid; gap: 0.5rem; min-width: 0; }
 .ask-list { display: grid; gap: 0.3rem; margin: 0; padding-left: 1.1rem; overflow-wrap: anywhere; }
+/* Guided questions (ADR-0095): closed choices that wrap to one column at phone width. */
+.ask-mode button[aria-pressed="true"] { border-color: #b8f264; color: #b8f264; }
+.ask-guided { gap: 0.6rem; }
+.ask-field { display: grid; gap: 0.25rem; min-width: 0; }
+.ask-field select { width: 100%; min-width: 0; min-height: 2.75rem; box-sizing: border-box; border: 1px solid #465149; border-radius: 0.7rem; padding: 0.55rem 0.75rem; color: #f4f7f3; color-scheme: dark; background: #0e1410; }
+.ask-field select:disabled { opacity: 0.55; }
+.ask-field select[aria-invalid="true"] { border-color: #f2a964; }
+.ask-field p { margin: 0; }
+.ask-guided__status { margin: 0; color: #a9b5ad; font-size: 0.86rem; overflow-wrap: anywhere; }
+.ask-guided__status--problem { color: #f2c18d; }
 
 /* Trends (ADR-0084): one series at a time, a simple SVG chart with gaps, and a table of every date. */
 .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }

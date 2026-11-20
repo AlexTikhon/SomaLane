@@ -7,6 +7,9 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { invocationDirectory, runDataQuestionEvaluationCli, type DataQuestionCliDependencies } from './data-question-evaluation-cli.js';
+import { DATA_QUESTION_PROMPT_VERSION, dataQuestionPromptDigest } from '../data-questions/data-question-prompt.js';
+import { buildDataQuestionReport, dataQuestionCodeFingerprint, loadDataQuestionDataset, runDataQuestionEvaluation, type DataQuestionEvalCase } from './data-question-evaluation.js';
+import { buildExecutionProfile } from './meal-draft-profile.js';
 
 // The command line of the "Ask my data" evaluation (ADR-0094 review correction): user-supplied relative --report and --out
 // paths mean the directory the command was typed in (npm's INIT_CWD, else the process's working directory), absolute paths
@@ -15,8 +18,9 @@ import { invocationDirectory, runDataQuestionEvaluationCli, type DataQuestionCli
 
 const repositoryRoot = resolve(fileURLToPath(new URL('.', import.meta.url)), '..', '..', '..', '..');
 const artifactsRelative = 'docs/reports/artifacts/ask-my-data-2026-11-19';
-const savedReport = (name: string) => JSON.parse(readFileSync(join(repositoryRoot, artifactsRelative, name), 'utf8')) as { codeFingerprint: string; promptDigest: string };
-const measured = { codeFingerprint: savedReport('qwen3-8b-development.json').codeFingerprint, promptDigest: savedReport('qwen3-8b-development.json').promptDigest };
+const savedReport = (name: string) => JSON.parse(readFileSync(join(repositoryRoot, artifactsRelative, name), 'utf8')) as { codeFingerprint: string; promptDigest: string; promptVersion: string };
+// The saved reports are judged as measured (their own code, prompt and prompt version), so these tests judge paths, not currency.
+const measured = { codeFingerprint: savedReport('qwen3-8b-development.json').codeFingerprint, promptDigest: savedReport('qwen3-8b-development.json').promptDigest, promptVersion: savedReport('qwen3-8b-development.json').promptVersion };
 
 const scratch: string[] = [];
 afterEach(() => {
@@ -31,7 +35,7 @@ function spacedDirectory(): string {
   return directory;
 }
 
-function dependencies(directory: string, current: { codeFingerprint: string; promptDigest: string } | undefined = measured) {
+function dependencies(directory: string, current: { codeFingerprint: string; promptDigest: string; promptVersion?: string } | undefined = measured) {
   const lines: string[] = [];
   const requests: string[] = [];
   const deps: DataQuestionCliDependencies = {
@@ -177,4 +181,85 @@ describe('the entry point as a process', () => {
     expect(existsSync(join(directory, 'gates.json'))).toBe(true);
     expect(existsSync(join(repositoryRoot, 'apps', 'api', 'gates.json'))).toBe(false);
   }, 60_000);
+});
+
+// Dataset versions on the command line (ADR-0095): v1 by default, --dataset-version v2 selects the new sets, and a check
+// judges exactly the selected version. Oracle reports are built in memory; nothing runs a model.
+describe('--dataset-version', () => {
+  /** The CURRENT code and prompt (the oracle reports below are built with them). */
+  const currentCode = { codeFingerprint: dataQuestionCodeFingerprint(), promptDigest: dataQuestionPromptDigest(), promptVersion: DATA_QUESTION_PROMPT_VERSION };
+  const profile = buildExecutionProfile({ maxOutputTokens: 300, maxResponseBytes: 32_768, model: 'qwen3:8b', modelDigest: 'a'.repeat(64), ollamaVersion: '0.12.0', timeoutMs: 45_000 });
+  const oracle = (entry: DataQuestionEvalCase): unknown => {
+    const expected = entry.expected;
+    if (expected.outcome !== 'proposal') return { outcome: expected.outcome, reason: expected.reason };
+    const intent = expected.intent;
+    if (intent.operation === 'day_overview') return { outcome: 'day_overview', period: intent.period };
+    if (intent.operation === 'weekly_review') return { focus: intent.focus, outcome: 'weekly_review', period: intent.period };
+    return { activityType: intent.type, outcome: 'activity_comparison', period: intent.period, source: intent.source };
+  };
+  async function writeOracleReports(directory: string, version: '1' | '2'): Promise<[string, string]> {
+    const names: string[] = [];
+    for (const set of ['development', 'heldout'] as const) {
+      const { dataset, digest } = loadDataQuestionDataset(set, undefined, version);
+      const provider = { generateStructured: (input: { user: string }) => Promise.resolve({ value: oracle(dataset.cases.find((entry) => entry.text === input.user)!) }), model: 'test' };
+      const run = await runDataQuestionEvaluation({ dataset, maxCalls: 20, maxOutputTokens: 300, provider, timeoutMs: 45_000 });
+      const report = buildDataQuestionReport({ dataset, digest, finishedAt: 'x', git: { dirty: false, dirtyPathCount: 0, dirtyPaths: [], sha: null }, profile, profileCheck: { mismatches: 0, requests: run.callsMade }, run, startedAt: 'x' });
+      const name = `v${version} ${set}.json`;
+      writeFileSync(join(directory, name), JSON.stringify(report));
+      names.push(name);
+    }
+    return [names[0]!, names[1]!];
+  }
+
+  it('a fake run of v2 records the v2 dataset version and makes no network request', async () => {
+    const directory = spacedDirectory();
+    const { deps, requests } = dependencies(directory, currentCode);
+    const code = await runDataQuestionEvaluationCli(['--set', 'heldout', '--provider', 'fake', '--dataset-version', 'v2', '--out', 'fake v2.json'], deps);
+    expect(code).toBe(0);
+    const report = JSON.parse(readFileSync(join(directory, 'fake v2.json'), 'utf8')) as { datasetVersion: string; evidence: string; results: Array<{ id: string }> };
+    expect(report.datasetVersion).toBe('data-question-eval-2');
+    expect(report.evidence).toBe('harness_self_check_not_model_evidence');
+    expect(report.results.every((result) => result.id.includes('-ho2-'))).toBe(true);
+    expect(requests).toEqual([]);
+  });
+
+  it('--check judges exactly the selected version: v2 evidence passes as v2 and is NOT_RUN under the v1 default', async () => {
+    const directory = spacedDirectory();
+    const [development, heldout] = await writeOracleReports(directory, '2');
+    const asV2 = dependencies(directory, currentCode);
+    const v2Code = await runDataQuestionEvaluationCli([...checkArgs(development, heldout, 'v2 gate.json'), '--dataset-version', 'v2'], asV2.deps);
+    expect(v2Code, asV2.lines.join('\n')).toBe(0);
+    expect(asV2.lines.join('\n')).toMatch(/MODEL GATE \(data questions\): PASS; evidence valid\n {2}dataset version judged: data-question-eval-2/u);
+    expect(JSON.parse(readFileSync(join(directory, 'v2 gate.json'), 'utf8'))).toMatchObject({ gate: { datasetVersion: 'data-question-eval-2', status: 'PASS' }, inferenceCallsMade: 0 });
+    const asDefault = dependencies(directory, currentCode);
+    expect(await runDataQuestionEvaluationCli(checkArgs(development, heldout, 'v1 gate.json'), asDefault.deps)).toBe(3);
+    expect(asDefault.lines.join('\n')).toMatch(/dataset version data-question-eval-2 is not the selected frozen data-question-eval-1/u);
+    expect([...asV2.requests, ...asDefault.requests]).toEqual([]);
+  });
+
+  it('mixed versions are NOT_RUN, and an unknown version is refused before anything is read', async () => {
+    const directory = spacedDirectory();
+    const [development1] = await writeOracleReports(directory, '1');
+    const [, heldout2] = await writeOracleReports(directory, '2');
+    const { deps, lines } = dependencies(directory, currentCode);
+    expect(await runDataQuestionEvaluationCli([...checkArgs(development1, heldout2, 'mixed.json'), '--dataset-version', 'v2'], deps)).toBe(3);
+    expect(lines.join('\n')).toMatch(/the reports mix dataset versions/u);
+    expect(existsSync(join(directory, 'mixed.json'))).toBe(true);
+    await expect(runDataQuestionEvaluationCli([...checkArgs(development1, heldout2), '--dataset-version', 'v3'], dependencies(directory, currentCode).deps)).rejects.toThrow(
+      /--dataset-version must be v1 or v2/u,
+    );
+  });
+
+  it('a v2 report with an impossible date is NOT_RUN (exit 3) and --out is still written', async () => {
+    const directory = spacedDirectory();
+    const [development, heldout] = await writeOracleReports(directory, '2');
+    const report = JSON.parse(readFileSync(join(directory, development), 'utf8')) as { results: Array<{ got: { plan?: { operation: string; period: { weekStart?: string } } } }> };
+    report.results.find((result) => result.got.plan?.operation === 'weekly_review')!.got.plan!.period.weekStart = '2026-02-30';
+    writeFileSync(join(directory, 'impossible v2.json'), JSON.stringify(report));
+    const { deps, lines, requests } = dependencies(directory, currentCode);
+    expect(await runDataQuestionEvaluationCli([...checkArgs('impossible v2.json', heldout, 'out/gates.json'), '--dataset-version', 'v2'], deps)).toBe(3);
+    expect(lines.join('\n')).toMatch(/report 1: malformed \(validation failed: RangeError/u);
+    expect(JSON.parse(readFileSync(join(directory, 'out', 'gates.json'), 'utf8'))).toMatchObject({ gate: { status: 'NOT_RUN' } });
+    expect(requests).toEqual([]);
+  });
 });

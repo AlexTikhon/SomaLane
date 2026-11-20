@@ -34,7 +34,63 @@ import { mealDraftExecutionProfileSchema, valueDifferences, type MealDraftExecut
 
 export const DATA_QUESTION_EVAL_SETS = ['development', 'heldout'] as const;
 export type DataQuestionEvalSet = (typeof DATA_QUESTION_EVAL_SETS)[number];
-export const DATA_QUESTION_EVAL_DATASET_VERSION = 'data-question-eval-1';
+
+/**
+ * The dataset versions an evaluation can be asked for, by `--dataset-version v1|v2` (the repository's convention, as for
+ * meal drafts). Version 1 (ADR-0094, 2026-11-19) is the default and keeps its files, digests, expectations and meaning; it
+ * has been examined, so runs of it are regression measurements. Version 2 (ADR-0095, 2026-11-20) is a NEW pair of
+ * synthetic sets written from the constraints policy and frozen before any inference on them; written and examined by the
+ * same engineer, so it is not independent blind evidence either.
+ */
+export const DATA_QUESTION_DATASET_VERSIONS = ['1', '2'] as const;
+export type DataQuestionDatasetVersion = (typeof DATA_QUESTION_DATASET_VERSIONS)[number];
+export const DATA_QUESTION_DEFAULT_DATASET_VERSION: DataQuestionDatasetVersion = '1';
+
+export interface PinnedDataQuestionDataset {
+  /** SHA-256 of the file with line endings normalized. */
+  digest: string;
+  /** File name in apps/api/evaluation/. */
+  file: string;
+}
+
+/** The pinned registry: every set of every version. A changed set is refused; a new set is a new version, never an edit. */
+export const DATA_QUESTION_DATASET_REGISTRY: Readonly<
+  Record<DataQuestionDatasetVersion, Readonly<{ name: string } & Record<DataQuestionEvalSet, PinnedDataQuestionDataset>>>
+> = Object.freeze({
+  '1': Object.freeze({
+    development: Object.freeze({ digest: '2178ed1adb65792013b7b3965a66867917cce8c9d37359f9f9f204016a7ab207', file: 'data-question.development.v1.json' }),
+    heldout: Object.freeze({ digest: 'ae698e5d247cef2873b4125f7d8d99e8448d827735fbb3d55f0f355edab616be', file: 'data-question.heldout.v1.json' }),
+    name: 'data-question-eval-1',
+  }),
+  '2': Object.freeze({
+    // Frozen 2026-11-20 from docs/data-question-constraints-policy.md, before any inference call on version 2.
+    development: Object.freeze({ digest: '73e7e265c9bba842b450ab9a9e27a726448c86791d6bfff206953696b7ec2952', file: 'data-question.development.v2.json' }),
+    heldout: Object.freeze({ digest: '895036a4adafedcbf3af5b7291adbfd539c776d020a72e1fc13c171cb5d61dbd', file: 'data-question.heldout.v2.json' }),
+    name: 'data-question-eval-2',
+  }),
+});
+
+/** The name version 1 recorded in its datasets and reports, under its historical constant. */
+export const DATA_QUESTION_EVAL_DATASET_VERSION = DATA_QUESTION_DATASET_REGISTRY['1'].name;
+
+/** The digests of one version's sets (version 1 by default). */
+export function dataQuestionDatasetDigests(version: DataQuestionDatasetVersion = DATA_QUESTION_DEFAULT_DATASET_VERSION): Readonly<Record<DataQuestionEvalSet, string>> {
+  const pinned = DATA_QUESTION_DATASET_REGISTRY[version];
+  return { development: pinned.development.digest, heldout: pinned.heldout.digest };
+}
+
+/**
+ * Reads `v1`/`v2` (the command-line spelling) into a registered version; refuses anything else. Undefined means the
+ * default, version 1, so every earlier command keeps its meaning.
+ */
+export function parseDataQuestionDatasetVersion(value: string | undefined): DataQuestionDatasetVersion {
+  if (value === undefined) return DATA_QUESTION_DEFAULT_DATASET_VERSION;
+  const version = /^v(\d+)$/u.exec(value)?.[1];
+  if (version === undefined || !(DATA_QUESTION_DATASET_VERSIONS as readonly string[]).includes(version)) {
+    throw new Error(`--dataset-version must be ${DATA_QUESTION_DATASET_VERSIONS.map((entry) => `v${entry}`).join(' or ')} (got ${value.slice(0, 20)})`);
+  }
+  return version as DataQuestionDatasetVersion;
+}
 /** At most this many inference calls in one invocation, and in the whole measurement (both sets). */
 export const DATA_QUESTION_EVAL_MAX_CALLS = 40;
 /** Consecutive identical systemic failures after which a run stops (the model or runtime is not working). */
@@ -48,14 +104,12 @@ export const DATA_QUESTION_THRESHOLDS = Object.freeze({
   technicalFailureMax: 0.1,
 });
 
-/** Pinned SHA-256 (line endings normalized) of each frozen dataset file. A changed file is a new version, not this one. */
-export const DATA_QUESTION_DATASET_DIGESTS: Readonly<Record<DataQuestionEvalSet, string>> = Object.freeze({
-  development: '2178ed1adb65792013b7b3965a66867917cce8c9d37359f9f9f204016a7ab207',
-  heldout: 'ae698e5d247cef2873b4125f7d8d99e8448d827735fbb3d55f0f355edab616be',
-});
+/** The version 1 digests, under their historical name. A changed file is a new version, not this one. */
+export const DATA_QUESTION_DATASET_DIGESTS: Readonly<Record<DataQuestionEvalSet, string>> = Object.freeze(dataQuestionDatasetDigests('1'));
 
 const repositoryRoot = resolve(fileURLToPath(new URL('.', import.meta.url)), '..', '..', '..', '..');
-export const datasetPath = (set: DataQuestionEvalSet) => resolve(repositoryRoot, 'apps', 'api', 'evaluation', `data-question.${set}.v1.json`);
+export const datasetPath = (set: DataQuestionEvalSet, version: DataQuestionDatasetVersion = DATA_QUESTION_DEFAULT_DATASET_VERSION) =>
+  resolve(repositoryRoot, 'apps', 'api', 'evaluation', DATA_QUESTION_DATASET_REGISTRY[version][set].file);
 
 const contextSchema = z.strictObject({ now: z.iso.datetime({ offset: false }), selectedDate: z.string(), timeZone: z.string() });
 const expectedSchema = z.discriminatedUnion('outcome', [
@@ -67,15 +121,18 @@ export const dataQuestionEvalCaseSchema = z.strictObject({
   category: z.enum(['supported', 'ambiguous', 'unsupported', 'adversarial']),
   context: contextSchema,
   expected: expectedSchema,
-  id: z.string().regex(/^(?:en|ru)-(?:dev|ho)-[a-z0-9-]+$/u),
+  // Version 2 ids carry the version ("en-dev2-…"), so a version 1 result can never stand for a version 2 case.
+  id: z.string().regex(/^(?:en|ru)-(?:dev|ho)2?-[a-z0-9-]+$/u),
   language: z.enum(['en', 'ru']),
+  /** The policy rule the expectation follows (version 2 onwards); never read by scoring. */
+  rationale: z.string().min(1).max(400).optional(),
   text: z.string().min(1).max(300),
 });
 export const dataQuestionEvalDatasetSchema = z.strictObject({
   cases: z.array(dataQuestionEvalCaseSchema).length(20),
   description: z.string(),
   name: z.enum(DATA_QUESTION_EVAL_SETS),
-  version: z.literal(DATA_QUESTION_EVAL_DATASET_VERSION),
+  version: z.enum([DATA_QUESTION_DATASET_REGISTRY['1'].name, DATA_QUESTION_DATASET_REGISTRY['2'].name]),
 });
 export type DataQuestionEvalCase = z.infer<typeof dataQuestionEvalCaseSchema>;
 export type DataQuestionEvalDataset = z.infer<typeof dataQuestionEvalDatasetSchema>;
@@ -84,13 +141,23 @@ export function datasetFileDigest(text: string): string {
   return normalizedDigest(text);
 }
 
-/** Reads, validates and checks a frozen set: its pinned digest, balance, unique ids, and every expected plan's resolution. */
-export function loadDataQuestionDataset(set: DataQuestionEvalSet, read: (path: string) => string = (path) => readFileSync(path, 'utf8')): { dataset: DataQuestionEvalDataset; digest: string } {
-  const text = read(datasetPath(set));
+/**
+ * Reads, validates and checks a frozen set of one version (version 1 by default): its pinned digest, the version it
+ * claims, balance, unique ids and texts, and every expected plan's resolution.
+ */
+export function loadDataQuestionDataset(
+  set: DataQuestionEvalSet,
+  read: (path: string) => string = (path) => readFileSync(path, 'utf8'),
+  version: DataQuestionDatasetVersion = DATA_QUESTION_DEFAULT_DATASET_VERSION,
+): { dataset: DataQuestionEvalDataset; digest: string } {
+  const pinned = DATA_QUESTION_DATASET_REGISTRY[version];
+  if (pinned === undefined) throw new Error(`No data-question dataset version ${String(version).slice(0, 20)} is registered`);
+  const text = read(datasetPath(set, version));
   const digest = datasetFileDigest(text);
-  if (digest !== DATA_QUESTION_DATASET_DIGESTS[set]) throw new Error(`The ${set} dataset does not match its pinned digest`);
+  if (digest !== pinned[set].digest) throw new Error(`The ${set} dataset does not match its pinned digest`);
   const dataset = dataQuestionEvalDatasetSchema.parse(JSON.parse(text));
   if (dataset.name !== set) throw new Error(`The ${set} dataset names itself ${dataset.name}`);
+  if (dataset.version !== pinned.name) throw new Error(`The v${version} ${set} dataset holds version ${dataset.version}`);
   const problems = datasetProblems(dataset);
   if (problems.length > 0) throw new Error(`The ${set} dataset is inconsistent: ${problems.join('; ')}`);
   return { dataset, digest };
@@ -101,6 +168,13 @@ export function datasetProblems(dataset: DataQuestionEvalDataset): string[] {
   const problems: string[] = [];
   if (new Set(dataset.cases.map((entry) => entry.id)).size !== dataset.cases.length) problems.push('duplicate ids');
   if (dataset.cases.filter((entry) => entry.language === 'en').length !== 10) problems.push('not 10 English cases');
+  if (new Set(dataset.cases.map((entry) => entry.text)).size !== dataset.cases.length) problems.push('duplicate texts');
+  const v2 = dataset.version === DATA_QUESTION_DATASET_REGISTRY['2'].name;
+  for (const entry of dataset.cases) {
+    if (v2 !== /^(?:en|ru)-(?:dev|ho)2-/u.test(entry.id)) problems.push(`${entry.id}: the id does not carry the dataset version`);
+    if (v2 && entry.rationale === undefined) problems.push(`${entry.id}: a version 2 case names its policy rule`);
+    if (!entry.id.startsWith(`${entry.language}-`)) problems.push(`${entry.id}: the id does not name its language`);
+  }
   for (const entry of dataset.cases) {
     if (entry.expected.outcome !== 'proposal') continue;
     const resolved = resolveDataQuestionPlan(entry.expected.intent, entry.context, { utcNow: () => new Date(entry.context.now) });
@@ -121,6 +195,7 @@ export function canonical(value: unknown): string {
 // The code that decides an interpretation's outcome: an explicit, reviewed list (not an import closure). Changing any of
 // these files changes the fingerprint and makes earlier model reports stale.
 export const DATA_QUESTION_FINGERPRINT_FILES = [
+  'apps/api/src/data-questions/data-question-constraints.ts',
   'apps/api/src/data-questions/data-question-interpretation-service.ts',
   'apps/api/src/data-questions/data-question-normalizer.ts',
   'apps/api/src/data-questions/data-question-plan.ts',
@@ -367,6 +442,8 @@ export interface DataQuestionGateQuality {
 }
 
 export interface DataQuestionGate {
+  /** The one dataset version judged (`--dataset-version`, version 1 by default), by its recorded name. */
+  datasetVersion: string;
   /** Whether the reports are valid evidence for the CURRENT code, prompt and datasets (separate from quality). */
   evidenceValid: boolean;
   problems: string[];
@@ -467,7 +544,8 @@ type ParsedReport = z.infer<typeof dataQuestionEvalReportSchema>;
 function verifyReport(
   report: ParsedReport,
   loaded: { dataset: DataQuestionEvalDataset; digest: string },
-  current: { codeFingerprint: string; promptDigest: string },
+  current: { codeFingerprint: string; promptDigest: string; promptVersion?: string },
+  pinnedDigest: string,
 ): { problems: string[]; quality: DataQuestionGateQuality | null } {
   const { set } = report;
   const { dataset, digest } = loaded;
@@ -476,10 +554,10 @@ function verifyReport(
 
   if (report.reportVersion !== DATA_QUESTION_REPORT_VERSION) problem(`report version ${report.reportVersion}`);
   if (report.evidence !== 'model' || report.profile.provider !== 'ollama') problem('not a model run with a valid execution profile');
-  if (report.datasetVersion !== dataset.version) problem(`dataset version ${report.datasetVersion} is not the frozen ${dataset.version}`);
-  if (report.datasetDigest !== DATA_QUESTION_DATASET_DIGESTS[set] || report.datasetDigest !== digest) problem('dataset digest differs from the pinned one');
+  if (report.datasetVersion !== dataset.version) problem(`dataset version ${report.datasetVersion} is not the selected frozen ${dataset.version}`);
+  if (report.datasetDigest !== pinnedDigest || report.datasetDigest !== digest) problem('dataset digest differs from the pinned one');
   if (report.promptDigest !== current.promptDigest) problem('prompt digest is stale');
-  if (report.promptVersion !== DATA_QUESTION_PROMPT_VERSION) problem(`prompt version ${report.promptVersion} is not the current one`);
+  if (report.promptVersion !== (current.promptVersion ?? DATA_QUESTION_PROMPT_VERSION)) problem(`prompt version ${report.promptVersion} is not the current one`);
   if (report.codeFingerprint !== current.codeFingerprint) problem('code fingerprint is stale');
   if (report.wireSchemaName !== DATA_QUESTION_WIRE_SCHEMA_NAME) problem('wire schema differs from the current one');
   if (canonical(report.thresholds) !== canonical(DATA_QUESTION_THRESHOLDS)) problem('stored thresholds differ from the frozen ones');
@@ -558,12 +636,18 @@ function verifyReport(
 export function evaluateDataQuestionGate(
   inputs: readonly unknown[],
   options: {
-    current?: { codeFingerprint: string; promptDigest: string };
+    /** The code and prompt to judge against (default: the current ones); a historical measurement can be judged as measured. */
+    current?: { codeFingerprint: string; promptDigest: string; promptVersion?: string };
+    /** The one version judged (version 1 by default); a report of any other version is refused, never counted. */
+    datasetVersion?: DataQuestionDatasetVersion;
     loadDataset?: (set: DataQuestionEvalSet) => { dataset: DataQuestionEvalDataset; digest: string };
   } = {},
 ): DataQuestionGate {
   const current = options.current ?? { codeFingerprint: dataQuestionCodeFingerprint(), promptDigest: dataQuestionPromptDigest() };
-  const load = options.loadDataset ?? ((set: DataQuestionEvalSet) => loadDataQuestionDataset(set));
+  const version = options.datasetVersion ?? DATA_QUESTION_DEFAULT_DATASET_VERSION;
+  const datasetVersion = DATA_QUESTION_DATASET_REGISTRY[version].name;
+  const pinned = dataQuestionDatasetDigests(version);
+  const load = options.loadDataset ?? ((set: DataQuestionEvalSet) => loadDataQuestionDataset(set, undefined, version));
   const problems: string[] = [];
   const quality: DataQuestionGate['quality'] = { development: null, heldout: null };
 
@@ -582,6 +666,9 @@ export function evaluateDataQuestionGate(
     if (parsed.report === undefined) problems.push(parsed.problem);
     else bySet.set(parsed.report.set, [...(bySet.get(parsed.report.set) ?? []), parsed.report]);
   });
+  // One gate judges one version: reports that mix versions are refused as a whole (each is also checked below).
+  const versions = [...new Set([...bySet.values()].flat().map((report) => report.datasetVersion))];
+  if (versions.length > 1) problems.push(`the reports mix dataset versions (${listed(versions.map((entry) => entry.slice(0, 40)))}); one gate judges one version`);
 
   const single = new Map<DataQuestionEvalSet, ParsedReport>();
   for (const set of DATA_QUESTION_EVAL_SETS) {
@@ -593,7 +680,7 @@ export function evaluateDataQuestionGate(
     single.set(set, report);
     const loaded = datasets.get(set);
     if (loaded === undefined) continue;
-    const verdict = verifyReport(report, loaded, current);
+    const verdict = verifyReport(report, loaded, current, pinned[set]);
     problems.push(...verdict.problems);
     quality[set] = verdict.quality;
   }
@@ -608,7 +695,7 @@ export function evaluateDataQuestionGate(
   const evidenceValid = problems.length === 0;
   if (!evidenceValid) {
     const shown = problems.length > DATA_QUESTION_GATE_PROBLEM_LIMIT ? [...problems.slice(0, DATA_QUESTION_GATE_PROBLEM_LIMIT - 1), `and ${problems.length - DATA_QUESTION_GATE_PROBLEM_LIMIT + 1} more problems`] : problems;
-    return { evidenceValid, problems: shown.map(bounded), quality, status: 'NOT_RUN' };
+    return { datasetVersion, evidenceValid, problems: shown.map(bounded), quality, status: 'NOT_RUN' };
   }
   for (const set of DATA_QUESTION_EVAL_SETS) {
     const score = quality[set]!;
@@ -616,7 +703,7 @@ export function evaluateDataQuestionGate(
     if (score.executableOnNonPlan > DATA_QUESTION_THRESHOLDS.executableOnNonPlanMax) problems.push(`${set}: ${score.executableOnNonPlan} executable proposal(s) on clarification or refusal cases`);
     if (score.technicalFailureRate > DATA_QUESTION_THRESHOLDS.technicalFailureMax) problems.push(`${set}: technical failures ${(score.technicalFailureRate * 100).toFixed(1)} % > 10 %`);
   }
-  return { evidenceValid, problems, quality, status: problems.length === 0 ? 'PASS' : 'FAIL' };
+  return { datasetVersion, evidenceValid, problems, quality, status: problems.length === 0 ? 'PASS' : 'FAIL' };
 }
 
 export function formatDataQuestionReport(report: DataQuestionEvalReport): string {
@@ -647,6 +734,7 @@ export function formatDataQuestionGate(gate: DataQuestionGate): string {
   });
   return [
     `MODEL GATE (data questions): ${gate.status}; evidence ${gate.evidenceValid ? 'valid' : 'NOT valid (missing, malformed, contradictory or stale)'}`,
+    `  dataset version judged: ${gate.datasetVersion}`,
     ...quality,
     ...gate.problems.map((problem) => `  - ${problem}`),
   ].join('\n');

@@ -1,5 +1,15 @@
-import { DATA_QUESTION_TEXT_MAX, type DataQuestionActivitySource, type DataQuestionAnswer, type DataQuestionPlan } from '@running-tracker/contracts';
+import {
+  DATA_QUESTION_ACTIVITY_SOURCES,
+  DATA_QUESTION_OPERATIONS,
+  DATA_QUESTION_TEXT_MAX,
+  DATA_QUESTION_WEEKLY_FOCUSES,
+  type DataQuestionActivitySource,
+  type DataQuestionAnswer,
+  type DataQuestionPlan,
+} from '@running-tracker/contracts';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
+
+import { activityTypeLabels } from './activity-form.js';
 
 import { activityComparisonView } from './activity-trends.js';
 import {
@@ -16,23 +26,30 @@ import {
 } from './daily-overview.js';
 import {
   answerProvenanceLine,
+  clarificationRouteLabels,
   clarificationText,
   dataQuestionSourceLabels,
+  guidedFocusLabels,
+  guidedOperationLabels,
+  guidedPeriodChoiceLabel,
+  guidedPeriodLabel,
+  guidedStatusText,
   planPreview,
   PREDEFINED_QUESTIONS,
   sourceActionOf,
   sourceChoicesFor,
   unsupportedText,
 } from './data-question.js';
-import { DataQuestionController, type AskSnapshot, type DataQuestionApi } from './data-question-controller.js';
+import { DataQuestionController, initialAskSnapshot, type AskMode, type AskSnapshot, type DataQuestionApi } from './data-question-controller.js';
+import { guidedProblems, guidedTypeChoices, periodChoicesFor, type GuidedDraft, type GuidedField } from './data-question-guided.js';
 import { mealsSummary, mealTotalRows } from './meal-log.js';
 import { answerDataQuestion, interpretDataQuestion, readDataQuestionCapabilities, resolveDataQuestionPlan, type CsrfCredentials } from './runner-api.js';
 import { MEAL_COVERAGE_EXPLANATION, mealWeekRows } from './weekly-review-meals.js';
 import { movementTotalRows } from './WeeklyReviewPanel.js';
 
-// "Ask my data" on Today (ADR-0094): one question at a time over the person's own daily overview, weekly review and
-// 28-day activity comparison. Predefined questions need no model; a typed question (when the server offers it) becomes a
-// plan to review first. Every figure shown is a field of the existing service's answer, worded by the same helpers as
+// "Ask my data" on Today (ADR-0094; guided questions ADR-0095): one question at a time over the person's own daily
+// overview, weekly review and 28-day activity comparison. The guided builder and the predefined shortcuts need no model;
+// a typed question (only when the server offers interpretation) becomes a plan to review first, like a guided one. Every figure shown is a field of the existing service's answer, worded by the same helpers as
 // Today, the weekly review and Trends, with its unit, coverage and source. Nothing here is stored.
 
 function Rows({ label, rows }: { label: string; rows: LabelledValue[] }) {
@@ -198,18 +215,108 @@ export function AnswerView({ answer, timeZone }: { answer: DataQuestionAnswer; t
   );
 }
 
+/**
+ * The guided builder: closed choices only, each field empty until the person picks it, the fields of the chosen view and
+ * nothing else. Review is possible only for a complete, compatible draft, and only resolves a plan to review.
+ */
+function GuidedBuilder({ busy, draft, handlers, selectedDate }: { busy: boolean; draft: GuidedDraft; handlers: AskMyDataHandlers; selectedDate: string }) {
+  const problems = guidedProblems(draft);
+  const ready = problems.length === 0;
+  const incompatible = problems.includes('type_incompatible');
+  const { operation } = draft;
+  const choose = (field: GuidedField) => (event: { target: { value: string } }) => handlers.updateDraft(field, event.target.value === '' ? null : event.target.value);
+  const submit = (event: FormEvent) => {
+    event.preventDefault();
+    if (!busy && ready) handlers.review();
+  };
+  return (
+    <form aria-label="Build a question" className="ask-form ask-guided" onSubmit={submit}>
+      <div className="ask-field">
+        <label htmlFor="ask-guided-operation">What to read</label>
+        <select disabled={busy} id="ask-guided-operation" onChange={choose('operation')} value={operation ?? ''}>
+          <option value="">Choose…</option>
+          {DATA_QUESTION_OPERATIONS.map((value) => (
+            <option key={value} value={value}>{guidedOperationLabels[value]}</option>
+          ))}
+        </select>
+      </div>
+      {operation !== null && (
+        <div className="ask-field">
+          <label htmlFor="ask-guided-period">{guidedPeriodLabel(operation)}</label>
+          <select disabled={busy} id="ask-guided-period" onChange={choose('period')} value={draft.period ?? ''}>
+            <option value="">Choose…</option>
+            {periodChoicesFor(operation).map((value) => (
+              <option key={value} value={value}>{guidedPeriodChoiceLabel(value, selectedDate)}</option>
+            ))}
+          </select>
+        </div>
+      )}
+      {operation === 'weekly_review' && (
+        <div className="ask-field">
+          <label htmlFor="ask-guided-focus">Part of the week</label>
+          <select disabled={busy} id="ask-guided-focus" onChange={choose('focus')} value={draft.focus ?? ''}>
+            <option value="">Choose…</option>
+            {DATA_QUESTION_WEEKLY_FOCUSES.map((value) => (
+              <option key={value} value={value}>{guidedFocusLabels[value]}</option>
+            ))}
+          </select>
+        </div>
+      )}
+      {operation === 'activity_comparison' && (
+        <>
+          <div className="ask-field">
+            <label htmlFor="ask-guided-source">Records</label>
+            <select aria-describedby="ask-guided-source-help" disabled={busy} id="ask-guided-source" onChange={choose('source')} value={draft.source ?? ''}>
+              <option value="">Choose…</option>
+              {DATA_QUESTION_ACTIVITY_SOURCES.map((value) => (
+                <option key={value} value={value}>{dataQuestionSourceLabels[value]}</option>
+              ))}
+            </select>
+            <p className="today-note" id="ask-guided-source-help">Sources are never combined: choose one.</p>
+          </div>
+          <div className="ask-field">
+            <label htmlFor="ask-guided-type">Activity type</label>
+            <select
+              aria-describedby="ask-guided-status"
+              aria-invalid={incompatible}
+              disabled={busy}
+              id="ask-guided-type"
+              onChange={choose('type')}
+              value={draft.type ?? ''}
+            >
+              <option value="">Choose…</option>
+              {guidedTypeChoices(draft.source).map(({ enabled, type }) => (
+                <option key={type} value={type} disabled={!enabled}>{activityTypeLabels[type]}</option>
+              ))}
+            </select>
+          </div>
+        </>
+      )}
+      <p className="today-note">For another date, change the date at the top of Today.</p>
+      <p aria-live="polite" className={incompatible ? 'ask-guided__status ask-guided__status--problem' : 'ask-guided__status'} id="ask-guided-status">
+        {guidedStatusText(problems)}
+      </p>
+      <button aria-describedby="ask-guided-status" disabled={busy || !ready} type="submit">Review question</button>
+    </form>
+  );
+}
+
 export interface AskMyDataHandlers {
   ask: (id: string) => void;
   cancel: () => void;
   chooseSource: (source: DataQuestionActivitySource) => void;
   dismiss: () => void;
   execute: () => void;
+  fromClarification: () => void;
   interpret: () => void;
   newQuestion: () => void;
   openSource: (answer: DataQuestionAnswer) => void;
   refresh: () => void;
   retry: () => void;
+  review: () => void;
+  setMode: (mode: AskMode) => void;
   textChange: (text: string) => void;
+  updateDraft: (field: GuidedField, value: string | null) => void;
 }
 
 export interface AskMyDataViewProps {
@@ -220,8 +327,10 @@ export interface AskMyDataViewProps {
 
 /** Everything the section shows, from one snapshot. Pure, so every state is testable without a DOM. */
 export function AskMyDataView({ handlers, snapshot }: AskMyDataViewProps) {
-  const { capability, context, state, text } = snapshot;
-  const busy = state.kind === 'interpreting' || state.kind === 'answering' || (state.kind === 'ready' && state.refreshing);
+  const { capability, context, draft, mode, state, text } = snapshot;
+  const busy = state.kind === 'interpreting' || state.kind === 'resolving' || state.kind === 'answering' || (state.kind === 'ready' && state.refreshing);
+  const typedAvailable = capability === 'available';
+  const showTyped = typedAvailable && mode === 'typed';
   const textLength = [...text].length;
   const submit = (event: FormEvent) => {
     event.preventDefault();
@@ -235,7 +344,14 @@ export function AskMyDataView({ handlers, snapshot }: AskMyDataViewProps) {
         the app from what you recorded; they give no advice, estimates or predictions, and nothing is stored.
       </p>
 
-      {capability === 'available' && (
+      {typedAvailable && (
+        <div aria-label="How to ask" className="ask-questions ask-mode" role="group">
+          <button aria-pressed={mode === 'guided'} disabled={busy} onClick={() => handlers.setMode('guided')} type="button">Choose a question</button>
+          <button aria-pressed={mode === 'typed'} disabled={busy} onClick={() => handlers.setMode('typed')} type="button">Type a question</button>
+        </div>
+      )}
+      {!showTyped && <GuidedBuilder busy={busy} draft={draft} handlers={handlers} selectedDate={context.selectedDate} />}
+      {showTyped && (
         <form className="ask-form" onSubmit={submit}>
           <label htmlFor="ask-text">Ask in your own words (English or Russian)</label>
           <input
@@ -255,7 +371,7 @@ export function AskMyDataView({ handlers, snapshot }: AskMyDataViewProps) {
         </form>
       )}
       {(capability === 'off' || capability === 'unavailable') && (
-        <p className="today-note">Typed questions are not available here right now; the questions below work without them.</p>
+        <p className="today-note">Typed questions are not available here right now; build the question above, or use a shortcut below.</p>
       )}
 
       <div aria-label="Predefined questions" className="ask-questions" role="group">
@@ -270,6 +386,12 @@ export function AskMyDataView({ handlers, snapshot }: AskMyDataViewProps) {
         {state.kind === 'interpreting' && (
           <div className="ask-row">
             <p className="search-results__loading">Interpreting your question…</p>
+            <button onClick={handlers.cancel} type="button">Cancel</button>
+          </div>
+        )}
+        {state.kind === 'resolving' && (
+          <div className="ask-row">
+            <p className="search-results__loading">Preparing the plan… nothing is read yet.</p>
             <button onClick={handlers.cancel} type="button">Cancel</button>
           </div>
         )}
@@ -318,7 +440,10 @@ export function AskMyDataView({ handlers, snapshot }: AskMyDataViewProps) {
                 ))}
               </div>
             )}
-            <button onClick={handlers.dismiss} type="button">Discard</button>
+            <div className="run-card__actions">
+              <button onClick={handlers.fromClarification} type="button">{clarificationRouteLabels[state.reason]}</button>
+              <button onClick={handlers.dismiss} type="button">Discard</button>
+            </div>
           </div>
         )}
         {state.kind === 'unsupported' && (
@@ -353,9 +478,10 @@ export interface AskMyDataSectionProps {
 }
 
 /**
- * The section and its controller. Today mounts it keyed by session, person and organization; the controller owns the
- * question text with everything derived from it, so an edit, a new selected date or zone, and New question clear the old
- * question's state; the controller dies with the screen or the session.
+ * The section and its controller. Today mounts it keyed by session, person and organization; the controller owns the mode,
+ * the question text and the guided draft with everything derived from them, so an edit of either, a mode change, a new
+ * selected date or zone, and New question clear the old question's state; the controller dies with the screen or the
+ * session.
  */
 export function AskMyDataSection({ api, csrf, onAction, onSelectDate, orgId, selectedDate, signal, timeZone }: AskMyDataSectionProps) {
   const csrfRef = useRef(csrf);
@@ -371,7 +497,7 @@ export function AskMyDataSection({ api, csrf, onAction, onSelectDate, orgId, sel
   const contextRef = useRef({ selectedDate, timeZone });
   contextRef.current = { selectedDate, timeZone };
   const controller = useRef<DataQuestionController | null>(null);
-  const [snapshot, setSnapshot] = useState<AskSnapshot>(() => ({ capability: 'checking', context: { selectedDate, timeZone }, state: { kind: 'idle' }, text: '' }));
+  const [snapshot, setSnapshot] = useState<AskSnapshot>(() => initialAskSnapshot({ selectedDate, timeZone }));
 
   useEffect(() => {
     const next = new DataQuestionController({ api: apiRef.current, context: contextRef.current, onChange: setSnapshot, orgId, signal });
@@ -388,6 +514,12 @@ export function AskMyDataSection({ api, csrf, onAction, onSelectDate, orgId, sel
     controller.current?.setContext({ selectedDate, timeZone });
   }, [selectedDate, timeZone]);
 
+  // A clarification sent the person to one builder field: move the keyboard focus there once.
+  const { guidedFocus } = snapshot;
+  useEffect(() => {
+    if (guidedFocus !== null) document.getElementById(`ask-guided-${guidedFocus}`)?.focus();
+  }, [guidedFocus]);
+
   const handlers: AskMyDataHandlers = {
     ask: (id) => {
       const question = PREDEFINED_QUESTIONS.find((candidate) => candidate.id === id);
@@ -397,6 +529,7 @@ export function AskMyDataSection({ api, csrf, onAction, onSelectDate, orgId, sel
     chooseSource: (source) => controller.current?.chooseSource(source),
     dismiss: () => controller.current?.dismiss(),
     execute: () => controller.current?.execute(),
+    fromClarification: () => controller.current?.fromClarification(),
     interpret: () => controller.current?.interpret(),
     newQuestion: () => controller.current?.newQuestion(),
     openSource: (answer) => {
@@ -406,7 +539,10 @@ export function AskMyDataSection({ api, csrf, onAction, onSelectDate, orgId, sel
     },
     refresh: () => controller.current?.refresh(),
     retry: () => controller.current?.retry(),
+    review: () => controller.current?.review(),
+    setMode: (mode) => controller.current?.setMode(mode),
     textChange: (text) => controller.current?.setText(text),
+    updateDraft: (field, value) => controller.current?.updateDraft(field, value),
   };
 
   return <AskMyDataView handlers={handlers} snapshot={snapshot} />;
