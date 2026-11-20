@@ -36,6 +36,8 @@ commitment to dates or to every item below.
    - A chat coach with read-only tools. A first, deliberately narrower form is "Ask my data" on Today
      ([ADR-0094](adr/0094-ask-my-data.md)): one question at a time, resolved into a plan the person reviews, answered by
      exactly one existing deterministic read; no chat history, no tools chosen by a model, interpretation off by default.
+     Its v2 ([ADR-0095](adr/0095-ask-my-data-guided-questions.md)) adds a guided question builder that needs no model and
+     checks a model's choices against the question's own words.
 4. **Optional:** retrieval over a small, curated knowledge base.
 
 ## Principles
@@ -199,7 +201,18 @@ shows the plan with explicit dates, zone and source, and reads only when the per
 read once; the answer is an allowlist of its fields with their coverage and provenance. Sources are never combined
 ("running" alone names no source), no record or result reaches the model, and nothing is stored or logged. A separate
 frozen synthetic evaluation measured `qwen3:8b` on 2026-11-19: FAIL (90.0 % and 85.0 % exact, one executable proposal on
-a clarification case in each set), so typed questions stay off; predefined questions work without any model.
+a clarification case in each set), so typed questions stayed off; predefined questions work without any model.
+
+**Ask my data v2** is [ADR-0095](adr/0095-ask-my-data-guided-questions.md): a compact guided builder inside the same section
+offers every combination the three reads already support (3 days, 9 weeks, 66 comparisons) as closed choices — view,
+period, weekly focus, one explicit source and one type (recorded runs: run only) — with Today's date field for other
+dates. Choices → "Review question" (the server's plan, nothing read) → "Get answer"; it works with interpretation off and
+never calls the model. Every clarification of a typed question leads into the builder at the field to choose. A bounded
+English/Russian constraints layer ([policy](data-question-constraints-policy.md)) checks a model's period, source, type,
+view and focus against the question itself and refuses instruction-bearing questions as a whole. A new frozen synthetic
+evaluation (v2) measured `qwen3:8b` on 2026-11-20: PASS (100 % and 95 % exact, no executable proposal on a
+clarification or refusal case). This is an engineering gate written from the same policy, not evidence on real questions,
+so interpretation **stays off by default**; enabling it is a separate decision.
 
 **HealthKit remains deferred** until macOS/Xcode access exists: reading Apple Health needs a native app, which cannot be
 built or signed from Windows. Nothing in the web pilot depends on it, and phone or watch imports stay a later item of the

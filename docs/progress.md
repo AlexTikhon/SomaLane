@@ -5452,3 +5452,31 @@ prompt digest `43d82ab2…` are still current. **No inference call.** Report:
 | `git diff --check` | clean |
 
 Model quality remains FAIL and interpretation stays off by default; this is no new model evidence. Changes are uncommitted.
+
+## Ask my data v2: guided questions and grounded interpretation parameters (ADR-0095) (2026-11-20)
+
+**What changed.** On top of HEAD `844079c`: a guided question builder in the Ask my data section (all 78 combinations the
+contracts accept, closed choices, explicit Review → server plan → Get answer, zero interpretation requests, works with
+interpretation off); every clarification routes into the builder; `DataQuestionController` owns mode, typed text, guided
+draft and derived state, with one invalidation for every input change and a new `resolving` state; a question-constraints
+layer at normalization (`data-question-constraints.ts`, policy `docs/data-question-constraints-policy.md`) that refuses
+instruction-bearing questions and rejects periods, sources, types, views and focuses the question does not name; prompt
+`data-question-prompt-2`; data-question evaluation versions (`--dataset-version v1|v2`, v1 default) with new frozen v2
+sets; the fingerprint covers the constraints module. No migration, table, read, cache, dependency or contract change.
+Report: `docs/reports/ask-my-data-v2-2026-11-20.md`; artifacts in `docs/reports/artifacts/ask-my-data-v2-2026-11-20/`.
+
+| Check | Result |
+|---|---|
+| Focused tests | API 10 files, 157 passed; web 5 files, 95 passed |
+| `npm run verify` (`VITEST_MAX_WORKERS=2`) | exit **0**: scripts 115, API **2,601**, web **1,409**, contracts **322**, fixtures 14, simulator 3, build |
+| Test database identity (read-only probe, before writes) | `127.0.0.1:5433/running_tracker_test`, server `172.18.0.2:5432`, PostgreSQL 17.5; runtime, owner and maintenance roles as themselves |
+| Integration (`VITEST_MAX_WORKERS` unset): the 18 ADR-0094 files (data questions now with all 78 guided intents, interpretation off) + 3 authentication files | **21 files, 396 passed** |
+| Chromium: `ask-my-data` (16: 1–9 adapted to the explicit typed mode, 10–16 new) | **16 passed** |
+| Chromium: Today, Today history, Trends, activity trends, weekly review, check-in, movement, meal draft, meal log, record, sign-out | **35 passed** |
+| Real model `qwen3:8b`, Ollama 0.40.16, v2 sets, frozen first | **40 of 40 calls**; gate **PASS**, evidence valid: development 20/20, held-out 19/20, 0 executable on non-plan cases, 0 technical failures |
+| ADR-0094 saved reports, rechecked | **NOT_RUN** (stale prompt and fingerprint); unchanged; FAIL when judged as measured |
+| `git diff --check` | clean |
+
+Interpretation stays off by default. Intentional v1 policy changes (not regressions): `en-ho-injection-source` and
+`ru-dev-injection-admin` would now be `not_a_data_question`. Backlog D11 (meal-draft diagnostics) remains open. Not
+verified: physical Safari, hosted CI, real GPS, production. Changes are uncommitted.

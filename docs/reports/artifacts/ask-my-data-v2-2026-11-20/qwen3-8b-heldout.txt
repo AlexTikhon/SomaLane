@@ -1,0 +1,15 @@
+
+> running-tracker@0.1.0 eval:data-questions
+> npm run eval:data-questions --workspace=@running-tracker/api -- --set heldout --dataset-version v2 --provider ollama --model qwen3:8b --out docs/reports/artifacts/ask-my-data-v2-2026-11-20/qwen3-8b-heldout.json
+
+
+> @running-tracker/api@0.1.0 eval:data-questions
+> node --import tsx src/evaluation/data-question-evaluation-main.ts --set heldout --dataset-version v2 --provider ollama --model qwen3:8b --out docs/reports/artifacts/ask-my-data-v2-2026-11-20/qwen3-8b-heldout.json
+
+DATA QUESTION EVALUATION (heldout, model run)
+  cases 20/20; calls 20; stopped no
+  exact normalized interpretation 19/20 = 95.0 % (en 9/10, ru 10/10)
+  executable proposals on clarification/refusal cases: 0 of 9
+  technical failures 0/20 = 0.0 %
+  latency mean 4267 ms, p50 4383 ms, p95 5565 ms, max 5744 ms
+  MISMATCH en-ho2-day-no-period: expected proposal, got clarify:operation_ambiguous

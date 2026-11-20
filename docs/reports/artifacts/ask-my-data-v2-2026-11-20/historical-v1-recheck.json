@@ -1,0 +1,37 @@
+{
+  "checkedAt": "2026-11-20T10:28:09.533Z",
+  "codeFingerprint": "17284f1fdcaca50d9298bdc88711a06330d00729b21543d41bcc36d74dd0f0bd",
+  "gate": {
+    "datasetVersion": "data-question-eval-1",
+    "evidenceValid": false,
+    "problems": [
+      "development: prompt digest is stale",
+      "development: prompt version data-question-prompt-1 is not the current one",
+      "development: code fingerprint is stale",
+      "heldout: prompt digest is stale",
+      "heldout: prompt version data-question-prompt-1 is not the current one",
+      "heldout: code fingerprint is stale"
+    ],
+    "quality": {
+      "development": {
+        "exact": 18,
+        "exactAccuracy": 0.9,
+        "executableOnNonPlan": 1,
+        "technicalFailureRate": 0,
+        "technicalFailures": 0,
+        "total": 20
+      },
+      "heldout": {
+        "exact": 17,
+        "exactAccuracy": 0.85,
+        "executableOnNonPlan": 1,
+        "technicalFailureRate": 0,
+        "technicalFailures": 0,
+        "total": 20
+      }
+    },
+    "status": "NOT_RUN"
+  },
+  "inferenceCallsMade": 0,
+  "promptDigest": "cdff434007f3833e25a4153cab85b80c32dac4de8b54d4ebc29ec238afc5070b"
+}
