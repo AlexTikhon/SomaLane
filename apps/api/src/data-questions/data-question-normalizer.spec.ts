@@ -192,6 +192,87 @@ describe('activity comparisons', () => {
   });
 });
 
+// data-question-constraints-2. Each answer below is a schema-valid wire answer a mistaken model could give; the question
+// itself decides. Before the correction every one of these was an executable intent anchored at the selected date or a
+// standard 28-versus-28 comparison.
+describe('temporal grounding: a mistaken model proposal cannot bypass the duration guards', () => {
+  const periods = ['selected_date', 'today', 'yesterday'] as const;
+
+  it.each([
+    'Compare my GPX runs from 28 days ago',
+    'Сравни мои пробежки GPX 28 дней назад',
+    'Compare my GPX runs from 4 weeks ago',
+    'Compare my GPX runs from four weeks ago',
+    'Сравни мои пробежки GPX 4 недели назад',
+    'Сравни мои пробежки GPX четыре недели назад',
+  ])('a relative date is a period clarification, never a comparison window: %s', (text) => {
+    for (const period of periods) {
+      expect(normalizeDataQuestion(text, compare('gpx', 'run', period)), period).toEqual(clarify('period_ambiguous'));
+      expect(decideDataQuestion(text, compare('gpx', 'run', period)).rule, period).toBe('temporal');
+    }
+    // No other view can carry it either.
+    expect(normalizeDataQuestion(text, day('selected_date'))).toEqual(clarify('period_ambiguous'));
+  });
+
+  it.each([
+    'Compare my GPX runs over 28 days versus 14 days',
+    'Compare my GPX running over 28 days and 14 days',
+    'Сравни мои пробежки GPX за 28 дней и 14 дней',
+    'Compare my GPX runs over 14 days versus 28 days',
+    'Compare my GPX runs, 14 days or 28 days',
+    'Compare my GPX runs over 28 or 14 days',
+    'Сравни мои пробежки GPX за 28 дней или 14 дней',
+    'Сравни мои пробежки GPX за 14 дней против 28 дней',
+  ])('a second, coordinated duration is an unsupported calculation: %s', (text) => {
+    for (const period of periods) {
+      expect(normalizeDataQuestion(text, compare('gpx', 'run', period)), period).toEqual({ outcome: 'unsupported', reason: 'unsupported_calculation' });
+      expect(decideDataQuestion(text, compare('gpx', 'run', period)).rule, period).toBe('range');
+    }
+  });
+
+  it.each([
+    ['Compare my GPX runs over 28 days', compare('gpx', 'run'), { operation: 'activity_comparison', period: 'selected_date', source: 'gpx', type: 'run' }],
+    ['Compare my GPX runs over the last 4 weeks', compare('gpx', 'run'), { operation: 'activity_comparison', period: 'selected_date', source: 'gpx', type: 'run' }],
+    ['Compare my GPX runs over 28 days versus the previous 28 days', compare('gpx', 'run'), { operation: 'activity_comparison', period: 'selected_date', source: 'gpx', type: 'run' }],
+    ['Compare my 14 GPX runs over 28 days', compare('gpx', 'run'), { operation: 'activity_comparison', period: 'selected_date', source: 'gpx', type: 'run' }],
+    [
+      'Compare my TCX cycling for the 28 days up to yesterday with the previous 28 days.',
+      compare('tcx', 'ride', 'yesterday'),
+      { operation: 'activity_comparison', period: 'yesterday', source: 'tcx', type: 'ride' },
+    ],
+    ['Compare my GPX runs for the 28 days up to today', compare('gpx', 'run', 'today'), { operation: 'activity_comparison', period: 'today', source: 'gpx', type: 'run' }],
+    ['Сравни мои пробежки GPX за 28 дней', compare('gpx', 'run'), { operation: 'activity_comparison', period: 'selected_date', source: 'gpx', type: 'run' }],
+    ['Сравни мои пробежки GPX за последние 4 недели', compare('gpx', 'run'), { operation: 'activity_comparison', period: 'selected_date', source: 'gpx', type: 'run' }],
+    [
+      'Сравни мои велотренировки из TCX за 28 дней по вчерашний день с предыдущими 28 днями',
+      compare('tcx', 'ride', 'yesterday'),
+      { operation: 'activity_comparison', period: 'yesterday', source: 'tcx', type: 'ride' },
+    ],
+    ['What did I record today?', day('today'), { operation: 'day_overview', period: 'today' }],
+    ['Show me everything I logged yesterday', day('yesterday'), { operation: 'day_overview', period: 'yesterday' }],
+    ['What did I record for the selected day?', day('selected_date'), { operation: 'day_overview', period: 'selected_date' }],
+    ['How many steps did I log last week?', week('previous_week', 'movement'), { focus: 'movement', operation: 'weekly_review', period: 'previous_week' }],
+    ['Покажи моё питание за эту неделю', week('current_week', 'nutrition'), { focus: 'nutrition', operation: 'weekly_review', period: 'current_week' }],
+  ])('positive control still becomes an intent: %s', (text, answer, expected) => {
+    expect(normalizeDataQuestion(text, answer)).toEqual(intent(expected));
+  });
+
+  it('the guards never manufacture a proposal from a model clarification or refusal', () => {
+    for (const text of ['Compare my GPX runs over 28 days', 'Compare my GPX runs from 28 days ago', 'Compare my GPX runs over 28 days versus 14 days', 'Сравни мои пробежки GPX за 28 дней']) {
+      for (const answer of [
+        { outcome: 'clarify', reason: 'activity_source_missing' },
+        { outcome: 'clarify', reason: 'period_ambiguous' },
+        { outcome: 'unsupported', reason: 'unsupported_calculation' },
+        { outcome: 'unsupported', reason: 'other_person' },
+      ] as const) {
+        const decided = normalizeDataQuestion(text, answer);
+        expect(decided.outcome, `${text} / ${answer.reason}`).toBe(answer.outcome);
+        expect(decided, `${text} / ${answer.reason}`).toMatchObject({ reason: answer.reason });
+      }
+    }
+  });
+});
+
 describe('weekly focus', () => {
   it('must agree with the nutrition or movement words, and both at once are two views', () => {
     expect(normalizeDataQuestion('How many steps did I log last week?', week('previous_week', 'nutrition'))).toEqual(clarify('operation_ambiguous'));

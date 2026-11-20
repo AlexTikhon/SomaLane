@@ -535,6 +535,43 @@ describe('ADR-0094 data questions under the runtime role', () => {
       expect(implied.outcome).toBe('clarify');
     });
 
+    it('a mistaken comparison proposal for a relative date or a second duration is a bounded non-proposal, and nothing is answered', async () => {
+      // Schema-valid and complete: before data-question-constraints-2 each of these became a 28-versus-28 plan.
+      provider.behaviour = () => Promise.resolve({ value: { activityType: 'run', outcome: 'activity_comparison', period: 'selected_date', source: 'gpx' } });
+      const cases = [
+        ['Compare my GPX runs from 28 days ago', { outcome: 'clarify', reason: 'period_ambiguous', sourceChoice: null }],
+        ['Сравни мои пробежки GPX 28 дней назад', { outcome: 'clarify', reason: 'period_ambiguous', sourceChoice: null }],
+        ['Compare my GPX runs from 4 weeks ago', { outcome: 'clarify', reason: 'period_ambiguous', sourceChoice: null }],
+        ['Compare my GPX runs over 28 days versus 14 days', { outcome: 'unsupported', reason: 'unsupported_calculation' }],
+        ['Compare my GPX running over 28 days and 14 days', { outcome: 'unsupported', reason: 'unsupported_calculation' }],
+        ['Сравни мои пробежки GPX за 28 дней и 14 дней', { outcome: 'unsupported', reason: 'unsupported_calculation' }],
+      ] as const;
+      for (const [text, expected] of cases) {
+        const response = await interpret(ids.userDual, text).expect(200);
+        expect(response.headers['cache-control'], text).toBe('no-store');
+        expect(dataQuestionInterpretationResponseSchema.parse(response.body), text).toEqual({ ...expected, version: 'data-question-1' });
+        expect(JSON.stringify(response.body), text).not.toContain('"plan"');
+      }
+      expect(provider.inputs).toHaveLength(cases.length);
+      // No answer service ran: no service read, no health table, no answer log line.
+      const touched = statements.join('\n').toLowerCase();
+      expect(touched).not.toMatch(/activity-trends:|daily-overview:|weekly-review:/u);
+      expect(touched).not.toMatch(/\b(meals|daily_movement|activities|runs|daily_metrics)\b/u);
+      expect(logLines.filter((line) => line.includes('data_question.answer'))).toHaveLength(0);
+      expect(logLines.filter((line) => line.includes('"outcome":"proposal"'))).toHaveLength(0);
+
+      // Positive controls through the same route: the window alone, and an explicit ending date.
+      provider.behaviour = () => Promise.resolve({ value: { activityType: 'run', outcome: 'activity_comparison', period: 'selected_date', source: 'gpx' } });
+      expect(dataQuestionInterpretationResponseSchema.parse((await interpret(ids.userDual, 'Compare my GPX runs over 28 days').expect(200)).body)).toMatchObject({
+        outcome: 'proposal',
+        plan: { operation: 'activity_comparison', period: { symbol: 'selected_date' }, source: 'gpx', type: 'run' },
+      });
+      provider.behaviour = () => Promise.resolve({ value: { activityType: 'ride', outcome: 'activity_comparison', period: 'yesterday', source: 'tcx' } });
+      expect(
+        dataQuestionInterpretationResponseSchema.parse((await interpret(ids.userDual, 'Compare my TCX cycling for the 28 days up to yesterday with the previous 28 days.').expect(200)).body),
+      ).toMatchObject({ outcome: 'proposal', plan: { operation: 'activity_comparison', period: { symbol: 'yesterday' }, source: 'tcx', type: 'ride' } });
+    });
+
     it('refuses unsupported requests with bounded codes', async () => {
       for (const [text, reason] of [
         ["Show my wife's meals for today", 'other_person'],

@@ -162,6 +162,26 @@ describe('one interpretation call, normalized and resolved by the server', () =>
     });
   });
 
+  it.each([
+    ['Compare my GPX runs from 28 days ago', { outcome: 'clarify', reason: 'period_ambiguous', sourceChoice: null }, 'clarify'],
+    ['Сравни мои пробежки GPX 4 недели назад', { outcome: 'clarify', reason: 'period_ambiguous', sourceChoice: null }, 'clarify'],
+    ['Compare my GPX runs over 28 days versus 14 days', { outcome: 'unsupported', reason: 'unsupported_calculation' }, 'unsupported'],
+    ['Сравни мои пробежки GPX за 28 дней и 14 дней', { outcome: 'unsupported', reason: 'unsupported_calculation' }, 'unsupported'],
+  ] as const)('a mistaken comparison proposal for "%s" ends as a bounded non-proposal without a plan', async (text, expected, outcome) => {
+    const { lines, provider, registry, service } = setup();
+    const pending = service.interpret(request({ text }));
+    await settleMicrotasks();
+    // Schema-valid and complete: exactly what the defect let through as a 28-versus-28 plan at the selected date.
+    provider.calls[0]!.resolve({ activityType: 'run', outcome: 'activity_comparison', period: 'selected_date', source: 'gpx' });
+    const result = await pending;
+    expect(result).toEqual({ ...expected, version: 'data-question-1' });
+    expect(result).not.toHaveProperty('plan');
+    expect(provider.calls).toHaveLength(1);
+    expect(lines).toEqual([expect.objectContaining({ event: 'data_question.interpretation', outcome })]);
+    expect(registry.render()).toContain(`data_question_interpretation_requests_total{outcome="${outcome}"} 1`);
+    expect(registry.render()).not.toContain('outcome="proposal"} 1');
+  });
+
   it('a symbolic period the server cannot resolve is a period clarification, never a guess', async () => {
     const { provider, service } = setup();
     const pending = service.interpret(request({ context: { selectedDate: '2000-01-01', timeZone: 'UTC' }, text: 'yesterday?' }));

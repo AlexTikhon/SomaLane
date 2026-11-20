@@ -1,16 +1,18 @@
 import type { ActivityType, DataQuestionActivitySource, DataQuestionDayPeriod, DataQuestionWeekPeriod } from '@running-tracker/contracts';
 
 // Question constraints of "Ask my data" (ADR-0095; the written policy is docs/data-question-constraints-policy.md,
-// `data-question-constraints-1`). Bounded English and Russian rules that read the ORIGINAL question, independently of
+// `data-question-constraints-2`). Bounded English and Russian rules that read the ORIGINAL question, independently of
 // what a model answered, into evidence spans with reason codes. The normalizer decides with them; they can only make a
 // model proposal more conservative (a clarification or a refusal), never create, widen or repair one.
 //
 // Not a parser. Each rule is a closed pattern matched case-insensitively between letter/digit boundaries; any whitespace
-// run is one space; `ё` reads as `е`. Temporal and window phrases are matched in a fixed order and MASKED once matched, so
-// a phrase counts once ("last week" is not also "week"; "the week of the selected date" is not also "the selected date").
-// No pattern mentions a complete evaluation question.
+// run is one space; `ё` reads as `е`. Numeric durations are first read WHOLE (qualifier, numbers, unit, "ago") and
+// classified by meaning, so "28 days ago" is a relative day and never the 28-day window. The other temporal and window
+// phrases are then matched in a fixed order; every match is MASKED, so a phrase counts once ("last week" is not also
+// "week"; "the week of the selected date" is not also "the selected date"). No pattern mentions a complete evaluation
+// question.
 
-export const DATA_QUESTION_CONSTRAINTS_VERSION = 'data-question-constraints-1';
+export const DATA_QUESTION_CONSTRAINTS_VERSION = 'data-question-constraints-2';
 
 export type ConstraintCode =
   | 'instruction.code'
@@ -156,41 +158,179 @@ const INSTRUCTION_RULES: readonly Rule[] = [
   { code: 'instruction.code', pattern: /<\s*script/giu },
 ];
 
+// ---- Temporal quantities (read whole and classified by meaning BEFORE the ordered phrase rules) ----
+//
+// A numeric duration is one phrase: an optional range qualifier, one number or a coordinated list of numbers ("28 or 14"),
+// a unit, and an optional "ago"/"назад". It is classified by what the whole phrase means, never by which sub-pattern
+// happens to run first: N days/weeks ago is a relative day (whatever N is); otherwise 28 days or 4 weeks is the
+// comparison window; any other duration is a range when it has a range qualifier or is coordinated with another duration
+// ("28 days versus 14 days", "за 28 дней и 14 дней", "28 or 14 days"); a bare duration with neither is no evidence. Only a
+// number directly followed by a unit (or joined to one by a conjunction) is read, so other numbers are never range evidence.
+
+const NUMBER_WORDS: Readonly<Record<string, number>> = {
+  two: 2,
+  three: 3,
+  four: 4,
+  five: 5,
+  six: 6,
+  seven: 7,
+  eight: 8,
+  nine: 9,
+  ten: 10,
+  eleven: 11,
+  twelve: 12,
+  fourteen: 14,
+  fifteen: 15,
+  'twenty-eight': 28,
+  twenty: 20,
+  thirty: 30,
+  sixty: 60,
+  ninety: 90,
+  hundred: 100,
+  два: 2,
+  две: 2,
+  три: 3,
+  четыре: 4,
+  пять: 5,
+  шесть: 6,
+  семь: 7,
+  восемь: 8,
+  девять: 9,
+  десять: 10,
+  четырнадцать: 14,
+  'двадцать-восемь': 28,
+  двадцать: 20,
+  тридцать: 30,
+};
+// Compound words first, so "twenty-eight" is never read as "twenty".
+const NUMBER = `\\d{1,4}|twenty[\\s-]+eight|двадцать[\\s-]+восемь|${Object.keys(NUMBER_WORDS)
+  .filter((word) => !word.includes('-'))
+  .join('|')}`;
+const UNIT_DAY = 'days?|dates?|дн\\p{L}*|день|дат\\p{L}*';
+const UNIT_WEEK = 'weeks?|недел\\p{L}*';
+const UNIT_MONTH = 'months?|месяц\\p{L}*';
+const UNIT_YEAR = 'years?|год\\p{L}*|лет';
+const RANGE_QUALIFIER =
+  '(?:last|past|previous|next|over|for|in|during)\\s+(?:the\\s+)?(?:last\\s+|past\\s+)?' +
+  '|(?:последн\\p{L}*|прошл\\p{L}*|предыдущ\\p{L}*|следующ\\p{L}*|за|в\\s+течение)\\s+(?:последн\\p{L}*\\s+)?';
+// Conjunctions that coordinate two durations (and, or, versus, against, with, to, compared to/with, than; и, или, либо,
+// против, с/со, до, по сравнению с, чем, а), alternatives included. "по" is not one: "за 28 дней по вчерашний день" names
+// the window's end, not a second duration.
+const CONJUNCTION =
+  'and|or|versus|vs\\.?|against|with|to|than|plus|compared\\s+(?:to|with)|' + 'и|или|либо|против|со?|до|чем|а|по\\s+сравнению\\s+со?';
+const GAP_FILLER = 'the|a|an|my|over|for|in|during|last|past|previous|prior|preceding|first|next|following|other|за|в\\s+течение|последн\\p{L}*|предыдущ\\p{L}*|прошл\\p{L}*|первы\\p{L}*|следующ\\p{L}*|мои\\p{L}*|на';
+const AGO = 'ago|back|(?:тому\\s+)?назад';
+
+const QUANTITY = new RegExp(
+  `${BEFORE}(?<qualifier>${RANGE_QUALIFIER})?(?<numbers>(?:${NUMBER})(?:\\s*,?\\s+(?:${CONJUNCTION})\\s+(?:${NUMBER}))*)\\s*-?\\s*` +
+    `(?<unit>${UNIT_DAY}|${UNIT_WEEK}|${UNIT_MONTH}|${UNIT_YEAR})(?<ago>\\s+(?:${AGO}))?${AFTER}`,
+  'giu',
+);
+const NUMBER_IN_LIST = new RegExp(`${BEFORE}(?:${NUMBER})${AFTER}`, 'giu');
+/** What may stand between two coordinated durations: a conjunction and determiners or qualifiers, nothing else. */
+const COORDINATION_GAP = new RegExp(`^\\s*,?\\s*(?:${CONJUNCTION})\\s+(?:(?:${GAP_FILLER})\\s+)*$`, 'iu');
+/** A bare number after a duration that shares its unit ("over 28 days or 14."). */
+const TRAILING_NUMBER = new RegExp(`^\\s*,?\\s*(?:${CONJUNCTION})\\s+(?:(?:${GAP_FILLER})\\s+)*(?<number>${NUMBER})(?=\\s*(?:$|[.,;:!?)]))`, 'iu');
+
+type UnitKind = 'day' | 'month' | 'week' | 'year';
+
+const unitKind = (unit: string): UnitKind =>
+  new RegExp(`^(?:${UNIT_DAY})$`, 'iu').test(unit) ? 'day' : new RegExp(`^(?:${UNIT_WEEK})$`, 'iu').test(unit) ? 'week' : new RegExp(`^(?:${UNIT_MONTH})$`, 'iu').test(unit) ? 'month' : 'year';
+
+const numberValue = (word: string): number => (/^\d+$/u.test(word) ? Number(word) : (NUMBER_WORDS[word.toLowerCase().replace(/[\s-]+/gu, '-')] ?? Number.NaN));
+
+/** 28 days or 4 weeks: the comparison window. */
+const isWindow = (value: number, unit: UnitKind) => (unit === 'day' && value === 28) || (unit === 'week' && value === 4);
+
+interface Quantity {
+  ago: boolean;
+  end: number;
+  qualified: boolean;
+  start: number;
+  /** Where the numbers begin (the evidence span of a window or relative day starts here, after any qualifier). */
+  numbersStart: number;
+  unit: UnitKind;
+  values: number[];
+}
+
+function* quantities(text: string): Generator<Quantity> {
+  QUANTITY.lastIndex = 0;
+  for (const match of text.matchAll(QUANTITY)) {
+    const groups = match.groups!;
+    const qualifier = groups['qualifier'] ?? '';
+    const numbers = groups['numbers']!;
+    yield {
+      ago: groups['ago'] !== undefined,
+      end: match.index + match[0].length,
+      numbersStart: match.index + qualifier.length,
+      qualified: qualifier.length > 0,
+      start: match.index,
+      unit: unitKind(groups['unit']!),
+      values: [...numbers.matchAll(NUMBER_IN_LIST)].map((entry) => numberValue(entry[0])),
+    };
+  }
+}
+
+/**
+ * Reads every numeric duration whole and classifies it (see above). Returns the evidence; the caller masks each span.
+ * Months and years are never a window or a relative day; without a qualifier or coordination they are left to
+ * `range.month_year`, and an unclassified bare day/week duration is left to the phrase rules, exactly as before.
+ */
+function quantityEvidence(text: string): Array<{ code: ConstraintCode; end: number; maskStart: number; start: number }> {
+  const found = [...quantities(text)];
+  const coordinated = new Set<Quantity>();
+  for (let index = 1; index < found.length; index += 1) {
+    const [left, right] = [found[index - 1]!, found[index]!];
+    if (left.ago || right.ago) continue;
+    if (COORDINATION_GAP.test(text.slice(left.end, right.start))) coordinated.add(left).add(right);
+  }
+  const evidence: Array<{ code: ConstraintCode; end: number; maskStart: number; start: number }> = [];
+  for (const quantity of found) {
+    const { end, numbersStart, start, unit, values } = quantity;
+    const dayOrWeek = unit === 'day' || unit === 'week';
+    if (quantity.ago && dayOrWeek) {
+      evidence.push({ code: 'temporal.relative_day', end, maskStart: start, start: numbersStart });
+      continue;
+    }
+    const window = values.every((value) => isWindow(value, unit));
+    if (window && !quantity.ago) {
+      evidence.push({ code: 'window.28_days', end, maskStart: start, start: numbersStart });
+    } else if (quantity.qualified || values.length > 1 || coordinated.has(quantity)) {
+      evidence.push({ code: 'range.n_units', end, maskStart: start, start });
+    }
+    if (quantity.ago) continue;
+    // A bare number after the duration takes its unit: "over 28 days or 14" is two durations.
+    const trailing = TRAILING_NUMBER.exec(text.slice(end));
+    if (trailing !== null && !isWindow(numberValue(trailing.groups!['number']!), unit)) {
+      const numberEnd = end + trailing[0].length;
+      const numberStart = numberEnd - trailing.groups!['number']!.length;
+      evidence.push({ code: 'range.n_units', end: numberEnd, maskStart: numberStart, start: numberStart });
+    }
+  }
+  return evidence;
+}
+
 // ---- Temporal and window phrases (matched in this order; each match is masked) ----
 
-const NUMBER_EN = '\\d{1,4}|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|fourteen|fifteen|twenty|thirty|sixty|ninety|hundred';
-const NUMBER_RU = '\\d{1,4}|два|две|три|четыре|пять|шесть|семь|восемь|девять|десять|четырнадцать|тридцать';
 const DAY_OF_MONTH = '(?:0?[1-9]|[12]\\d|3[01])';
 const MONTHS_EN = 'january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec';
 const MONTHS_RU_GENITIVE = 'января|февраля|марта|апреля|мая|июня|июля|августа|сентября|октября|ноября|декабря';
 
 const TEMPORAL_RULES: readonly Rule[] = [
-  // The comparison's own window first: "28 days" and "4 weeks" are not ranges, "previous period" is not "previous week".
-  rule(
-    'window.28_days',
-    '(?:28|twenty[\\s-]+eight)\\s*-?\\s*(?:days?|dates?)',
-    '(?:4|four)\\s+weeks?',
-    '28\\s+(?:дней|дня|днями|дням|день|дат\\p{L}*)',
-    '(?:4|четыре)\\s+недел\\p{L}*',
-    '28-?дневн\\p{L}*',
-  ),
+  // Numeric durations ("28 days", "4 weeks ago", "over 14 days") were already read above; "previous period" is not
+  // "previous week".
   rule('window.previous_period', '(?:the\\s+)?(?:previous|prior|last|preceding)\\s+period', '(?:предыдущ|прошл|прежн)\\p{L}*\\s+период\\p{L}*'),
   rule(
     'temporal.relative_day',
     '(?:the\\s+)?day\\s+before\\s+yesterday',
-    `(?:${NUMBER_EN}|a\\s+few|several)\\s+(?:days?|weeks?)\\s+ago`,
-    'a\\s+week\\s+ago',
+    `(?:a\\s+few|several)\\s+(?:days?|weeks?)\\s+(?:${AGO})`,
+    `a\\s+week\\s+(?:${AGO})`,
     'the\\s+other\\s+day',
     'позавчера',
     'позавчерашн\\p{L}*',
-    `(?:${NUMBER_RU}|несколько)\\s+(?:дн\\p{L}*|день|недел\\p{L}*)\\s+назад`,
-    'неделю\\s+назад',
+    `несколько\\s+(?:дн\\p{L}*|день|недел\\p{L}*)\\s+(?:${AGO})`,
+    `неделю\\s+(?:${AGO})`,
     'на\\s+днях',
-  ),
-  rule(
-    'range.n_units',
-    `(?:last|past|previous|next|over|for|in|during)\\s+(?:the\\s+)?(?:last\\s+|past\\s+)?(?:${NUMBER_EN})\\s+(?:days?|weeks?|months?|years?)`,
-    `(?:последн\\p{L}*|прошл\\p{L}*|предыдущ\\p{L}*|следующ\\p{L}*|за|в\\s+течение)\\s+(?:последн\\p{L}*\\s+)?(?:${NUMBER_RU})\\s+(?:дн\\p{L}*|день|недел\\p{L}*|месяц\\p{L}*|год\\p{L}*|лет)`,
   ),
   rule('period.yesterday', '(?:the\\s+)?day\\s+before\\s+today'),
   rule(
@@ -343,13 +483,18 @@ export function analyzeQuestionConstraints(question: string): QuestionConstraint
 
   for (const { code, pattern } of INSTRUCTION_RULES) for (const span of matches(pattern, text)) add(code, span);
 
+  const mask = (from: string, span: { end: number; start: number }) => `${from.slice(0, span.start)}${' '.repeat(span.end - span.start)}${from.slice(span.end)}`;
   let masked = text;
+  for (const { code, end, maskStart, start } of quantityEvidence(text)) {
+    add(code, { end, start });
+    masked = mask(masked, { end, start: maskStart });
+  }
   const dayPeriods = new Set<DataQuestionDayPeriod>();
   const weekPeriods = new Set<DataQuestionWeekPeriod>();
   for (const { code, pattern } of TEMPORAL_RULES) {
     for (const span of matches(pattern, masked)) {
       add(code, span);
-      masked = `${masked.slice(0, span.start)}${' '.repeat(span.end - span.start)}${masked.slice(span.end)}`;
+      masked = mask(masked, span);
       const symbol = PERIOD_SYMBOLS[code];
       if (symbol === undefined) continue;
       if (DAY_SYMBOLS.has(symbol)) dayPeriods.add(symbol as DataQuestionDayPeriod);

@@ -345,4 +345,20 @@ describe('the code fingerprint covers every interpretation policy module', () =>
     });
     expect(asMeasured).toMatchObject({ evidenceValid: true, status: 'FAIL' });
   });
+
+  it('the saved ADR-0095 v2 reports (39/40) are stale for the corrected constraints (NOT_RUN), and still PASS only as measured', () => {
+    const artifact = (name: string) =>
+      JSON.parse(readFileSync(resolve(repositoryRoot, 'docs/reports/artifacts/ask-my-data-v2-2026-11-20', name), 'utf8')) as DataQuestionEvalReport;
+    const development = artifact('qwen3-8b-development.json');
+    const heldout = artifact('qwen3-8b-heldout.json');
+    // The prompt did not change; only the code fingerprint (data-question-constraints-2) did.
+    const current = evaluateDataQuestionGate([development, heldout], { datasetVersion: '2' });
+    expectNotRun(current, /code fingerprint is stale/u);
+    expect(current.problems.join()).not.toMatch(/prompt digest is stale|dataset digest/u);
+    const asMeasured = evaluateDataQuestionGate([development, heldout], {
+      current: { codeFingerprint: development.codeFingerprint, promptDigest: development.promptDigest, promptVersion: development.promptVersion },
+      datasetVersion: '2',
+    });
+    expect(asMeasured).toMatchObject({ evidenceValid: true, status: 'PASS' });
+  });
 });

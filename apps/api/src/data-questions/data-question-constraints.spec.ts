@@ -11,7 +11,7 @@ const sorted = <Value>(values: Iterable<Value>) => [...values].toSorted();
 
 describe('version and spans', () => {
   it('names its policy version and reports spans into the original text', () => {
-    expect(DATA_QUESTION_CONSTRAINTS_VERSION).toBe('data-question-constraints-1');
+    expect(DATA_QUESTION_CONSTRAINTS_VERSION).toBe('data-question-constraints-2');
     const text = 'Compare my GPX walks for the 28 days up to yesterday';
     const analysis = analyzeQuestionConstraints(text);
     for (const entry of analysis.evidence) {
@@ -139,6 +139,112 @@ describe('periods', () => {
     expect(analyzeQuestionConstraints('Steps for the week').weekUnqualified).toBe(true);
     expect(sorted(analyzeQuestionConstraints('Сколько шагов за неделю?').weekPeriods)).toEqual([]);
     expect(analyzeQuestionConstraints('Сколько шагов за неделю?').weekUnqualified).toBe(true);
+  });
+});
+
+// data-question-constraints-2: a numeric duration is read whole and classified by meaning, so no matcher can mask part of
+// a longer temporal phrase (the 28-day window used to hide "28 days ago"), and a duration coordinated with another one is
+// a range even when the preposition is not repeated.
+describe('numeric durations are read whole and classified by meaning', () => {
+  const spanOf = (text: string, code: ConstraintCode) =>
+    analyzeQuestionConstraints(text)
+      .evidence.filter((entry) => entry.code === code)
+      .map((entry) => text.slice(entry.start, entry.end));
+
+  it.each([
+    ['Compare my GPX runs from 28 days ago', '28 days ago'],
+    ['Compare my GPX runs from 4 weeks ago', '4 weeks ago'],
+    ['Compare my GPX runs from four weeks ago', 'four weeks ago'],
+    ['Compare my GPX runs from twenty-eight days ago', 'twenty-eight days ago'],
+    ['Compare my GPX runs from 4 weeks back', '4 weeks back'],
+    ['Сравни мои пробежки GPX 28 дней назад', '28 дней назад'],
+    ['Сравни мои пробежки GPX 4 недели назад', '4 недели назад'],
+    ['Сравни мои пробежки GPX четыре недели назад', 'четыре недели назад'],
+    ['Сравни мои пробежки GPX 28 дней тому назад', '28 дней тому назад'],
+    ['Compare my GPX runs from 14 days ago', '14 days ago'],
+  ])('a relative date is never the comparison window: %s', (text, phrase) => {
+    const analysis = analyzeQuestionConstraints(text);
+    expect(analysis.unsupportedTemporal).toBe(true);
+    expect(analysis.window.days28).toBe(false);
+    expect(analysis.unsupportedRange).toBe(false);
+    expect(spanOf(text, 'temporal.relative_day')).toEqual([phrase]);
+  });
+
+  it.each([
+    'Compare my GPX runs over 28 days',
+    'Compare my GPX runs over the last 28 days',
+    'Compare my GPX runs over the last 4 weeks',
+    'Compare my GPX runs for the past four weeks',
+    'Compare my GPX runs with the previous 28 days',
+    'Compare my GPX runs over a 28-day window',
+    'Compare my GPX runs for the 28 days ending yesterday with the previous 28 days',
+    'Compare my GPX runs over 28 days versus the previous 28 days',
+    'Сравни мои пробежки GPX за 28 дней',
+    'Сравни мои пробежки GPX за последние 4 недели',
+    'Сравни мои пробежки GPX за 28-дневный период',
+    'Сравни мои пробежки GPX за 28 дней и предыдущие 28 дней',
+    'Сравни мои велотренировки из TCX за 28 дней по вчерашний день с предыдущими 28 днями',
+  ])('a 28-day / 4-week window stays a window: %s', (text) => {
+    const analysis = analyzeQuestionConstraints(text);
+    expect(analysis.window.days28).toBe(true);
+    expect(analysis.unsupportedRange).toBe(false);
+    expect(analysis.unsupportedTemporal).toBe(false);
+  });
+
+  it('an explicit supported ending date beside the window is still that day symbol', () => {
+    expect(sorted(analyzeQuestionConstraints('Compare my TCX cycling for the 28 days up to yesterday with the previous 28 days.').dayPeriods)).toEqual(['yesterday']);
+    expect(sorted(analyzeQuestionConstraints('Compare my GPX runs for the 28 days up to today').dayPeriods)).toEqual(['today']);
+    expect(sorted(analyzeQuestionConstraints('Compare my GPX runs for the 28 days up to the selected date').dayPeriods)).toEqual(['selected_date']);
+    expect(sorted(analyzeQuestionConstraints('Сравни мои пробежки GPX за 28 дней по вчерашний день').dayPeriods)).toEqual(['yesterday']);
+  });
+
+  it.each([
+    ['Compare my GPX runs over 28 days versus 14 days', '14 days'],
+    ['Compare my GPX running over 28 days and 14 days', '14 days'],
+    ['Compare my GPX runs over 28 days or 14 days', '14 days'],
+    ['Compare my GPX runs over 28 days vs. 14 days', '14 days'],
+    ['Compare my GPX runs over 28 days against 14 days', '14 days'],
+    ['Compare my GPX runs over 28 days with the 14 days', '14 days'],
+    ['Compare my GPX runs over 28 days, and 7 days', '7 days'],
+    ['Compare my GPX runs, 14 days versus 28 days', '14 days'],
+    ['Compare my GPX runs over 28 or 14 days', 'over 28 or 14 days'],
+    ['Compare my GPX runs over 14 or 28 days', 'over 14 or 28 days'],
+    ['Compare my GPX runs over 28 days or 14.', '14'],
+    ['Compare my GPX runs over 4 weeks and 2 weeks', '2 weeks'],
+    ['Сравни мои пробежки GPX за 28 дней и 14 дней', '14 дней'],
+    ['Сравни мои пробежки GPX за 28 дней или 14 дней', '14 дней'],
+    ['Сравни мои пробежки GPX за 28 дней либо за 14 дней', 'за 14 дней'],
+    ['Сравни мои пробежки GPX за 28 дней против 14 дней', '14 дней'],
+    ['Сравни мои пробежки GPX за 28 дней с 14 днями', '14 днями'],
+    ['Сравни мои пробежки GPX за 28 дней по сравнению с 14 днями', '14 днями'],
+    ['Сравни мои пробежки GPX: 14 дней и 28 дней', '14 дней'],
+    ['Сравни мои пробежки GPX за 28 или 14 дней', 'за 28 или 14 дней'],
+  ])('a coordinated second duration is an unsupported range: %s', (text, phrase) => {
+    const analysis = analyzeQuestionConstraints(text);
+    expect(analysis.unsupportedRange).toBe(true);
+    expect(spanOf(text, 'range.n_units')).toContain(phrase);
+  });
+
+  it.each([
+    'Compare my 14 GPX runs over 28 days',
+    'Compare my GPX runs over 28 days, I did 3 of them',
+    'Compare my GPX runs over 28 days and 14 km',
+    'Compare my GPX runs over 28 days with 2 friends',
+    'Compare my GPX runs over 28 days and 14 runs',
+    'Сравни мои 5 пробежек GPX за 28 дней',
+    'Сравни мои пробежки GPX за 28 дней и 10 км',
+  ])('numbers outside a temporal expression are never range evidence: %s', (text) => {
+    const analysis = analyzeQuestionConstraints(text);
+    expect(analysis.unsupportedRange).toBe(false);
+    expect(analysis.window.days28).toBe(true);
+  });
+
+  it('a bare duration with no qualifier and no coordination keeps its earlier reading', () => {
+    expect(analyzeQuestionConstraints('Show my 3 weeks').unsupportedRange).toBe(false);
+    expect(analyzeQuestionConstraints('Show my 3 weeks').weekUnqualified).toBe(true);
+    expect(analyzeQuestionConstraints('Show my steps for 3 months').unsupportedRange).toBe(true);
+    expect(analyzeQuestionConstraints('What did I log 3 months ago?').unsupportedRange).toBe(true);
+    expect(analyzeQuestionConstraints('Что я ел в 3 дня?').unsupportedRange).toBe(false);
   });
 });
 
