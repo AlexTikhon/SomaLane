@@ -152,6 +152,33 @@ describe('Meal log view (ADR-0083)', () => {
     const back = vi.fn();
     const element = MealLogView(props({ handlers: { ...handlers, backToToday: back } }));
     expect(renderToStaticMarkup(element)).toContain('>Back to Today</button>');
+    expect(renderToStaticMarkup(element)).not.toContain('Back to Trends');
+  });
+
+  it('offers Back to Trends beside Back to Today only when opened from Trends, and not while a mutation is in flight (ADR-0096)', () => {
+    const both = { ...handlers, backToToday: vi.fn(), backToTrends: vi.fn() };
+    const html = renderToStaticMarkup(MealLogView(props({ handlers: both })));
+    expect(html).toMatch(/<div class="meal-log__back"><button type="button">Back to Trends<\/button><button type="button">Back to Today<\/button><\/div>/u);
+    const busy = renderToStaticMarkup(MealLogView(props({ busy: true, handlers: both })));
+    expect(busy).toContain('<button disabled="" type="button">Back to Trends</button>');
+    expect(busy).toContain('<button type="button">Back to Today</button>');
+    const screen = (onBackToTrends?: () => void) =>
+      renderToStaticMarkup(
+        <MealLogScreen
+          api={{ create: vi.fn(), list: vi.fn(), propose: vi.fn(), remove: vi.fn(), update: vi.fn() }}
+          csrf={{ headerName: 'x-csrf-token', token: 't' }}
+          initialDate={DAY}
+          nowMs={Date.parse('2026-11-08T10:00:00Z')}
+          onBackToToday={vi.fn()}
+          onBackToTrends={onBackToTrends}
+          orgId="org"
+          signal={new AbortController().signal}
+          timeZone="Europe/Warsaw"
+        />,
+      );
+    expect(screen(vi.fn())).toContain('>Back to Trends</button>');
+    expect(screen(undefined)).not.toContain('Back to Trends');
+    expect(screen(undefined)).toContain('>Back to Today</button>');
   });
 
   it('never estimates, judges or advises', () => {

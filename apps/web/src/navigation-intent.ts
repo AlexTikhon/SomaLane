@@ -1,4 +1,4 @@
-import type { ActivityHistorySource, ActivityType, DailyTrendsMetric } from '@running-tracker/contracts';
+import type { ActivityHistorySource, ActivityType, DailyTrendsMetric, DailyTrendsNutritionMetric } from '@running-tracker/contracts';
 
 import type { ActivityTrendMeasure } from './activity-trends.js';
 import type { TodayAction } from './daily-overview.js';
@@ -51,6 +51,30 @@ export interface HistoryIntent {
   scope: string;
   source: ActivityHistorySource;
   timeZone: string;
+}
+
+/**
+ * The way back from the Meal log to the Trends selection it was opened from (ADR-0096): the range's end date and the
+ * nutrition series of the answer whose row was used. In App memory only, tied to its scope like every intent, and cleared
+ * by sign-out, by any ordinary navigation, by being used and by any change of scope, so it never returns to another
+ * person, organization or session, nor resurfaces later.
+ */
+export interface TrendsReturn {
+  endDate: string;
+  metric: DailyTrendsNutritionMetric;
+  scope: string;
+}
+
+/**
+ * A nutrition row's "Meal log" action on Trends: the Meal log intent for the row's stored date, and the way back to the
+ * range and series the row belongs to.
+ */
+export function navigationFromTrendsRow(
+  localDate: string,
+  back: { endDate: string; metric: DailyTrendsNutritionMetric },
+  scope: string,
+): { editor: EditorIntent; trendsReturn: TrendsReturn; view: AppView } {
+  return { editor: { localDate, scope, section: 'meals' }, trendsReturn: { endDate: back.endDate, metric: back.metric, scope }, view: 'meals' };
 }
 
 /**

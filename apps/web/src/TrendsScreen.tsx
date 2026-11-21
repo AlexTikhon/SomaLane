@@ -1,4 +1,12 @@
-import { DAILY_METRICS_LOCAL_DATE_MIN, DAILY_TRENDS_RANGE_DAYS, dailyTrendsRangeOf, isEmptyDailyTrends, type DailyTrends, type DailyTrendsMetric } from '@running-tracker/contracts';
+import {
+  DAILY_METRICS_LOCAL_DATE_MIN,
+  DAILY_TRENDS_RANGE_DAYS,
+  dailyTrendsRangeOf,
+  isEmptyDailyTrends,
+  type DailyTrends,
+  type DailyTrendsMetric,
+  type DailyTrendsNutritionMetric,
+} from '@running-tracker/contracts';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import { checkInDateProblem, localDateIn } from './daily-checkin.js';
@@ -7,7 +15,9 @@ import {
   chartGeometry,
   computedLine,
   coverageLine,
+  isNutritionTrendsMetric,
   missingExplanation,
+  nutritionFigures,
   rangeLabel,
   summaryLines,
   tableRows,
@@ -28,9 +38,13 @@ import { DailyTrendsController, loadingTrends, type TrendsReader, type TrendsSna
 import { readActivityTrends, readDailyTrends } from './runner-api.js';
 import type { ActivityHistorySource, ActivityType } from '@running-tracker/contracts';
 
-// The Trends screen (ADR-0084): 28 calendar dates of four of the person's own daily series, recomputed by the server on
-// every read. It shows what was recorded and how much of the range that covers, and nothing else: no target, judgement,
-// prediction, correlation or advice. A date without a value is a gap in the chart and "Not recorded" in the table.
+// The Trends screen (ADR-0084; recorded nutrition since ADR-0096): 28 calendar dates of the person's own daily series,
+// recomputed by the server on every read. It shows what was recorded and how much of the range that covers, and nothing
+// else: no target, judgement, balance, estimate, prediction, correlation or advice. A date without a value is a gap in the
+// chart and "Not recorded" in the table. A nutrition row opens that date's Meal log, with a way back to this selection.
+
+/** Opens the Meal log on a nutrition row's date, with the range end and series of the answer the row belongs to. */
+export type OpenMealLog = (localDate: string, back: { endDate: string; metric: DailyTrendsNutritionMetric }) => void;
 
 /** A simple line chart of one series: a point per recorded date, a line only between consecutive recorded dates. */
 export function TrendChart({ description, geometry }: { description: string; geometry: TrendChartGeometry }) {
@@ -82,18 +96,23 @@ export function TrendChart({ description, geometry }: { description: string; geo
 export function TrendsContent({
   metric,
   onOpenDay,
+  onOpenMealLog,
   timeZone,
   trends,
 }: {
   metric: DailyTrendsMetric;
   onOpenDay: (localDate: string) => void;
+  onOpenMealLog?: OpenMealLog | undefined;
   timeZone: string;
   trends: DailyTrends;
 }) {
   const spec = trendMetricSpecs[metric];
   const rows = tableRows(trends, metric);
   const geometry = chartGeometry(trends, metric);
-  const manual = metric === 'steps' || metric === 'foodEnergyKcal';
+  const nutrition = isNutritionTrendsMetric(metric) ? metric : null;
+  const manual = metric === 'steps' || nutrition !== null;
+  // The way back is the range of this answer (not the date being typed), so a row can only return to the range it showed.
+  const openMealLog = nutrition !== null && onOpenMealLog !== undefined ? (localDate: string) => onOpenMealLog(localDate, { endDate: trends.range.endDate, metric: nutrition }) : null;
   return (
     <div className="trends-content">
       {isEmptyDailyTrends(trends) && <p className="today-empty">Nothing is recorded for these dates yet.</p>}
@@ -104,6 +123,16 @@ export function TrendsContent({
         <p>
           {manual && <span className="review-badge">Manually entered</span>} {spec.source}
         </p>
+        {nutrition !== null && (
+          <dl aria-label={`${spec.label} over the range`} className="trends-figures">
+            {nutritionFigures(trends, nutrition).map((figure) => (
+              <div key={figure.label}>
+                <dt>{figure.label}</dt>
+                <dd>{figure.value}</dd>
+              </div>
+            ))}
+          </dl>
+        )}
         <p className="trends-coverage">{coverageLine(trends, metric)}</p>
         <ul className="trends-summary">
           {summaryLines(trends, metric).map((line) => (
@@ -120,27 +149,43 @@ export function TrendsContent({
 
       <section aria-labelledby="trends-table-title" className="today-card trends-card">
         <h2 id="trends-table-title">Every date</h2>
-        <p className="today-note">Newest first. Open a date to see everything recorded for it on Today.</p>
+        <p className="today-note">
+          {openMealLog === null
+            ? 'Newest first. Open a date to see everything recorded for it on Today.'
+            : 'Newest first. Open shows the date on Today; Meal log lists that date’s entries to edit or delete, with a way back here.'}
+        </p>
         <table className="trends-table">
           <thead>
             <tr>
               <th scope="col">Date</th>
               <th scope="col">{spec.label}</th>
-              <th scope="col"><span className="visually-hidden">Action</span></th>
+              <th scope="col"><span className="visually-hidden">Actions</span></th>
             </tr>
           </thead>
           <tbody>
             {rows.map((row) => (
-              <tr className={row.recorded ? undefined : 'trends-table__missing'} data-date={row.localDate} key={row.localDate}>
+              <tr
+                className={row.recorded ? (row.coverage === 'partial' ? 'trends-table__partial' : undefined) : 'trends-table__missing'}
+                data-coverage={row.coverage ?? undefined}
+                data-date={row.localDate}
+                key={row.localDate}
+              >
                 <th scope="row">{row.dateLabel}</th>
                 <td>
                   <span className="trends-table__value">{row.value}</span>
                   {row.detail !== null && <span className="trends-table__detail">{row.detail}</span>}
                 </td>
                 <td>
-                  <button aria-label={`Open Today on ${row.dateLabel}`} onClick={() => onOpenDay(row.localDate)} type="button">
-                    Open
-                  </button>
+                  <div className="trends-table__actions">
+                    <button aria-label={`Open Today on ${row.dateLabel}`} onClick={() => onOpenDay(row.localDate)} type="button">
+                      Open
+                    </button>
+                    {openMealLog !== null && (
+                      <button aria-label={`Open Meal log on ${row.dateLabel}`} onClick={() => openMealLog(row.localDate)} type="button">
+                        Meal log
+                      </button>
+                    )}
+                  </div>
                 </td>
               </tr>
             ))}
@@ -161,6 +206,8 @@ export interface TrendsViewProps {
   onChooseEnd: (value: string) => void;
   onChooseMetric: (metric: DailyTrendsMetric) => void;
   onOpenDay: (localDate: string) => void;
+  /** A nutrition row's Meal log action (ADR-0096); omitted, the rows have Open only. */
+  onOpenMealLog?: OpenMealLog | undefined;
   onRefresh: () => void;
   snapshot: TrendsSnapshot;
   timeZone: string;
@@ -168,7 +215,7 @@ export interface TrendsViewProps {
 }
 
 /** Everything the screen shows, from one snapshot. Pure, so every state is testable without a DOM. */
-export function TrendsView({ activity, endInput, metric, onChooseEnd, onChooseMetric, onOpenDay, onRefresh, snapshot, timeZone, today }: TrendsViewProps) {
+export function TrendsView({ activity, endInput, metric, onChooseEnd, onChooseMetric, onOpenDay, onOpenMealLog, onRefresh, snapshot, timeZone, today }: TrendsViewProps) {
   const { load } = snapshot;
   const busy = load.kind === 'loading' || (load.kind === 'ready' && load.refreshing);
   const state = load.kind === 'ready' && load.refreshing ? 'refreshing' : load.kind;
@@ -181,10 +228,10 @@ export function TrendsView({ activity, endInput, metric, onChooseEnd, onChooseMe
         <p className="eyebrow">28-day view</p>
         <h1 id="trends-title" tabIndex={-1}>Trends</h1>
         <p>
-          Your recorded weight, sleep duration, steps and food energy, and the activity you logged, for the 28 calendar dates
-          ending on the date you choose, read again each time you open this view or press Refresh. It shows what was recorded
-          and how much of the range that covers; it sets no targets, makes no predictions and gives no advice. Only you can see
-          it.
+          Your recorded weight, sleep duration, steps, food energy, protein, carbohydrate and fat, and the activity you logged,
+          for the 28 calendar dates ending on the date you choose, read again each time you open this view or press Refresh. It
+          shows what was recorded and how much of the range that covers; it sets no targets, makes no predictions and gives no
+          advice. Only you can see it.
         </p>
       </div>
 
@@ -223,7 +270,9 @@ export function TrendsView({ activity, endInput, metric, onChooseEnd, onChooseMe
             {load.kind === 'error' && <button onClick={onRefresh} type="button">Retry</button>}
           </div>
         )}
-        {load.kind === 'ready' && <TrendsContent metric={metric} onOpenDay={onOpenDay} timeZone={timeZone} trends={load.trends} />}
+        {load.kind === 'ready' && (
+          <TrendsContent metric={metric} onOpenDay={onOpenDay} onOpenMealLog={onOpenMealLog} timeZone={timeZone} trends={load.trends} />
+        )}
       </div>
       {activity}
     </section>
@@ -250,6 +299,8 @@ export interface TrendsScreenProps {
   onChooseMetric: (metric: DailyTrendsMetric) => void;
   /** Opens Today on a date of the range. */
   onOpenDay: (localDate: string) => void;
+  /** Opens the Meal log on a nutrition row's date, with the way back to this range and series (ADR-0096). */
+  onOpenMealLog?: OpenMealLog;
   /** Called with every valid end date the person selects, so the parent can keep the range. */
   onSelectEndDate: (endDate: string) => void;
   orgId: string;
@@ -273,6 +324,7 @@ export function TrendsScreen({
   onChooseActivity = () => undefined,
   onChooseMetric,
   onOpenDay,
+  onOpenMealLog,
   onSelectEndDate,
   orgId,
   read = readDailyTrends,
@@ -373,6 +425,7 @@ export function TrendsScreen({
       onChooseEnd={chooseEnd}
       onChooseMetric={chooseMetric}
       onOpenDay={onOpenDay}
+      onOpenMealLog={onOpenMealLog}
       onRefresh={() => {
         controller.current?.refresh();
         activityController.current?.refresh();

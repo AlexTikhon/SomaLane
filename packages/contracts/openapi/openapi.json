@@ -1763,8 +1763,8 @@
         "tags": [
           "Daily trends"
         ],
-        "summary": "Compute the signed-in person's 28-day trends of four daily series",
-        "description": "Owner-only derived health data (ADR-0084), computed by the app on every read and never stored; no language model is called, nothing is queued and nothing is written. Every source is read in one REPEATABLE READ, READ ONLY transaction with row-level security and explicit organization and owner predicates, by a fixed set of range statements; run sharing never adds another person's data. The range is the 28 calendar dates ending on `endDate` inclusive; when 2000-01-01 cuts it short, the response gives the actual first date and number of dates (`range.days`, the denominator of every coverage figure) and `shortenedByLowerBound: true`. `endDate` must not be after today in `timeZone` by server time (400 INVALID_REQUEST); `timeZone` decides only that, never a record's date. Every record belongs to the calendar date it was stored for, whatever zone it was saved in. Four series, one entry per date: recorded weight (kg) and sleep duration (minutes) from the check-in, manually entered steps from the movement record, and food energy from the logged meal entries (entries logged, entries with energy, and the exact sum over those entries, or null when none records energy). A value that was not recorded is null, never zero, and adds nothing to any total or average; a recorded 0 is a value. The summary is defined by `summarizeDailyTrendDays`: weight's first, last and change only with at least two recorded dates; the sleep average over recorded dates only, rounded to the nearest minute with halves up; the recorded step total with its day count; the recorded food-energy total with both its day and its entry coverage. Food energy is never described as a complete diary: unlogged food is unknown. No note text, meal titles, other free text, balance, target, prediction or advice. Answers `Cache-Control: no-store`, errors included.",
+        "summary": "Compute the signed-in person's 28-day trends: weight, sleep, steps and recorded nutrition (seven series)",
+        "description": "Owner-only derived health data (ADR-0084; recorded nutrition since ADR-0096, `daily-trends-2`), computed by the app on every read and never stored; no language model is called, nothing is queued and nothing is written. Every source is read in one REPEATABLE READ, READ ONLY transaction with row-level security and explicit organization and owner predicates, by a fixed set of range statements; run sharing never adds another person's data. The range is the 28 calendar dates ending on `endDate` inclusive; when 2000-01-01 cuts it short, the response gives the actual first date and number of dates (`range.days`, the denominator of every coverage figure) and `shortenedByLowerBound: true`. `endDate` must not be after today in `timeZone` by server time (400 INVALID_REQUEST); `timeZone` decides only that, never a record's date. Every record belongs to the calendar date it was stored for, whatever zone it was saved in. Seven series, one entry per date: recorded weight (kg) and sleep duration (minutes) from the check-in, manually entered steps from the movement record, and recorded food energy (kcal), protein, carbohydrate and fat (g) from the logged manual meal entries. Nutrition has one canonical structure, `nutrition`: per date, `loggedEntries` (title-only entries included) and, for each of `energyKcal`, `proteinG`, `carbohydrateG` and `fatG`, `{ recordedEntries, total }`; for the range, `summary.nutrition` gives `daysInRange` (equal to `range.days`), `loggedEntries`, `daysWithEntries` and, per nutrient, `{ recordedEntries, recordedDays, total }`. Each nutrient's entry and day coverage is independent of the others. A total is the exact sum of the recorded values (PostgreSQL numeric, at most one decimal) over exactly the entries that record that nutrient, and is null exactly when none does. A value that was not recorded is null, never zero, and adds nothing to any total or average; a recorded 0 is a value and counts in coverage; a date with no logged entry is unknown, not zero. The summary is defined by `summarizeDailyTrendDays`: weight's first, last and change only with at least two recorded dates; the sleep average over recorded dates only, rounded to the nearest minute with halves up; the recorded step total with its day count; the recorded nutrition totals with their entry and day coverage, which must equal the sum of the dates. Coverage counts logged entries and dates that hold a value; it never establishes that all food was logged, even when every logged entry records a nutrient. No note text, meal titles, other free text, balance, target, nutrition average, estimate, prediction or advice. Answers `Cache-Control: no-store`, errors included.",
         "parameters": [
           {
             "$ref": "#/components/parameters/OrgId"
@@ -12629,7 +12629,7 @@
                     }
                   ]
                 },
-                "foodEnergy": {
+                "nutrition": {
                   "type": "object",
                   "properties": {
                     "loggedEntries": {
@@ -12637,28 +12637,121 @@
                       "minimum": 0,
                       "maximum": 10000
                     },
-                    "entriesWithEnergy": {
-                      "type": "integer",
-                      "minimum": 0,
-                      "maximum": 10000
-                    },
-                    "recordedKcal": {
-                      "anyOf": [
-                        {
-                          "type": "number",
+                    "energyKcal": {
+                      "type": "object",
+                      "properties": {
+                        "recordedEntries": {
+                          "type": "integer",
                           "minimum": 0,
-                          "maximum": 200000000
+                          "maximum": 10000
                         },
-                        {
-                          "type": "null"
+                        "total": {
+                          "anyOf": [
+                            {
+                              "type": "number",
+                              "minimum": 0,
+                              "maximum": 200000000
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
                         }
-                      ]
+                      },
+                      "required": [
+                        "recordedEntries",
+                        "total"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "proteinG": {
+                      "type": "object",
+                      "properties": {
+                        "recordedEntries": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 10000
+                        },
+                        "total": {
+                          "anyOf": [
+                            {
+                              "type": "number",
+                              "minimum": 0,
+                              "maximum": 20000000
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        }
+                      },
+                      "required": [
+                        "recordedEntries",
+                        "total"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "carbohydrateG": {
+                      "type": "object",
+                      "properties": {
+                        "recordedEntries": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 10000
+                        },
+                        "total": {
+                          "anyOf": [
+                            {
+                              "type": "number",
+                              "minimum": 0,
+                              "maximum": 20000000
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        }
+                      },
+                      "required": [
+                        "recordedEntries",
+                        "total"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "fatG": {
+                      "type": "object",
+                      "properties": {
+                        "recordedEntries": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 10000
+                        },
+                        "total": {
+                          "anyOf": [
+                            {
+                              "type": "number",
+                              "minimum": 0,
+                              "maximum": 20000000
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        }
+                      },
+                      "required": [
+                        "recordedEntries",
+                        "total"
+                      ],
+                      "additionalProperties": false
                     }
                   },
                   "required": [
                     "loggedEntries",
-                    "entriesWithEnergy",
-                    "recordedKcal"
+                    "energyKcal",
+                    "proteinG",
+                    "carbohydrateG",
+                    "fatG"
                   ],
                   "additionalProperties": false
                 }
@@ -12668,7 +12761,7 @@
                 "weightKg",
                 "sleepMinutes",
                 "steps",
-                "foodEnergy"
+                "nutrition"
               ],
               "additionalProperties": false
             }
@@ -12829,17 +12922,18 @@
                 ],
                 "additionalProperties": false
               },
-              "foodEnergy": {
+              "nutrition": {
                 "type": "object",
                 "properties": {
-                  "daysWithEntries": {
-                    "type": "integer",
-                    "minimum": 0,
-                    "maximum": 28
+                  "source": {
+                    "type": "string",
+                    "enum": [
+                      "manual"
+                    ]
                   },
-                  "daysWithEnergy": {
+                  "daysInRange": {
                     "type": "integer",
-                    "minimum": 0,
+                    "minimum": 1,
                     "maximum": 28
                   },
                   "loggedEntries": {
@@ -12847,37 +12941,153 @@
                     "minimum": 0,
                     "maximum": 280000
                   },
-                  "entriesWithEnergy": {
+                  "daysWithEntries": {
                     "type": "integer",
                     "minimum": 0,
-                    "maximum": 280000
+                    "maximum": 28
                   },
-                  "recordedTotalKcal": {
-                    "anyOf": [
-                      {
-                        "type": "number",
+                  "energyKcal": {
+                    "type": "object",
+                    "properties": {
+                      "recordedEntries": {
+                        "type": "integer",
                         "minimum": 0,
-                        "maximum": 5600000000
+                        "maximum": 280000
                       },
-                      {
-                        "type": "null"
+                      "recordedDays": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 28
+                      },
+                      "total": {
+                        "anyOf": [
+                          {
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 5600000000
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
                       }
-                    ]
+                    },
+                    "required": [
+                      "recordedEntries",
+                      "recordedDays",
+                      "total"
+                    ],
+                    "additionalProperties": false
                   },
-                  "source": {
-                    "type": "string",
-                    "enum": [
-                      "manual"
-                    ]
+                  "proteinG": {
+                    "type": "object",
+                    "properties": {
+                      "recordedEntries": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 280000
+                      },
+                      "recordedDays": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 28
+                      },
+                      "total": {
+                        "anyOf": [
+                          {
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 560000000
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    },
+                    "required": [
+                      "recordedEntries",
+                      "recordedDays",
+                      "total"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "carbohydrateG": {
+                    "type": "object",
+                    "properties": {
+                      "recordedEntries": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 280000
+                      },
+                      "recordedDays": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 28
+                      },
+                      "total": {
+                        "anyOf": [
+                          {
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 560000000
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    },
+                    "required": [
+                      "recordedEntries",
+                      "recordedDays",
+                      "total"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "fatG": {
+                    "type": "object",
+                    "properties": {
+                      "recordedEntries": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 280000
+                      },
+                      "recordedDays": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 28
+                      },
+                      "total": {
+                        "anyOf": [
+                          {
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 560000000
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    },
+                    "required": [
+                      "recordedEntries",
+                      "recordedDays",
+                      "total"
+                    ],
+                    "additionalProperties": false
                   }
                 },
                 "required": [
-                  "daysWithEntries",
-                  "daysWithEnergy",
+                  "source",
+                  "daysInRange",
                   "loggedEntries",
-                  "entriesWithEnergy",
-                  "recordedTotalKcal",
-                  "source"
+                  "daysWithEntries",
+                  "energyKcal",
+                  "proteinG",
+                  "carbohydrateG",
+                  "fatG"
                 ],
                 "additionalProperties": false
               }
@@ -12886,7 +13096,7 @@
               "weight",
               "sleep",
               "steps",
-              "foodEnergy"
+              "nutrition"
             ],
             "additionalProperties": false
           },

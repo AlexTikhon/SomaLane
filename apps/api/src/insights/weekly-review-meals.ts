@@ -9,6 +9,11 @@ import {
 } from '@running-tracker/contracts';
 import type { PoolClient } from 'pg';
 
+import { mealSummaryRecordOf, type MealSummaryRecord, type MealSummaryRow } from '../meals/meal-nutrition-summary.js';
+
+// The row parser lives in meals/meal-nutrition-summary.ts since ADR-0096 (shared with Trends); re-exported unchanged.
+export { nutritionTenthsOf, type MealMetricRecord, type MealSummaryRecord } from '../meals/meal-nutrition-summary.js';
+
 // Recorded nutrition of the week's manual meal entries in the deterministic weekly review (ADR-0093).
 //
 // Review-only, like movement and imports: meals are not part of the aggregate, the facts, the coverage or the data gaps
@@ -17,40 +22,6 @@ import type { PoolClient } from 'pg';
 // for the week) with every count and total computed by PostgreSQL in exact numeric arithmetic. No meal is loaded and no
 // title, type, description, zone or identifier is selected. The code below only parses and checks what the database
 // computed; the contract then checks that the days and the week agree.
-
-/** One metric of one summary row: entries and dates that hold a value, and the exact sum in integer tenths. */
-export interface MealMetricRecord {
-  days: number;
-  entries: number;
-  /** Integer tenths (1061.1 kcal is 10611), or null when no entry holds a value. */
-  totalTenths: number | null;
-}
-
-/** One row of the summary statement: a stored date (`localDate`) or the whole week (`localDate` null). */
-export interface MealSummaryRecord {
-  daysWithEntries: number;
-  localDate: string | null;
-  loggedEntries: number;
-  metrics: Readonly<Record<MealNutritionField, MealMetricRecord>>;
-}
-
-interface MealSummaryRow {
-  carbohydrate_g_days: number;
-  carbohydrate_g_entries: number;
-  carbohydrate_g_total: string | null;
-  days_with_entries: number;
-  energy_kcal_days: number;
-  energy_kcal_entries: number;
-  energy_kcal_total: string | null;
-  fat_g_days: number;
-  fat_g_entries: number;
-  fat_g_total: string | null;
-  local_date: string | null;
-  logged_entries: number;
-  protein_g_days: number;
-  protein_g_entries: number;
-  protein_g_total: string | null;
-}
 
 // $1 organization, $2 owner, $3 Monday. The stored local dates Monday to Sunday inclusive: an entry belongs to the calendar
 // date it was logged for, whatever zone it was saved in and whatever zone the week's activities are read in. Manual
@@ -83,42 +54,10 @@ SELECT CASE WHEN grouping(meal.local_date) = 0 THEN to_char(meal.local_date, 'YY
  GROUP BY GROUPING SETS ((meal.local_date), ())
  ORDER BY grouping(meal.local_date), meal.local_date`;
 
-/**
- * Exact integer tenths from PostgreSQL's text form of a non-negative numeric sum ("1061.1", "0.0", "250", "250.30").
- * Every stored value has at most one meaningful decimal (CHECK constraints of migration 0039), so a sum has too; anything
- * else is a defect and throws rather than being rounded. Ten integer digits hold the week's largest total (1.4e9).
- */
-export function nutritionTenthsOf(text: string): number {
-  const matched = /^(\d{1,10})(?:\.(\d)0*)?$/u.exec(text);
-  if (!matched) throw new Error('PostgreSQL returned a nutrition total that is not a non-negative number with at most one meaningful decimal');
-  return Number(matched[1]) * 10 + Number(matched[2] ?? '0');
-}
-
-const columns: Readonly<Record<MealNutritionField, 'carbohydrate_g' | 'energy_kcal' | 'fat_g' | 'protein_g'>> = {
-  carbohydrateG: 'carbohydrate_g',
-  energyKcal: 'energy_kcal',
-  fatG: 'fat_g',
-  proteinG: 'protein_g',
-};
-
-function recordOf(row: MealSummaryRow): MealSummaryRecord {
-  const metric = (field: MealNutritionField): MealMetricRecord => {
-    const column = columns[field];
-    const total = row[`${column}_total`];
-    return { days: row[`${column}_days`], entries: row[`${column}_entries`], totalTenths: total === null ? null : nutritionTenthsOf(total) };
-  };
-  return {
-    daysWithEntries: row.days_with_entries,
-    localDate: row.local_date,
-    loggedEntries: row.logged_entries,
-    metrics: { carbohydrateG: metric('carbohydrateG'), energyKcal: metric('energyKcal'), fatG: metric('fatG'), proteinG: metric('proteinG') },
-  };
-}
-
 /** Runs the summary statement on the review's transaction client (its snapshot, its tenant context). */
 export async function readWeekMeals(client: PoolClient, owner: { orgId: string; userId: string }, weekStart: string): Promise<MealSummaryRecord[]> {
   const result = await client.query<MealSummaryRow>(weekMealsSql, [owner.orgId, owner.userId, weekStart]);
-  return result.rows.map(recordOf);
+  return result.rows.map(mealSummaryRecordOf);
 }
 
 const fromTenths = (tenths: number | null) => (tenths === null ? null : tenths / 10);

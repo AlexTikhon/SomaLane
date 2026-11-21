@@ -7,19 +7,23 @@ import {
   isTrendsMetric,
   missingExplanation,
   NOT_RECORDED,
+  nutritionFigures,
   rangeLabel,
   summaryLines,
   tableRows,
   trendMetricOptions,
 } from './daily-trends.js';
-import { sparseTrends, trendsFixture } from './daily-trends-fixtures.js';
+import { NUTRITION_A, NUTRITION_B, NUTRITION_C, nutritionOf, nutritionTrends, sparseTrends, trendsFixture } from './daily-trends-fixtures.js';
 
 const END = '2026-11-09';
+const NUTRITION_METRICS = ['foodEnergyKcal', 'proteinG', 'carbohydrateG', 'fatG'] as const;
+const FORBIDDEN = /balance|deficit|surplus|target|goal|recommend|predict|estimate|average|too (much|little)|healthy|should/iu;
 
 describe('trends wording', () => {
-  it('offers the four series in order', () => {
-    expect(trendMetricOptions.map((option) => option.label)).toEqual(['Weight', 'Sleep', 'Steps', 'Food energy']);
+  it('offers the seven series in order, the four nutrition series after the daily records', () => {
+    expect(trendMetricOptions.map((option) => option.label)).toEqual(['Weight', 'Sleep', 'Steps', 'Food energy', 'Protein', 'Carbohydrate', 'Fat']);
     expect(isTrendsMetric('steps')).toBe(true);
+    expect(isTrendsMetric('proteinG')).toBe(true);
     expect(isTrendsMetric('activeEnergyKcal')).toBe(false);
   });
 
@@ -71,15 +75,100 @@ describe('trends wording', () => {
   it('gives food energy both coverage levels and never calls it a complete diary', () => {
     expect(summaryLines(sparseTrends(), 'foodEnergyKcal')).toEqual([
       'Food energy recorded: 760.9 kcal from 2 of 5 logged entries, on 1 day.',
-      '1 day has logged entries without any food energy recorded.',
+      'Meal entries were logged on 2 of 28 days; 1 of those days has no food energy recorded.',
       'The total covers only what you logged with an energy value; it is not a complete food diary.',
     ]);
-    const titleOnly = trendsFixture(END, { '2026-11-01': { foodEnergy: { entriesWithEnergy: 0, loggedEntries: 2, recordedKcal: null } } });
+    const titleOnly = trendsFixture(END, { '2026-11-01': { nutrition: nutritionOf(2) } });
     expect(summaryLines(titleOnly, 'foodEnergyKcal')).toEqual(['2 entries logged on 1 day, none with food energy recorded.']);
-    const complete = trendsFixture(END, { '2026-11-01': { foodEnergy: { entriesWithEnergy: 2, loggedEntries: 2, recordedKcal: 0 } } });
+    const complete = trendsFixture(END, { '2026-11-01': { nutrition: nutritionOf(2, { energyKcal: [2, 0] }) } });
     expect(summaryLines(complete, 'foodEnergyKcal')).toContain('The total covers only what you logged with an energy value; it is not a complete food diary.');
     expect(missingExplanation('foodEnergyKcal')).toMatch(/not a complete food diary/u);
     expect(missingExplanation('steps')).toMatch(/unknown, not zero/u);
+  });
+});
+
+describe('recorded nutrition (ADR-0096)', () => {
+  it('words the required fixture per metric: coverage against the range and the logged entries, independently', () => {
+    const trends = nutritionTrends();
+    expect(coverageLine(trends, 'proteinG')).toBe(
+      'Recorded on 1 of 28 days. Protein is recorded on 2 of 4 logged entries. The other 27 days have no value: unknown, not zero.',
+    );
+    expect(coverageLine(trends, 'fatG')).toBe('Recorded on 2 of 28 days. Fat is recorded on 2 of 4 logged entries. The other 26 days have no value: unknown, not zero.');
+    expect(coverageLine(trends, 'carbohydrateG')).toBe(
+      'Recorded on 2 of 28 days. Carbohydrate is recorded on 2 of 4 logged entries. The other 26 days have no value: unknown, not zero.',
+    );
+    expect(coverageLine(trends, 'foodEnergyKcal')).toBe(
+      'Recorded on 2 of 28 days. Energy is recorded on 2 of 4 logged entries. The other 26 days have no value: unknown, not zero.',
+    );
+    expect(summaryLines(trends, 'proteinG')).toEqual([
+      'Protein recorded: 10.1 g from 2 of 4 logged entries, on 1 day.',
+      'Meal entries were logged on 2 of 28 days; 1 of those days has no protein recorded.',
+      'The total covers only what you logged with a protein value; it is not a complete food diary.',
+    ]);
+    expect(summaryLines(trends, 'fatG')[1]).toBe('Meal entries were logged on 2 of 28 days.');
+    expect(nutritionFigures(trends, 'proteinG')).toEqual([
+      { label: 'Recorded total', value: '10.1 g' },
+      { label: 'Days with a value', value: '1 of 28 days' },
+      { label: 'Entries with a value', value: '2 of 4 logged entries' },
+      { label: 'Days with logged entries', value: '2 of 28 days' },
+    ]);
+    expect(nutritionFigures(trends, 'foodEnergyKcal')[0]).toEqual({ label: 'Recorded total', value: '100.1 kcal' });
+    expect(nutritionFigures(trendsFixture(END), 'fatG')).toEqual([
+      { label: 'Recorded total', value: NOT_RECORDED },
+      { label: 'Days with a value', value: '0 of 28 days' },
+      { label: 'Entries with a value', value: 'No entries logged' },
+      { label: 'Days with logged entries', value: '0 of 28 days' },
+    ]);
+  });
+
+  it('tells apart no entries, entries without the metric, a partial date, full coverage and a recorded zero', () => {
+    const trends = nutritionTrends();
+    const row = (metric: (typeof NUTRITION_METRICS)[number], date: string) => tableRows(trends, metric).find((entry) => entry.localDate === date)!;
+    // Date A's fat: a recorded zero covering 1 of 3 entries, labelled partial.
+    expect(row('fatG', NUTRITION_A)).toMatchObject({ coverage: 'partial', detail: 'Partial: 1 of 3 entries with fat', recorded: true, value: '0 g' });
+    expect(row('proteinG', NUTRITION_A)).toMatchObject({ coverage: 'partial', detail: 'Partial: 2 of 3 entries with protein', value: '10.1 g' });
+    // Date B's protein: logged, not recorded.
+    expect(row('proteinG', NUTRITION_B)).toMatchObject({ coverage: 'none', detail: '1 entry logged, no protein recorded', recorded: false, value: NOT_RECORDED });
+    expect(row('fatG', NUTRITION_B)).toMatchObject({ coverage: 'all', detail: '1 logged entry with fat', value: '5.3 g' });
+    expect(row('foodEnergyKcal', NUTRITION_B)).toMatchObject({ coverage: 'all', detail: '1 logged entry with energy', value: '0 kcal' });
+    // Date C: no entries at all.
+    for (const metric of NUTRITION_METRICS) expect(row(metric, NUTRITION_C)).toMatchObject({ coverage: 'no-entries', detail: 'No entry logged', value: NOT_RECORDED });
+    const all = tableRows(trendsFixture(END, { [END]: { nutrition: nutritionOf(2, { carbohydrateG: [2, 1] }) } }), 'carbohydrateG');
+    expect(all[0]).toMatchObject({ coverage: 'all', detail: 'All 2 logged entries with carbohydrate' });
+    expect(tableRows(trends, 'steps')[0]!.coverage).toBeNull();
+  });
+
+  it('draws recorded zeros on the baseline, leaves missing dates as gaps and names the metric and unit', () => {
+    const trends = nutritionTrends();
+    const fat = chartGeometry(trends, 'fatG');
+    expect(fat.points.map((point) => [point.localDate, point.value])).toEqual([
+      [NUTRITION_A, 0],
+      [NUTRITION_B, 5.3],
+    ]);
+    expect(fat.points[0]!.y).toBe(fat.plot.bottom);
+    expect(fat.segments.map((segment) => segment.length)).toEqual([2]); // A and B are adjacent: joined
+    expect(fat.missing).toHaveLength(26);
+    expect(fat.points[1]!.label).toBe('Fat, Tue, 3 Nov 2026: 5.3 g');
+    const protein = chartGeometry(trends, 'proteinG');
+    expect(protein.segments.map((segment) => segment.length)).toEqual([1]); // B has no protein: nothing to join
+    expect(protein.missing.map((gap) => gap.localDate)).toContain(NUTRITION_B);
+    expect(chartDescription(trends, 'carbohydrateG')).toBe(
+      'Carbohydrate recorded (g), 28 days, Tue, 13 Oct 2026 to Mon, 9 Nov 2026: 2 of 28 days have a value. The table below lists every date.',
+    );
+    expect(chartGeometry(trends, 'foodEnergyKcal').yTicks.map((tick) => tick.label)).toEqual(['0', '100.1']);
+  });
+
+  it('keeps macro-only and title-only ranges apart from an empty one, and writes no judgement anywhere', () => {
+    const macroOnly = trendsFixture(END, { '2026-11-01': { nutrition: nutritionOf(1, { proteinG: [1, 25.5] }) } });
+    expect(summaryLines(macroOnly, 'foodEnergyKcal')).toEqual(['1 entry logged on 1 day, none with food energy recorded.']);
+    expect(summaryLines(macroOnly, 'proteinG')[0]).toBe('Protein recorded: 25.5 g from 1 of 1 logged entry, on 1 day.');
+    const titleOnly = trendsFixture(END, { '2026-11-01': { nutrition: nutritionOf(2) } });
+    for (const metric of NUTRITION_METRICS) {
+      expect(summaryLines(titleOnly, metric)[0]).toMatch(/^2 entries logged on 1 day, none with .+ recorded\.$/u);
+      expect(summaryLines(trendsFixture(END), metric)).toEqual(['No meal entry was logged in this range.']);
+      const text = [coverageLine(nutritionTrends(), metric), ...summaryLines(nutritionTrends(), metric), missingExplanation(metric)].join(' ');
+      expect(text).not.toMatch(FORBIDDEN);
+    }
   });
 });
 
@@ -94,10 +183,10 @@ describe('trends table', () => {
 
   it('says which entries a food-energy value covers', () => {
     const rows = tableRows(sparseTrends(), 'foodEnergyKcal');
-    expect(rows.find((row) => row.localDate === '2026-11-02')).toMatchObject({ detail: '2 of 3 entries with energy', value: '760.9 kcal' });
+    expect(rows.find((row) => row.localDate === '2026-11-02')).toMatchObject({ detail: 'Partial: 2 of 3 entries with energy', value: '760.9 kcal' });
     expect(rows.find((row) => row.localDate === '2026-10-20')).toMatchObject({ detail: '2 entries logged, no energy recorded', value: NOT_RECORDED });
     expect(rows.find((row) => row.localDate === '2026-10-21')).toMatchObject({ detail: 'No entry logged', value: NOT_RECORDED });
-    const all = tableRows(trendsFixture(END, { [END]: { foodEnergy: { entriesWithEnergy: 2, loggedEntries: 2, recordedKcal: 1 } } }), 'foodEnergyKcal');
+    const all = tableRows(trendsFixture(END, { [END]: { nutrition: nutritionOf(2, { energyKcal: [2, 1] }) } }), 'foodEnergyKcal');
     expect(all[0]!.detail).toBe('All 2 logged entries with energy');
   });
 });

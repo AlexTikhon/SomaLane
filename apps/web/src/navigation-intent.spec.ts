@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { afterHistoryIntentApplied, checkInIntentOf, inScope, mealIntentDateOf, navigationFor } from './navigation-intent.js';
+import { afterHistoryIntentApplied, checkInIntentOf, inScope, mealIntentDateOf, navigationFor, navigationFromTrendsRow } from './navigation-intent.js';
 
 const SCOPE = '0|user-a|org-a';
 
@@ -78,6 +78,21 @@ describe('Today navigation', () => {
       trendsEnd: { localDate: '2026-11-17', scope: SCOPE },
       view: 'trends',
     });
+  });
+
+  it('opens the Meal log from a Trends nutrition row with a scoped way back to the range and series (ADR-0096)', () => {
+    const next = navigationFromTrendsRow('2026-11-02', { endDate: '2026-11-09', metric: 'proteinG' }, SCOPE);
+    expect(next).toEqual({
+      editor: { localDate: '2026-11-02', scope: SCOPE, section: 'meals' },
+      trendsReturn: { endDate: '2026-11-09', metric: 'proteinG', scope: SCOPE },
+      view: 'meals',
+    });
+    expect(mealIntentDateOf(next.editor)).toBe('2026-11-02');
+    expect(checkInIntentOf(next.editor)).toBeUndefined();
+    // Never under another session, person or organization.
+    expect(inScope(next.trendsReturn, SCOPE)).toBe(next.trendsReturn);
+    for (const other of ['1|user-a|org-a', '0|user-b|org-a', '0|user-a|org-b']) expect(inScope(next.trendsReturn, other)).toBeNull();
+    expect(inScope(next.trendsReturn, null)).toBeNull();
   });
 
   it('consumes a history intent once applied, and never a newer one, even for the same day (ADR-0088)', () => {

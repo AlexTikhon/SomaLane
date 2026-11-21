@@ -1,12 +1,23 @@
-import { DAILY_TRENDS_METRICS, type DailyTrendDay, type DailyTrends, type DailyTrendsMetric, type DailyTrendsRange } from '@running-tracker/contracts';
+import {
+  DAILY_TRENDS_METRICS,
+  DAILY_TRENDS_NUTRITION_FIELD,
+  isDailyTrendsNutritionMetric,
+  type DailyTrendDay,
+  type DailyTrends,
+  type DailyTrendsMetric,
+  type DailyTrendsNutritionMetric,
+  type DailyTrendsRange,
+} from '@running-tracker/contracts';
 
 import { formatCheckInDate, formatSleep } from './daily-checkin.js';
 import { formatSteps } from './daily-movement.js';
 import { formatNutritionNumber } from './meal-log.js';
 
-// Presentation of the 28-day trends (ADR-0084). Pure functions: every sentence, label and chart coordinate the screen
-// shows comes from here, so each state can be tested without a DOM. Missing is "Not recorded" (unknown), never 0; a
-// recorded 0 is shown as 0. No target, judgement, prediction, correlation or recommendation is ever written.
+// Presentation of the 28-day trends (ADR-0084; recorded nutrition since ADR-0096). Pure functions: every sentence, label
+// and chart coordinate the screen shows comes from here, so each state can be tested without a DOM. Missing is "Not
+// recorded" (unknown), never 0; a recorded 0 is shown as 0. A nutrition total covers only the logged entries that record
+// it, never what was eaten. No target, judgement, balance, estimate, average, prediction, correlation or recommendation
+// is ever written.
 
 export const NOT_RECORDED = 'Not recorded';
 
@@ -22,6 +33,36 @@ export interface TrendMetricSpec {
   zeroBaseline: boolean;
   valueOf: (day: DailyTrendDay) => number | null;
   format: (value: number) => string;
+}
+
+/** How each nutrition series is named in sentences: its name, the noun in a sentence, the short word and the unit. */
+interface NutritionWording {
+  name: string;
+  noun: string;
+  short: string;
+  unit: 'g' | 'kcal';
+  withValue: string;
+}
+
+const nutritionWording: Readonly<Record<DailyTrendsNutritionMetric, NutritionWording>> = {
+  carbohydrateG: { name: 'Carbohydrate', noun: 'carbohydrate', short: 'carbohydrate', unit: 'g', withValue: 'a carbohydrate value' },
+  fatG: { name: 'Fat', noun: 'fat', short: 'fat', unit: 'g', withValue: 'a fat value' },
+  foodEnergyKcal: { name: 'Food energy', noun: 'food energy', short: 'energy', unit: 'kcal', withValue: 'an energy value' },
+  proteinG: { name: 'Protein', noun: 'protein', short: 'protein', unit: 'g', withValue: 'a protein value' },
+};
+
+function nutritionSpec(metric: DailyTrendsNutritionMetric): TrendMetricSpec {
+  const wording = nutritionWording[metric];
+  const field = DAILY_TRENDS_NUTRITION_FIELD[metric];
+  return {
+    format: (value) => `${formatNutritionNumber(value)} ${wording.unit}`,
+    label: wording.name,
+    source: `The sum of the ${wording.noun} you recorded on the meal entries you logged for each date.`,
+    title: `${wording.name} recorded (${wording.unit})`,
+    unit: wording.unit,
+    valueOf: (day) => day.nutrition[field].total,
+    zeroBaseline: true,
+  };
 }
 
 export const trendMetricSpecs: Readonly<Record<DailyTrendsMetric, TrendMetricSpec>> = {
@@ -52,15 +93,10 @@ export const trendMetricSpecs: Readonly<Record<DailyTrendsMetric, TrendMetricSpe
     valueOf: (day) => day.steps,
     zeroBaseline: true,
   },
-  foodEnergyKcal: {
-    format: (kcal) => `${formatNutritionNumber(kcal)} kcal`,
-    label: 'Food energy',
-    source: 'The sum of the food energy you recorded on the meal entries you logged for each date.',
-    title: 'Food energy recorded (kcal)',
-    unit: 'kcal',
-    valueOf: (day) => day.foodEnergy.recordedKcal,
-    zeroBaseline: true,
-  },
+  foodEnergyKcal: nutritionSpec('foodEnergyKcal'),
+  proteinG: nutritionSpec('proteinG'),
+  carbohydrateG: nutritionSpec('carbohydrateG'),
+  fatG: nutritionSpec('fatG'),
 };
 
 export const trendMetricOptions = DAILY_TRENDS_METRICS.map((metric) => ({ label: trendMetricSpecs[metric].label, metric }));
@@ -69,10 +105,21 @@ export function isTrendsMetric(value: string): value is DailyTrendsMetric {
   return (DAILY_TRENDS_METRICS as readonly string[]).includes(value);
 }
 
-const plural = (count: number, one: string, many: string) => `${count} ${count === 1 ? one : many}`;
-const days = (count: number) => plural(count, 'day', 'days');
-const entries = (count: number) => plural(count, 'entry', 'entries');
+/** True for food energy, protein, carbohydrate and fat: the series read from the meal log, with a Meal log action. */
+export const isNutritionTrendsMetric = isDailyTrendsNutritionMetric;
+
 const grouped = new Intl.NumberFormat('en-GB', { maximumFractionDigits: 0 });
+const count = (value: number) => grouped.format(value);
+const plural = (value: number, one: string, many: string) => `${count(value)} ${value === 1 ? one : many}`;
+const days = (value: number) => plural(value, 'day', 'days');
+const entries = (value: number) => plural(value, 'entry', 'entries');
+const capitalized = (text: string) => `${text.charAt(0).toUpperCase()}${text.slice(1)}`;
+
+/** The range's figures for one nutrition series and the date counts they are read against. */
+function nutritionOf(trends: DailyTrends, metric: DailyTrendsNutritionMetric) {
+  const { nutrition } = trends.summary;
+  return { metric: nutrition[DAILY_TRENDS_NUTRITION_FIELD[metric]], nutrition, wording: nutritionWording[metric] };
+}
 
 /** "28 days, Tue, 13 Oct 2026 to Mon, 9 Nov 2026", and why it is shorter when the lower bound cut it. */
 export function rangeLabel(range: Pick<DailyTrendsRange, 'days' | 'endDate' | 'shortenedByLowerBound' | 'startDate'> & { requestedDays: number }): string {
@@ -84,37 +131,72 @@ export function rangeLabel(range: Pick<DailyTrendsRange, 'days' | 'endDate' | 's
 export function coverageLine(trends: DailyTrends, metric: DailyTrendsMetric): string {
   const total = trends.range.days;
   const { summary } = trends;
-  const recorded =
-    metric === 'weightKg'
+  const recorded = isNutritionTrendsMetric(metric)
+    ? nutritionOf(trends, metric).metric.recordedDays
+    : metric === 'weightKg'
       ? summary.weight.daysRecorded
       : metric === 'sleepMinutes'
         ? summary.sleep.daysRecorded
-        : metric === 'steps'
-          ? summary.steps.daysRecorded
-          : summary.foodEnergy.daysWithEnergy;
+        : summary.steps.daysRecorded;
   const missing = total - recorded;
   const head = recorded === total ? `Recorded on all ${days(total)}.` : `Recorded on ${recorded} of ${days(total)}.`;
   const tail = missing === 0 ? '' : ` The other ${missing === 1 ? 'day has' : `${missing} days have`} no value: unknown, not zero.`;
-  if (metric !== 'foodEnergyKcal') return `${head}${tail}`;
-  const food = summary.foodEnergy;
+  if (!isNutritionTrendsMetric(metric)) return `${head}${tail}`;
+  const { metric: figures, nutrition, wording } = nutritionOf(trends, metric);
   const entryPart =
-    food.loggedEntries === 0
+    nutrition.loggedEntries === 0
       ? ' No meal entry was logged in this range.'
-      : ` Energy is recorded on ${food.entriesWithEnergy} of ${plural(food.loggedEntries, 'logged entry', 'logged entries')}.`;
+      : ` ${capitalized(wording.short)} is recorded on ${count(figures.recordedEntries)} of ${plural(nutrition.loggedEntries, 'logged entry', 'logged entries')}.`;
   return `${head}${entryPart}${tail}`;
 }
 
 /** What a missing value means for the metric, said once beside the chart and the table. */
 export function missingExplanation(metric: DailyTrendsMetric): string {
-  if (metric === 'foodEnergyKcal') {
-    return 'A date without a value has no logged entry with food energy. Food you did not log is unknown, so even a date where every entry has energy is not a complete food diary. Unknown values add nothing to the total.';
+  if (isNutritionTrendsMetric(metric)) {
+    const { noun } = nutritionWording[metric];
+    return `A date without a value has no logged entry with ${noun} recorded. Food you did not log is unknown, so even a date where every entry records ${noun} is not a complete food diary, and a partial date's total covers only the entries that record it. Unknown values add nothing to the total.`;
   }
   return 'A date without a value was not recorded. It is unknown, not zero, and is left out of every total and average. The chart leaves a gap there and never joins values across it.';
 }
 
+export interface TrendFigure {
+  label: string;
+  value: string;
+}
+
+/**
+ * The compact figures of a nutrition series for the range: the recorded total, the dates with a value against the
+ * actual range, the entries with a value against the logged entries, and the dates with any logged entry.
+ */
+export function nutritionFigures(trends: DailyTrends, metric: DailyTrendsNutritionMetric): TrendFigure[] {
+  const { metric: figures, nutrition, wording } = nutritionOf(trends, metric);
+  const range = trends.range.days;
+  return [
+    { label: 'Recorded total', value: figures.total === null ? NOT_RECORDED : `${formatNutritionNumber(figures.total)} ${wording.unit}` },
+    { label: 'Days with a value', value: `${count(figures.recordedDays)} of ${days(range)}` },
+    { label: 'Entries with a value', value: nutrition.loggedEntries === 0 ? 'No entries logged' : `${count(figures.recordedEntries)} of ${plural(nutrition.loggedEntries, 'logged entry', 'logged entries')}` },
+    { label: 'Days with logged entries', value: `${count(nutrition.daysWithEntries)} of ${days(range)}` },
+  ];
+}
+
 /** The modest, defined statistics of the metric, each naming the dates or entries it covers. */
 export function summaryLines(trends: DailyTrends, metric: DailyTrendsMetric): string[] {
-  const { foodEnergy, sleep, steps, weight } = trends.summary;
+  const { sleep, steps, weight } = trends.summary;
+  if (isNutritionTrendsMetric(metric)) {
+    const { metric: figures, nutrition, wording } = nutritionOf(trends, metric);
+    if (nutrition.loggedEntries === 0) return ['No meal entry was logged in this range.'];
+    if (figures.total === null) {
+      return [`${entries(nutrition.loggedEntries)} logged on ${days(nutrition.daysWithEntries)}, none with ${wording.noun} recorded.`];
+    }
+    const without = nutrition.daysWithEntries - figures.recordedDays;
+    return [
+      `${wording.name} recorded: ${formatNutritionNumber(figures.total)} ${wording.unit} from ${count(figures.recordedEntries)} of ${plural(nutrition.loggedEntries, 'logged entry', 'logged entries')}, on ${days(figures.recordedDays)}.`,
+      `Meal entries were logged on ${count(nutrition.daysWithEntries)} of ${days(trends.range.days)}${
+        without === 0 ? '' : `; ${without === 1 ? '1 of those days has' : `${count(without)} of those days have`} no ${wording.noun} recorded`
+      }.`,
+      `The total covers only what you logged with ${wording.withValue}; it is not a complete food diary.`,
+    ];
+  }
   switch (metric) {
     case 'weightKg': {
       if (weight.first === null || weight.last === null || weight.changeKg === null) {
@@ -138,38 +220,33 @@ export function summaryLines(trends: DailyTrends, metric: DailyTrendsMetric): st
       return steps.recordedTotal === null
         ? ['No steps were entered in this range.']
         : [`Recorded total ${formatSteps(steps.recordedTotal)} on ${days(steps.daysRecorded)}; the total covers only those days.`];
-    case 'foodEnergyKcal': {
-      if (foodEnergy.recordedTotalKcal === null) {
-        return foodEnergy.loggedEntries === 0
-          ? ['No meal entry was logged in this range.']
-          : [`${entries(foodEnergy.loggedEntries)} logged on ${days(foodEnergy.daysWithEntries)}, none with food energy recorded.`];
-      }
-      const lines = [
-        `Food energy recorded: ${formatNutritionNumber(foodEnergy.recordedTotalKcal)} kcal from ${foodEnergy.entriesWithEnergy} of ${plural(foodEnergy.loggedEntries, 'logged entry', 'logged entries')}, on ${days(foodEnergy.daysWithEnergy)}.`,
-      ];
-      const withoutEnergy = foodEnergy.daysWithEntries - foodEnergy.daysWithEnergy;
-      if (withoutEnergy > 0) lines.push(`${withoutEnergy === 1 ? '1 day has' : `${withoutEnergy} days have`} logged entries without any food energy recorded.`);
-      lines.push('The total covers only what you logged with an energy value; it is not a complete food diary.');
-      return lines;
-    }
   }
 }
 
+/** How the entries of one date relate to a nutrition series: none logged, none recording it, some (partial) or all. */
+export type TrendNutritionCoverage = 'all' | 'no-entries' | 'none' | 'partial';
+
 export interface TrendTableRow {
+  /** Nutrition series only: how the date's logged entries cover the series (null for the other series). */
+  coverage: TrendNutritionCoverage | null;
   dateLabel: string;
-  /** Food energy only: which entries the value covers. */
+  /** Nutrition series only: which entries the value covers. */
   detail: string | null;
   localDate: string;
   recorded: boolean;
   value: string;
 }
 
-function foodDetail(day: DailyTrendDay): string {
-  const { entriesWithEnergy, loggedEntries } = day.foodEnergy;
-  if (loggedEntries === 0) return 'No entry logged';
-  if (entriesWithEnergy === 0) return `${entries(loggedEntries)} logged, no energy recorded`;
-  if (entriesWithEnergy === loggedEntries) return `${entriesWithEnergy === 1 ? '1 logged entry' : `All ${loggedEntries} logged entries`} with energy`;
-  return `${entriesWithEnergy} of ${entries(loggedEntries)} with energy`;
+function nutritionCoverageOf(day: DailyTrendDay, metric: DailyTrendsNutritionMetric): { coverage: TrendNutritionCoverage; detail: string } {
+  const { loggedEntries } = day.nutrition;
+  const { recordedEntries } = day.nutrition[DAILY_TRENDS_NUTRITION_FIELD[metric]];
+  const { short } = nutritionWording[metric];
+  if (loggedEntries === 0) return { coverage: 'no-entries', detail: 'No entry logged' };
+  if (recordedEntries === 0) return { coverage: 'none', detail: `${entries(loggedEntries)} logged, no ${short} recorded` };
+  if (recordedEntries === loggedEntries) {
+    return { coverage: 'all', detail: `${loggedEntries === 1 ? '1 logged entry' : `All ${count(loggedEntries)} logged entries`} with ${short}` };
+  }
+  return { coverage: 'partial', detail: `Partial: ${count(recordedEntries)} of ${entries(loggedEntries)} with ${short}` };
 }
 
 /** One row per date of the range, newest first, with the metric's value or "Not recorded". */
@@ -178,9 +255,11 @@ export function tableRows(trends: DailyTrends, metric: DailyTrendsMetric): Trend
   return trends.days
     .map((day) => {
       const value = spec.valueOf(day);
+      const nutrition = isNutritionTrendsMetric(metric) ? nutritionCoverageOf(day, metric) : null;
       return {
+        coverage: nutrition?.coverage ?? null,
         dateLabel: formatCheckInDate(day.localDate),
-        detail: metric === 'foodEnergyKcal' ? foodDetail(day) : null,
+        detail: nutrition?.detail ?? null,
         localDate: day.localDate,
         recorded: value !== null,
         value: value === null ? NOT_RECORDED : spec.format(value),
@@ -237,14 +316,14 @@ export function chartGeometry(trends: DailyTrends, metric: DailyTrendsMetric): T
     return value === null ? [] : [value];
   });
   const { max, min } = extentOf(values, spec.zeroBaseline);
-  // The axis shows the scale's bottom and top: the largest value itself for counts, durations and food energy (exact,
-  // in its own precision), and a padded value to one decimal for weight.
+  // The axis shows the scale's bottom and top: the largest value itself for counts, durations and nutrition (exact, in
+  // its own precision), and a padded value to one decimal for weight.
   const tickValue = (value: number) =>
     metric === 'sleepMinutes'
       ? formatSleep(Math.round(value))
       : metric === 'weightKg'
         ? `${value.toFixed(1)} kg`
-        : metric === 'foodEnergyKcal'
+        : isNutritionTrendsMetric(metric)
           ? formatNutritionNumber(value)
           : grouped.format(Math.round(value));
   const tickLabels = values.length === 0 ? [] : [tickValue(min), tickValue(max)];
@@ -266,7 +345,8 @@ export function chartGeometry(trends: DailyTrends, metric: DailyTrendsMetric): T
       run = [];
       return;
     }
-    const point = { label: `${formatCheckInDate(day.localDate)}: ${spec.format(value)}`, localDate: day.localDate, value, x: xOf(index), y: yOf(value) };
+    // The dot's title names the series, the date and the value with its unit ("Protein, Mon, 2 Nov 2026: 10.1 g").
+    const point = { label: `${spec.label}, ${formatCheckInDate(day.localDate)}: ${spec.format(value)}`, localDate: day.localDate, value, x: xOf(index), y: yOf(value) };
     points.push(point);
     run.push(point);
   });

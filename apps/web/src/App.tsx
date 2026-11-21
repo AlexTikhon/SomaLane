@@ -16,12 +16,14 @@ import {
   inScope,
   mealIntentDateOf,
   navigationFor,
+  navigationFromTrendsRow,
   type AppView,
   type EditorIntent,
   type HistoryIntent,
   type KeptActivitySelection,
   type KeptDate,
   type KeptMetric,
+  type TrendsReturn,
 } from './navigation-intent.js';
 import { TodayScreen } from './TodayScreen.js';
 import { TrendsScreen } from './TrendsScreen.js';
@@ -144,6 +146,9 @@ export function App() {
   const [trendsEnd, setTrendsEnd] = useState<KeptDate | null>(null);
   const [trendsMetric, setTrendsMetric] = useState<KeptMetric | null>(null);
   const [trendsActivity, setTrendsActivity] = useState<KeptActivitySelection | null>(null);
+  // The way back from the Meal log to the Trends range and series it was opened from (ADR-0096). Scoped, memory only, and
+  // cleared by sign-out, ordinary navigation, use and any change of scope.
+  const [trendsReturn, setTrendsReturn] = useState<TrendsReturn | null>(null);
   const [runnerResult, setRunnerResult] = useState<{ orgId: string; runId: string; signal: AbortSignal; userId: string } | null>(null);
   const resultTimeZone = useMemo(() => defaultTimeZone(), []);
   const captureController = useRef<CaptureController | null>(null);
@@ -189,6 +194,7 @@ export function App() {
     setTrendsEnd(null);
     setTrendsMetric(null);
     setTrendsActivity(null);
+    setTrendsReturn(null);
   }, []);
   const { session, refreshSession, signOut, signOutState, verification } = useRunnerSession(suspendRunner, forgetSignedOutIdentity);
   const { choose: chooseOrganization, discovery, prefer: preferOrganization, reload: reloadOrganizations, selectedOrgId } =
@@ -823,12 +829,18 @@ export function App() {
   const viewScope = session.status === 'ready' && selectedOrgId !== null
     ? `${sessionGeneration(session.signal)}|${session.session.identity.userId}|${selectedOrgId}`
     : null;
+  // A change of session, person or organization drops the way back to Trends (ADR-0096): returning to the same scope
+  // later must not bring it back.
+  useEffect(() => {
+    setTrendsReturn((current) => inScope(current, viewScope));
+  }, [viewScope]);
   // A navigation button opens a view as it always did: with no editor intent. Changing views never touches the run's
   // capture, upload queue, writer lease or recovery, which App owns whatever view is shown.
   const openView = (view: AppView) => {
     setRunnerResult(null);
     setEditorIntent(null);
     setHistoryIntent(null);
+    setTrendsReturn(null);
     setActiveView(view);
   };
   const openFromToday = (action: TodayAction) => {
@@ -837,6 +849,7 @@ export function App() {
     setRunnerResult(null);
     setEditorIntent(next.editor);
     setHistoryIntent(next.history ?? null);
+    setTrendsReturn(null);
     if (next.trendsEnd) setTrendsEnd(next.trendsEnd);
     if (next.trendsActivity) setTrendsActivity(next.trendsActivity);
     setActiveView(next.view);
@@ -860,6 +873,24 @@ export function App() {
     if (viewScope === null) return;
     setTodayDate({ localDate, scope: viewScope });
     openView('today');
+  };
+  // A nutrition row of Trends opens the Meal log on its stored date, remembering the range and series to return to.
+  const openMealLogFromTrends = (localDate: string, back: { endDate: string; metric: TrendsReturn['metric'] }) => {
+    if (viewScope === null) return;
+    const next = navigationFromTrendsRow(localDate, back, viewScope);
+    setRunnerResult(null);
+    setHistoryIntent(null);
+    setEditorIntent(next.editor);
+    setTrendsReturn(next.trendsReturn);
+    setActiveView(next.view);
+  };
+  const scopedTrendsReturn = inScope(trendsReturn, viewScope);
+  // Back to Trends: the kept range and series become the return intent's, and Trends mounts and reads them again.
+  const backToTrends = (back: TrendsReturn) => {
+    if (viewScope === null || back.scope !== viewScope) return;
+    setTrendsEnd({ localDate: back.endDate, scope: viewScope });
+    setTrendsMetric({ metric: back.metric, scope: viewScope });
+    openView('trends');
   };
 
   return (
@@ -1027,6 +1058,7 @@ export function App() {
             onChooseActivity={(selection) => setTrendsActivity({ ...selection, scope: viewScope })}
             onChooseMetric={(metric) => setTrendsMetric({ metric, scope: viewScope })}
             onOpenDay={backToToday}
+            onOpenMealLog={openMealLogFromTrends}
             onSelectEndDate={(localDate) => setTrendsEnd({ localDate, scope: viewScope })}
             orgId={selectedOrgId}
             selectedEndDate={inScope(trendsEnd, viewScope)?.localDate ?? null}
@@ -1125,6 +1157,7 @@ export function App() {
             csrf={session.session.csrf}
             initialDate={mealIntentDateOf(scopedIntent)}
             onBackToToday={backToToday}
+            onBackToTrends={scopedTrendsReturn === null ? undefined : () => backToTrends(scopedTrendsReturn)}
             orgId={selectedOrgId}
             signal={session.signal}
             timeZone={resultTimeZone}

@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 import { addLocalDays, DAILY_METRICS_LOCAL_DATE_MIN, dailyMetricsLocalDateSchema, dailySleepMinutesSchema, dailyWeightKgSchema, localDateSpanDays } from './daily-metrics.js';
 import { dailyMovementSources, dailyStepsSchema } from './daily-movement.js';
-import { hasAtMostOneDecimal, MEAL_ENERGY_KCAL_MAX, MEAL_SOURCES } from './meals.js';
+import { hasAtMostOneDecimal, MEAL_NUTRITION_FIELDS, MEAL_NUTRITION_MAX, MEAL_SOURCES, type MealNutritionField } from './meals.js';
 import { ianaTimeZoneSchema, localDateSchema, timestampSchema } from './primitives.js';
 
 // 28-day trends of the signed-in person (ADR-0084): four daily series read from their own records for the calendar
@@ -15,33 +15,59 @@ import { ianaTimeZoneSchema, localDateSchema, timestampSchema } from './primitiv
 // daylight saving change cannot drop or repeat one.
 //
 // Missing is null (unknown) and never counts as zero; a recorded 0 is a value. Each series has its own coverage against
-// the number of dates in the range. Food energy has two coverage levels kept apart: dates with an energy value, and
-// logged entries with an energy value. Neither says the food diary is complete: food that was not logged is unknown.
+// the number of dates in the range. Recorded nutrition (food energy, protein, carbohydrate, fat; ADR-0096) keeps, for each
+// metric independently, the dates and the logged entries that record it. None of it says the food diary is complete:
+// food that was not logged is unknown.
 
 /**
  * The version of the trends' attribution and counting rules. Change it when a field's meaning changes.
  * - `daily-trends-1`: ADR-0084.
+ * - `daily-trends-2`: ADR-0096. `days[].foodEnergy` and `summary.foodEnergy` are replaced by `nutrition`: the logged
+ *   entries and, per meal nutrition field (energy, protein, carbohydrate, fat), the recorded entries, recorded days and
+ *   exact total, for every date and for the range. Weight, sleep, steps, the range and the query are unchanged.
  */
-export const DAILY_TRENDS_VERSION = 'daily-trends-1';
+export const DAILY_TRENDS_VERSION = 'daily-trends-2';
 
 /** The number of calendar dates a trends range asks for, ending on `endDate` inclusive. */
 export const DAILY_TRENDS_RANGE_DAYS = 28;
 
-/** The four series, in display order. */
-export const DAILY_TRENDS_METRICS = ['weightKg', 'sleepMinutes', 'steps', 'foodEnergyKcal'] as const;
+/** The series, in display order: the three daily records, then the four nutrition series. */
+export const DAILY_TRENDS_METRICS = ['weightKg', 'sleepMinutes', 'steps', 'foodEnergyKcal', 'proteinG', 'carbohydrateG', 'fatG'] as const;
 export type DailyTrendsMetric = (typeof DAILY_TRENDS_METRICS)[number];
 
-// At most 10,000 logged entries per date (as the daily overview assumes), so at most 280,000 in a range.
-const dayEntryCount = z.number().int().min(0).max(10_000);
-const rangeEntryCount = z.number().int().min(0).max(10_000 * DAILY_TRENDS_RANGE_DAYS);
+/** The nutrition series (ADR-0096), each read from one meal nutrition field. */
+export const DAILY_TRENDS_NUTRITION_METRICS = ['foodEnergyKcal', 'proteinG', 'carbohydrateG', 'fatG'] as const;
+export type DailyTrendsNutritionMetric = (typeof DAILY_TRENDS_NUTRITION_METRICS)[number];
+
+/** The meal nutrition field each nutrition series shows. `foodEnergyKcal` keeps its ADR-0084 name on the client. */
+export const DAILY_TRENDS_NUTRITION_FIELD: Readonly<Record<DailyTrendsNutritionMetric, MealNutritionField>> = {
+  carbohydrateG: 'carbohydrateG',
+  fatG: 'fatG',
+  foodEnergyKcal: 'energyKcal',
+  proteinG: 'proteinG',
+};
+
+export function isDailyTrendsNutritionMetric(metric: string): metric is DailyTrendsNutritionMetric {
+  return (DAILY_TRENDS_NUTRITION_METRICS as readonly string[]).includes(metric);
+}
+
+/** Technical bounds, not dietary ones: at most 10,000 logged entries per stored date (as the daily overview and review). */
+export const DAILY_TRENDS_MEAL_ENTRIES_PER_DAY_MAX = 10_000;
+export const DAILY_TRENDS_MEAL_ENTRIES_PER_RANGE_MAX = DAILY_TRENDS_MEAL_ENTRIES_PER_DAY_MAX * DAILY_TRENDS_RANGE_DAYS;
+
+const dayEntryCount = z.number().int().min(0).max(DAILY_TRENDS_MEAL_ENTRIES_PER_DAY_MAX);
+const rangeEntryCount = z.number().int().min(0).max(DAILY_TRENDS_MEAL_ENTRIES_PER_RANGE_MAX);
 const dayCount = z.number().int().min(0).max(DAILY_TRENDS_RANGE_DAYS);
 const storedZone = z.string().min(1).max(64);
 
-// An exact sum of one-decimal values (PostgreSQL numeric per date, integer tenths across dates): non-negative, finite,
-// at most one decimal, far below the range where a JSON number could not hold one decimal exactly.
-const kcalTotal = (max: number) => z.number().finite().min(0).max(max).refine(hasAtMostOneDecimal, 'A recorded total has at most one decimal');
-const dayKcalTotal = kcalTotal(10_000 * MEAL_ENERGY_KCAL_MAX);
-const rangeKcalTotal = kcalTotal(10_000 * MEAL_ENERGY_KCAL_MAX * DAILY_TRENDS_RANGE_DAYS);
+/** Integer tenths of a non-negative value with at most one decimal (exact for every value the bounds allow). */
+const tenthsOf = (value: number) => Math.round(value * 10);
+
+// An exact sum of one-decimal values (PostgreSQL numeric, parsed into integer tenths): finite, non-negative, at most one
+// decimal and at most what `entries` entries can hold. The largest range total, 280,000 x 20,000 kcal = 5.6e9 kcal, is
+// 5.6e10 tenths: far below the range where a JSON number could not hold one decimal exactly.
+const nutritionTotal = (field: MealNutritionField, entries: number) =>
+  z.number().finite().min(0).max(entries * MEAL_NUTRITION_MAX[field]).refine(hasAtMostOneDecimal, 'A recorded total has at most one decimal');
 
 /** The actual range for an end date: 28 dates, or fewer when the lower bound 2000-01-01 cuts it short. */
 export function dailyTrendsRangeOf(endDate: string): { days: number; endDate: string; shortenedByLowerBound: boolean; startDate: string } {
@@ -57,36 +83,54 @@ export function dailyTrendsDatesOf(range: { days: number; startDate: string }): 
 }
 
 /**
- * Food energy of one date: how many entries were logged, how many of them record energy, and the exact sum over exactly
- * those entries (null when none does, never 0; recorded zeros give 0). A date with entries but no energy value has no
- * energy value; a date without entries is unknown, not "nothing eaten".
+ * One nutrition metric on one stored date: `recordedEntries` logged entries hold a value (a recorded 0 included) and
+ * `total` is the exact sum of exactly those values: null when none does (unknown, never 0); recorded zeros give 0.
  */
-export const dailyTrendFoodEnergySchema = z
+function dayNutritionMetricSchema(field: MealNutritionField) {
+  return z
+    .strictObject({ recordedEntries: dayEntryCount, total: nutritionTotal(field, DAILY_TRENDS_MEAL_ENTRIES_PER_DAY_MAX).nullable() })
+    .refine((metric) => (metric.total === null) === (metric.recordedEntries === 0), {
+      message: 'a total exists exactly when at least one entry records the value',
+      path: ['total'],
+    })
+    .refine((metric) => metric.total === null || metric.total <= metric.recordedEntries * MEAL_NUTRITION_MAX[field], {
+      message: 'a total cannot exceed what its recorded entries can hold',
+      path: ['total'],
+    });
+}
+
+/**
+ * Recorded nutrition of one date (ADR-0096): how many meal entries were logged for it (title-only ones included) and, for
+ * each metric independently, how many of them record it and the exact sum. A date without entries is unknown, not
+ * "nothing eaten"; a date whose entries all record a metric is still not a complete food diary.
+ */
+export const dailyTrendNutritionSchema = z
   .strictObject({
     loggedEntries: dayEntryCount,
-    entriesWithEnergy: dayEntryCount,
-    recordedKcal: dayKcalTotal.nullable(),
+    energyKcal: dayNutritionMetricSchema('energyKcal'),
+    proteinG: dayNutritionMetricSchema('proteinG'),
+    carbohydrateG: dayNutritionMetricSchema('carbohydrateG'),
+    fatG: dayNutritionMetricSchema('fatG'),
   })
-  .refine((food) => food.entriesWithEnergy <= food.loggedEntries, {
-    message: 'energy cannot be recorded for more entries than were logged',
-    path: ['entriesWithEnergy'],
-  })
-  .refine((food) => (food.recordedKcal === null) === (food.entriesWithEnergy === 0), {
-    message: 'a total exists exactly when at least one entry records energy',
-    path: ['recordedKcal'],
+  .superRefine((nutrition, context) => {
+    for (const field of MEAL_NUTRITION_FIELDS) {
+      if (nutrition[field].recordedEntries > nutrition.loggedEntries) {
+        context.addIssue({ code: 'custom', message: 'a metric cannot be recorded for more entries than were logged', path: [field, 'recordedEntries'] });
+      }
+    }
   });
 
 /**
  * One calendar date of the range. Each value is the stored daily value for that date, or null when none was recorded:
- * weight and sleep duration from the check-in, steps from the manually entered movement, food energy from the logged
- * meal entries. No note, title or other text.
+ * weight and sleep duration from the check-in, steps from the manually entered movement, nutrition from the logged meal
+ * entries. No note, title or other text.
  */
 export const dailyTrendDaySchema = z.strictObject({
   localDate: localDateSchema,
   weightKg: dailyWeightKgSchema.nullable(),
   sleepMinutes: dailySleepMinutesSchema.nullable(),
   steps: dailyStepsSchema.nullable(),
-  foodEnergy: dailyTrendFoodEnergySchema,
+  nutrition: dailyTrendNutritionSchema,
 });
 
 const recordedWeightSchema = z.strictObject({ localDate: localDateSchema, kg: dailyWeightKgSchema });
@@ -126,55 +170,113 @@ export const dailyTrendsStepsSummarySchema = z.strictObject({
 });
 
 /**
- * Food energy over the range, with both coverage levels: dates with an energy value (`daysWithEnergy`) and logged entries
- * with an energy value (`entriesWithEnergy` of `loggedEntries`). The total is over exactly those entries. Even when every
- * logged entry records energy, food that was never logged is unknown: this is not a complete food diary.
+ * One nutrition metric over the range: `recordedEntries` entries and `recordedDays` stored dates hold a value,
+ * independently of the other metrics; `total` is the exact sum over those entries (null when none).
  */
-export const dailyTrendsFoodEnergySummarySchema = z.strictObject({
-  daysWithEntries: dayCount,
-  daysWithEnergy: dayCount,
-  loggedEntries: rangeEntryCount,
-  entriesWithEnergy: rangeEntryCount,
-  recordedTotalKcal: rangeKcalTotal.nullable(),
-  source: z.enum(MEAL_SOURCES),
-});
+function rangeNutritionMetricSchema(field: MealNutritionField) {
+  return z
+    .strictObject({
+      recordedEntries: rangeEntryCount,
+      recordedDays: dayCount,
+      total: nutritionTotal(field, DAILY_TRENDS_MEAL_ENTRIES_PER_RANGE_MAX).nullable(),
+    })
+    .refine((metric) => (metric.total === null) === (metric.recordedEntries === 0), {
+      message: 'a total exists exactly when at least one entry records the value',
+      path: ['total'],
+    })
+    .refine((metric) => (metric.recordedDays === 0) === (metric.recordedEntries === 0) && metric.recordedDays <= metric.recordedEntries, {
+      message: 'a date records the value exactly when one of its entries does',
+      path: ['recordedDays'],
+    })
+    .refine((metric) => metric.total === null || metric.total <= metric.recordedEntries * MEAL_NUTRITION_MAX[field], {
+      message: 'a total cannot exceed what its recorded entries can hold',
+      path: ['total'],
+    });
+}
+
+/**
+ * Recorded nutrition over the range (ADR-0096): the actual number of dates (`daysInRange`, equal to `range.days`), the
+ * logged entries and the dates with at least one, and per metric the recorded entries, recorded dates and exact total.
+ * PostgreSQL computes it in the same statement as the dates; the response schema refuses it when it differs from the sum
+ * of the dates. Even when every logged entry records a metric, food that was never logged is unknown.
+ */
+export const dailyTrendsNutritionSummarySchema = z
+  .strictObject({
+    /** Server-owned provenance; manual entry is the only source. */
+    source: z.enum(MEAL_SOURCES),
+    /** The actual number of dates in the range: the denominator of every day coverage figure. */
+    daysInRange: z.number().int().min(1).max(DAILY_TRENDS_RANGE_DAYS),
+    loggedEntries: rangeEntryCount,
+    /** Stored dates with at least one logged entry, a title-only one included. */
+    daysWithEntries: dayCount,
+    energyKcal: rangeNutritionMetricSchema('energyKcal'),
+    proteinG: rangeNutritionMetricSchema('proteinG'),
+    carbohydrateG: rangeNutritionMetricSchema('carbohydrateG'),
+    fatG: rangeNutritionMetricSchema('fatG'),
+  })
+  .superRefine((nutrition, context) => {
+    const issue = (message: string, path: (string | number)[]) => context.addIssue({ code: 'custom', message, path });
+    if (nutrition.daysWithEntries > nutrition.daysInRange) issue('dates with entries cannot exceed the dates of the range', ['daysWithEntries']);
+    if ((nutrition.daysWithEntries === 0) !== (nutrition.loggedEntries === 0) || nutrition.daysWithEntries > nutrition.loggedEntries) {
+      issue('a date has entries exactly when entries were logged for it', ['daysWithEntries']);
+    }
+    for (const field of MEAL_NUTRITION_FIELDS) {
+      const metric = nutrition[field];
+      if (metric.recordedEntries > nutrition.loggedEntries) issue('a metric cannot be recorded for more entries than were logged', [field, 'recordedEntries']);
+      if (metric.recordedDays > nutrition.daysWithEntries) issue('a metric cannot be recorded on more dates than have entries', [field, 'recordedDays']);
+    }
+  });
 
 export const dailyTrendsSummarySchema = z.strictObject({
   weight: dailyTrendsWeightSummarySchema,
   sleep: dailyTrendsSleepSummarySchema,
   steps: dailyTrendsStepsSummarySchema,
-  foodEnergy: dailyTrendsFoodEnergySummarySchema,
+  nutrition: dailyTrendsNutritionSummarySchema,
 });
 
 export type DailyTrendDay = z.infer<typeof dailyTrendDaySchema>;
 export type DailyTrendsSummary = z.infer<typeof dailyTrendsSummarySchema>;
 
-// Weight has at most two decimals and food energy at most one, so these integers are exact.
+// Weight has at most two decimals and nutrition totals at most one, so these integers are exact.
 const hundredths = (kg: number) => Math.round(kg * 100);
-const tenths = (kcal: number) => Math.round(kcal * 10);
+
+/** The range's recorded nutrition from its dates: sums of the dates' counts, dates with a value, totals in integer tenths. */
+export function summarizeDailyTrendNutrition(days: readonly DailyTrendDay[]): DailyTrendsSummary['nutrition'] {
+  const metric = (field: MealNutritionField) => {
+    const recorded = days.filter((day) => day.nutrition[field].total !== null);
+    return {
+      recordedDays: recorded.length,
+      recordedEntries: days.reduce((sum, day) => sum + day.nutrition[field].recordedEntries, 0),
+      total: recorded.length === 0 ? null : recorded.reduce((sum, day) => sum + tenthsOf(day.nutrition[field].total!), 0) / 10,
+    };
+  };
+  return {
+    carbohydrateG: metric('carbohydrateG'),
+    daysInRange: days.length,
+    daysWithEntries: days.filter((day) => day.nutrition.loggedEntries > 0).length,
+    energyKcal: metric('energyKcal'),
+    fatG: metric('fatG'),
+    loggedEntries: days.reduce((sum, day) => sum + day.nutrition.loggedEntries, 0),
+    proteinG: metric('proteinG'),
+    source: 'manual',
+  };
+}
 
 /**
- * The summary of a range's days, defined once: the API computes it with this function and the contract refuses a summary
- * that differs from it. Only recorded values take part; integers carry the arithmetic (weight in hundredths, energy in
- * tenths, sleep rounding with integers), so no binary floating-point remainder can appear.
+ * The summary of a range's days, defined once: the contract refuses a summary that differs from it. Only recorded values
+ * take part; integers carry the arithmetic (weight in hundredths, nutrition in tenths, sleep rounding with integers), so no
+ * binary floating-point remainder can appear. (The API takes the range's nutrition from PostgreSQL's own range aggregate;
+ * this equality makes the two computations check each other.)
  */
 export function summarizeDailyTrendDays(days: readonly DailyTrendDay[]): DailyTrendsSummary {
   const weights = days.flatMap((day) => (day.weightKg === null ? [] : [{ kg: day.weightKg, localDate: day.localDate }]));
   const sleeps = days.flatMap((day) => (day.sleepMinutes === null ? [] : [day.sleepMinutes]));
   const steps = days.flatMap((day) => (day.steps === null ? [] : [day.steps]));
-  const energyDays = days.filter((day) => day.foodEnergy.recordedKcal !== null);
   const sleepTotal = sleeps.reduce((sum, minutes) => sum + minutes, 0);
   const first = weights.length >= 2 ? weights[0]! : null;
   const last = weights.length >= 2 ? weights.at(-1)! : null;
   return {
-    foodEnergy: {
-      daysWithEnergy: energyDays.length,
-      daysWithEntries: days.filter((day) => day.foodEnergy.loggedEntries > 0).length,
-      entriesWithEnergy: days.reduce((sum, day) => sum + day.foodEnergy.entriesWithEnergy, 0),
-      loggedEntries: days.reduce((sum, day) => sum + day.foodEnergy.loggedEntries, 0),
-      recordedTotalKcal: energyDays.length === 0 ? null : energyDays.reduce((sum, day) => sum + tenths(day.foodEnergy.recordedKcal!), 0) / 10,
-      source: 'manual',
-    },
+    nutrition: summarizeDailyTrendNutrition(days),
     sleep: {
       // Round half up, in integers: floor((2 * total + n) / (2 * n)).
       averageMinutes: sleeps.length === 0 ? null : Math.floor((2 * sleepTotal + sleeps.length) / (2 * sleeps.length)),
@@ -261,8 +363,12 @@ export const dailyTrendsSchema = z
       trends.days.length === trends.range.days && dailyTrendsDatesOf(trends.range).every((localDate, index) => trends.days[index]?.localDate === localDate),
     { message: 'days are every date of the range, oldest first, once each', path: ['days'] },
   )
+  .refine((trends) => trends.summary.nutrition.daysInRange === trends.range.days, {
+    message: 'the nutrition denominator is the actual number of dates in the range',
+    path: ['summary', 'nutrition', 'daysInRange'],
+  })
   .refine((trends) => canonical(trends.summary) === canonical(summarizeDailyTrendDays(trends.days)), {
-    message: 'the summary is computed from the days by summarizeDailyTrendDays',
+    message: 'the summary is computed from the days by summarizeDailyTrendDays (range nutrition = the sum of the dates)',
     path: ['summary'],
   });
 
@@ -273,13 +379,18 @@ export const dailyTrendsSchema = z
  */
 export const dailyTrendsQuerySchema = z.strictObject({ endDate: dailyMetricsLocalDateSchema, timeZone: ianaTimeZoneSchema });
 
-/** True when none of the four series has a value and no meal entry was logged in the range. */
+/**
+ * True when no weight, sleep or steps value is recorded and no meal entry was logged in the range. A range with only
+ * title-only entries, or with macronutrients but no food energy, is not empty.
+ */
 export function isEmptyDailyTrends(trends: Pick<DailyTrends, 'summary'>): boolean {
-  const { foodEnergy, sleep, steps, weight } = trends.summary;
-  return weight.daysRecorded === 0 && sleep.daysRecorded === 0 && steps.daysRecorded === 0 && foodEnergy.loggedEntries === 0;
+  const { nutrition, sleep, steps, weight } = trends.summary;
+  return weight.daysRecorded === 0 && sleep.daysRecorded === 0 && steps.daysRecorded === 0 && nutrition.loggedEntries === 0;
 }
 
 export type DailyTrends = z.infer<typeof dailyTrendsSchema>;
 export type DailyTrendsRange = z.infer<typeof dailyTrendsRangeSchema>;
-export type DailyTrendFoodEnergy = z.infer<typeof dailyTrendFoodEnergySchema>;
+export type DailyTrendNutrition = z.infer<typeof dailyTrendNutritionSchema>;
+export type DailyTrendNutritionMetric = DailyTrendNutrition[MealNutritionField];
+export type DailyTrendsNutritionSummary = z.infer<typeof dailyTrendsNutritionSummarySchema>;
 export type DailyTrendsQuery = z.infer<typeof dailyTrendsQuerySchema>;

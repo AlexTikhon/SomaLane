@@ -41,6 +41,8 @@ import { createMeal, deleteMeal, listMeals, proposeMealDraft, updateMeal, type C
 export interface MealLogHandlers {
   askDelete: (view: MealView) => void;
   backToToday?: () => void;
+  /** Present only when the Meal log was opened from a Trends row (ADR-0096). */
+  backToTrends?: () => void;
   cancelDelete: () => void;
   cancelEdit: () => void;
   chooseDate: (value: string) => void;
@@ -155,8 +157,13 @@ export function MealLogView(props: MealLogViewProps) {
           Log what you ate by hand. The values you enter are totals for the whole entry, not per 100 g, and every value is
           optional: leave it empty if you do not know it. Nothing is estimated or looked up. Only you can see your meal log.
         </p>
-        {handlers.backToToday !== undefined && (
-          <button className="meal-log__back" onClick={handlers.backToToday} type="button">Back to Today</button>
+        {(handlers.backToTrends !== undefined || handlers.backToToday !== undefined) && (
+          <div className="meal-log__back">
+            {handlers.backToTrends !== undefined && (
+              <button disabled={busy} onClick={handlers.backToTrends} type="button">Back to Trends</button>
+            )}
+            {handlers.backToToday !== undefined && <button onClick={handlers.backToToday} type="button">Back to Today</button>}
+          </div>
         )}
       </div>
 
@@ -294,6 +301,11 @@ export interface MealLogScreenProps {
   initialDate: string | null;
   /** Returns to Today on the date shown here; Today reads that date again when it opens. */
   onBackToToday?: (localDate: string) => void;
+  /**
+   * Returns to the Trends range and series this Meal log was opened from (ADR-0096); Trends reads that range again when it
+   * opens, so saved edits and deletions show. Omitted when the Meal log was not opened from Trends.
+   */
+  onBackToTrends?: (() => void) | undefined;
   orgId: string;
   // The session's signal: ending or replacing the session silences every request of this screen.
   signal: AbortSignal;
@@ -311,7 +323,7 @@ interface DeletionSelection {
 
 // The parent keys this screen by session, person and organization, so a change of any of them starts from a clean form
 // and list with no request carried over.
-export function MealLogScreen({ api = defaultApi, csrf, initialDate, newKey, nowMs, onBackToToday, orgId, signal, timeZone: zone }: MealLogScreenProps) {
+export function MealLogScreen({ api = defaultApi, csrf, initialDate, newKey, nowMs, onBackToToday, onBackToTrends, orgId, signal, timeZone: zone }: MealLogScreenProps) {
   const timeZone = useMemo(() => zone ?? defaultTimeZone(), [zone]);
   const today = useMemo(() => localDateIn(timeZone, nowMs ?? Date.now()), [nowMs, timeZone]);
   const openingDate = initialDate !== null && checkInDateProblem(initialDate, today) === null ? initialDate : today;
@@ -515,6 +527,8 @@ export function MealLogScreen({ api = defaultApi, csrf, initialDate, newKey, now
       setDeletion({ id: nextDeletionId.current++, mealId: view.mealId });
     },
     ...(onBackToToday === undefined ? {} : { backToToday: () => onBackToToday(list.localDate) }),
+    // Not while a save or deletion is in flight, so the next Trends read cannot start before it settles.
+    ...(onBackToTrends === undefined ? {} : { backToTrends: () => { if (!busy) onBackToTrends(); } }),
     cancelDelete: () => {
       if (!busy) setDeletion(null);
     },

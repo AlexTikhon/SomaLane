@@ -9,19 +9,28 @@ import {
   dailyTrendsSchema,
   isEmptyDailyTrends,
   openApiDocument,
+  MEAL_NUTRITION_FIELDS,
   summarizeDailyTrendDays,
   type DailyTrendDay,
   type DailyTrends,
+  type MealNutritionField,
 } from './index.js';
 
 const END = '2026-11-09';
-const noFood = { entriesWithEnergy: 0, loggedEntries: 0, recordedKcal: null };
+
+/** A date's nutrition: `loggedEntries` and, per field, [recorded entries, total]; every other field unknown. */
+function nutrition(loggedEntries: number, values: Partial<Record<MealNutritionField, [number, number | null]>> = {}): DailyTrendDay['nutrition'] {
+  const metric = (field: MealNutritionField) => ({ recordedEntries: values[field]?.[0] ?? 0, total: values[field]?.[1] ?? null });
+  return { carbohydrateG: metric('carbohydrateG'), energyKcal: metric('energyKcal'), fatG: metric('fatG'), loggedEntries, proteinG: metric('proteinG') };
+}
+const noFood = nutrition(0);
+const unrecorded = { recordedDays: 0, recordedEntries: 0, total: null };
 
 /** Every date of the range ending on `endDate`, without values, with `overrides` by date. */
 function daysFor(endDate: string, overrides: Record<string, Partial<DailyTrendDay>> = {}): DailyTrendDay[] {
   return dailyTrendsDatesOf(dailyTrendsRangeOf(endDate)).map((localDate) => ({
-    foodEnergy: noFood,
     localDate,
+    nutrition: noFood,
     sleepMinutes: null,
     steps: null,
     weightKg: null,
@@ -98,7 +107,16 @@ describe('daily trends range', () => {
 describe('daily trends summary', () => {
   it('has no value and no total for an empty range: null, never zero', () => {
     expect(summarizeDailyTrendDays(daysFor(END))).toEqual({
-      foodEnergy: { daysWithEnergy: 0, daysWithEntries: 0, entriesWithEnergy: 0, loggedEntries: 0, recordedTotalKcal: null, source: 'manual' },
+      nutrition: {
+        carbohydrateG: unrecorded,
+        daysInRange: 28,
+        daysWithEntries: 0,
+        energyKcal: unrecorded,
+        fatG: unrecorded,
+        loggedEntries: 0,
+        proteinG: unrecorded,
+        source: 'manual',
+      },
       sleep: { averageMinutes: null, daysRecorded: 0, recordedTotalMinutes: null },
       steps: { daysRecorded: 0, recordedTotal: null, source: 'manual' },
       weight: { changeKg: null, daysRecorded: 0, first: null, last: null },
@@ -107,13 +125,15 @@ describe('daily trends summary', () => {
 
   it('keeps recorded zeros as values: totals and averages of 0 over the recorded dates', () => {
     const days = daysFor(END, {
-      '2026-11-01': { foodEnergy: { entriesWithEnergy: 2, loggedEntries: 2, recordedKcal: 0 }, sleepMinutes: 0, steps: 0 },
+      '2026-11-01': { nutrition: nutrition(2, { energyKcal: [2, 0], fatG: [1, 0] }), sleepMinutes: 0, steps: 0 },
       '2026-11-02': { sleepMinutes: 0, steps: 0 },
     });
     const summary = summarizeDailyTrendDays(days);
     expect(summary.steps).toEqual({ daysRecorded: 2, recordedTotal: 0, source: 'manual' });
     expect(summary.sleep).toEqual({ averageMinutes: 0, daysRecorded: 2, recordedTotalMinutes: 0 });
-    expect(summary.foodEnergy).toMatchObject({ daysWithEnergy: 1, entriesWithEnergy: 2, recordedTotalKcal: 0 });
+    expect(summary.nutrition.energyKcal).toEqual({ recordedDays: 1, recordedEntries: 2, total: 0 });
+    expect(summary.nutrition.fatG).toEqual({ recordedDays: 1, recordedEntries: 1, total: 0 });
+    expect(summary.nutrition.proteinG).toEqual(unrecorded);
   });
 
   it('gives each series its own coverage, and averages sleep over the recorded dates only', () => {
@@ -156,30 +176,61 @@ describe('daily trends summary', () => {
     expect(summarizeDailyTrendDays(daysFor(END, { '2026-10-14': { weightKg: 70.1 }, '2026-10-15': { weightKg: 70.3 } })).weight.changeKg).toBe(0.2);
   });
 
-  it('adds food energy exactly, with day and entry coverage kept apart', () => {
+  it('adds nutrition exactly, with day and entry coverage kept apart for each metric independently', () => {
     const days = daysFor(END, {
-      '2026-10-13': { foodEnergy: { entriesWithEnergy: 1, loggedEntries: 1, recordedKcal: 0.1 } },
-      '2026-10-14': { foodEnergy: { entriesWithEnergy: 1, loggedEntries: 3, recordedKcal: 0.2 } },
-      // A title-only day: entries logged, none with energy.
-      '2026-10-15': { foodEnergy: { entriesWithEnergy: 0, loggedEntries: 2, recordedKcal: null } },
-      '2026-10-16': { foodEnergy: { entriesWithEnergy: 2, loggedEntries: 2, recordedKcal: 1061.1 } },
+      '2026-10-13': { nutrition: nutrition(1, { energyKcal: [1, 0.1], proteinG: [1, 0.1] }) },
+      '2026-10-14': { nutrition: nutrition(3, { carbohydrateG: [3, 0.2], energyKcal: [1, 0.2] }) },
+      // A title-only day: entries logged, no metric recorded.
+      '2026-10-15': { nutrition: nutrition(2) },
+      '2026-10-16': { nutrition: nutrition(2, { energyKcal: [2, 1061.1], fatG: [2, 0] }) },
     });
-    expect(summarizeDailyTrendDays(days).foodEnergy).toEqual({
-      daysWithEnergy: 3,
+    expect(summarizeDailyTrendDays(days).nutrition).toEqual({
+      carbohydrateG: { recordedDays: 1, recordedEntries: 3, total: 0.2 },
+      daysInRange: 28,
       daysWithEntries: 4,
-      entriesWithEnergy: 4,
+      energyKcal: { recordedDays: 3, recordedEntries: 4, total: 1061.4 }, // 0.1 + 0.2 + 1061.1, never 1061.3999999999999
+      fatG: { recordedDays: 1, recordedEntries: 2, total: 0 },
       loggedEntries: 8,
-      recordedTotalKcal: 1061.4, // 0.1 + 0.2 + 1061.1, never 1061.3999999999999
+      proteinG: { recordedDays: 1, recordedEntries: 1, total: 0.1 },
       source: 'manual',
     });
+  });
+
+  it('keeps the required fixture (ADR-0096): independent coverage, a recorded zero, a title-only entry, a date without entries', () => {
+    // A: (100.1, 10.1, null, 0), (null, 0, 20.2, null), title only. B: (0, null, 0, 5.3). C: no entries.
+    const days = daysFor(END, {
+      '2026-11-02': { nutrition: nutrition(3, { carbohydrateG: [1, 20.2], energyKcal: [1, 100.1], fatG: [1, 0], proteinG: [2, 10.1] }) },
+      '2026-11-03': { nutrition: nutrition(1, { carbohydrateG: [1, 0], energyKcal: [1, 0], fatG: [1, 5.3] }) },
+    });
+    expect(summarizeDailyTrendDays(days).nutrition).toEqual({
+      carbohydrateG: { recordedDays: 2, recordedEntries: 2, total: 20.2 },
+      daysInRange: 28,
+      daysWithEntries: 2,
+      energyKcal: { recordedDays: 2, recordedEntries: 2, total: 100.1 },
+      fatG: { recordedDays: 2, recordedEntries: 2, total: 5.3 },
+      loggedEntries: 4,
+      proteinG: { recordedDays: 1, recordedEntries: 2, total: 10.1 },
+      source: 'manual',
+    });
+    expect(dailyTrendsSchema.safeParse(trendsFor(END, days)).success).toBe(true);
+  });
+
+  it('adds ten recorded 0.1 values to exactly 1, and the largest range total exactly', () => {
+    const dates = dailyTrendsDatesOf(dailyTrendsRangeOf(END));
+    const spread = summarizeDailyTrendDays(daysFor(END, Object.fromEntries(dates.slice(0, 10).map((date) => [date, { nutrition: nutrition(1, { fatG: [1, 0.1] }) }]))));
+    expect(spread.nutrition.fatG).toEqual({ recordedDays: 10, recordedEntries: 10, total: 1 }); // never 0.9999999999999999
+    const full = daysFor(END, Object.fromEntries(dates.map((date) => [date, { nutrition: nutrition(10_000, { energyKcal: [10_000, 200_000_000] }) }])));
+    const trends = trendsFor(END, full);
+    expect(trends.summary.nutrition.energyKcal.total).toBe(5_600_000_000);
+    expect(dailyTrendsSchema.safeParse(trends).success).toBe(true);
   });
 });
 
 describe('daily trends contract', () => {
   it('accepts a consistent response and pins the version', () => {
-    const days = daysFor(END, { '2026-11-01': { foodEnergy: { entriesWithEnergy: 1, loggedEntries: 2, recordedKcal: 350.5 }, steps: 0, weightKg: 72.4 } });
+    const days = daysFor(END, { '2026-11-01': { nutrition: nutrition(2, { energyKcal: [1, 350.5] }), steps: 0, weightKg: 72.4 } });
     expect(dailyTrendsSchema.parse(trendsFor(END, days))).toEqual(trendsFor(END, days));
-    expect(DAILY_TRENDS_VERSION).toBe('daily-trends-1');
+    expect(DAILY_TRENDS_VERSION).toBe('daily-trends-2');
     const shortened = trendsFor('2000-01-03', daysFor('2000-01-03'), '2026-11-09');
     expect(dailyTrendsSchema.parse(shortened).range).toMatchObject({ days: 3, includesToday: false, shortenedByLowerBound: true, startDate: '2000-01-01' });
   });
@@ -188,12 +239,12 @@ describe('daily trends contract', () => {
     const days = daysFor(END, { '2026-11-01': { steps: 100 } });
     const trends = trendsFor(END, days);
     expect(issuesOf({ ...trends, summary: { ...trends.summary, steps: { daysRecorded: 1, recordedTotal: 101, source: 'manual' } } })).toContain(
-      'the summary is computed from the days by summarizeDailyTrendDays',
+      'the summary is computed from the days by summarizeDailyTrendDays (range nutrition = the sum of the dates)',
     );
     // A single measurement presented as a change.
     const one = trendsFor(END, daysFor(END, { '2026-11-01': { weightKg: 70 } }));
     const asChange = { ...one.summary, weight: { changeKg: 0, daysRecorded: 1, first: { kg: 70, localDate: '2026-11-01' }, last: { kg: 70, localDate: '2026-11-01' } } };
-    expect(issuesOf({ ...one, summary: asChange })).toContain('the summary is computed from the days by summarizeDailyTrendDays');
+    expect(issuesOf({ ...one, summary: asChange })).toContain('the summary is computed from the days by summarizeDailyTrendDays (range nutrition = the sum of the dates)');
     // A missing value counted as zero.
     expect(issuesOf({ ...trends, summary: { ...trends.summary, sleep: { averageMinutes: 0, daysRecorded: 28, recordedTotalMinutes: 0 } } })).not.toEqual([]);
   });
@@ -206,18 +257,53 @@ describe('daily trends contract', () => {
     expect(issuesOf(trendsFor(END, duplicated))).toContain('days are every date of the range, oldest first, once each');
   });
 
-  it('refuses inconsistent food energy and an energy total of 0 that nobody recorded', () => {
-    const bad = (foodEnergy: unknown) => issuesOf(trendsFor(END, daysFor(END, { '2026-11-01': { foodEnergy: foodEnergy as DailyTrendDay['foodEnergy'] } })));
-    expect(bad({ entriesWithEnergy: 0, loggedEntries: 2, recordedKcal: 0 })).toContain('a total exists exactly when at least one entry records energy');
-    expect(bad({ entriesWithEnergy: 1, loggedEntries: 1, recordedKcal: null })).toContain('a total exists exactly when at least one entry records energy');
-    expect(bad({ entriesWithEnergy: 3, loggedEntries: 2, recordedKcal: 5 })).toContain('energy cannot be recorded for more entries than were logged');
-    expect(bad({ entriesWithEnergy: 1, loggedEntries: 1, recordedKcal: 0.05 })).toContain('A recorded total has at most one decimal');
+  it('refuses inconsistent date nutrition for every metric, and a total of 0 that nobody recorded', () => {
+    const bad = (value: unknown) => issuesOf(trendsFor(END, daysFor(END, { '2026-11-01': { nutrition: value as DailyTrendDay['nutrition'] } })));
+    for (const field of MEAL_NUTRITION_FIELDS) {
+      const max = field === 'energyKcal' ? 20_000 : 2_000;
+      expect(bad({ ...nutrition(2), [field]: { recordedEntries: 0, total: 0 } }), field).toContain('a total exists exactly when at least one entry records the value');
+      expect(bad({ ...nutrition(1), [field]: { recordedEntries: 1, total: null } }), field).toContain('a total exists exactly when at least one entry records the value');
+      expect(bad({ ...nutrition(2), [field]: { recordedEntries: 3, total: 5 } }), field).toContain('a metric cannot be recorded for more entries than were logged');
+      expect(bad({ ...nutrition(1), [field]: { recordedEntries: 1, total: 0.05 } }), field).toContain('A recorded total has at most one decimal');
+      expect(bad({ ...nutrition(2), [field]: { recordedEntries: 1, total: max + 0.1 } }), field).toContain('a total cannot exceed what its recorded entries can hold');
+      expect(bad({ ...nutrition(1), [field]: { recordedEntries: 1, total: -0.1 } }), field).not.toEqual([]);
+      expect(bad({ ...nutrition(10_001), [field]: { recordedEntries: 1, total: 1 } }), field).not.toEqual([]);
+    }
+    // One metric's values say nothing about the others.
+    expect(bad(nutrition(3, { fatG: [1, 0] }))).toEqual([]);
+  });
+
+  it('refuses an inconsistent range summary for every metric, and a denominator that is not the range', () => {
+    const days = daysFor(END, {
+      '2026-11-02': { nutrition: nutrition(3, { carbohydrateG: [1, 20.2], energyKcal: [1, 100.1], fatG: [1, 0], proteinG: [2, 10.1] }) },
+      '2026-11-03': { nutrition: nutrition(1, { carbohydrateG: [1, 0], energyKcal: [1, 0], fatG: [1, 5.3] }) },
+    });
+    const trends = trendsFor(END, days);
+    const withNutrition = (change: Record<string, unknown>) => issuesOf({ ...trends, summary: { ...trends.summary, nutrition: { ...trends.summary.nutrition, ...change } } });
+    const summaryRule = 'the summary is computed from the days by summarizeDailyTrendDays (range nutrition = the sum of the dates)';
+    expect(withNutrition({ daysInRange: 27 })).toContain('the nutrition denominator is the actual number of dates in the range');
+    expect(withNutrition({ daysWithEntries: 29 })).not.toEqual([]);
+    expect(withNutrition({ daysWithEntries: 0 })).toContain('a date has entries exactly when entries were logged for it');
+    expect(withNutrition({ daysWithEntries: 3 })).toContain(summaryRule);
+    expect(withNutrition({ loggedEntries: 5 })).toContain(summaryRule);
+    for (const field of MEAL_NUTRITION_FIELDS) {
+      const metric = trends.summary.nutrition[field];
+      const change = (value: Record<string, unknown>) => withNutrition({ [field]: { ...metric, ...value } });
+      expect(change({ recordedDays: 2, recordedEntries: 5 }), field).toContain('a metric cannot be recorded for more entries than were logged');
+      expect(change({ recordedDays: 3, recordedEntries: 4 }), field).toContain('a metric cannot be recorded on more dates than have entries');
+      expect(change({ recordedDays: 0 }), field).toContain('a date records the value exactly when one of its entries does');
+      expect(change({ total: null }), field).toContain('a total exists exactly when at least one entry records the value');
+      expect(change({ total: (metric.total ?? 0) + 0.1 }), field).toContain(summaryRule);
+    }
   });
 
   it('refuses personal text and unknown fields anywhere', () => {
     const trends = trendsFor(END, daysFor(END));
     expect(issuesOf({ ...trends, days: [{ ...trends.days[0], note: 'x' }, ...trends.days.slice(1)] })).not.toEqual([]);
-    expect(issuesOf({ ...trends, days: [{ ...trends.days[0], foodEnergy: { ...noFood, titles: ['Soup'] } }, ...trends.days.slice(1)] })).not.toEqual([]);
+    expect(issuesOf({ ...trends, days: [{ ...trends.days[0], nutrition: { ...noFood, titles: ['Soup'] } }, ...trends.days.slice(1)] })).not.toEqual([]);
+    // The daily-trends-1 shape is refused, never read with another meaning.
+    const legacy = { entriesWithEnergy: 0, loggedEntries: 0, recordedKcal: null };
+    expect(issuesOf({ ...trends, days: [{ ...trends.days[0], foodEnergy: legacy }, ...trends.days.slice(1)] })).not.toEqual([]);
     expect(issuesOf({ ...trends, extra: true })).not.toEqual([]);
   });
 
@@ -234,10 +320,11 @@ describe('daily trends contract', () => {
     );
   });
 
-  it('calls a range empty only when no series has a value and no entry was logged', () => {
+  it('calls a range empty only when no series has a value and no entry was logged (a title-only or macro-only range is not empty)', () => {
     expect(isEmptyDailyTrends(trendsFor(END, daysFor(END)))).toBe(true);
     expect(isEmptyDailyTrends(trendsFor(END, daysFor(END, { '2026-11-01': { steps: 0 } })))).toBe(false);
-    expect(isEmptyDailyTrends(trendsFor(END, daysFor(END, { '2026-11-01': { foodEnergy: { entriesWithEnergy: 0, loggedEntries: 1, recordedKcal: null } } })))).toBe(false);
+    expect(isEmptyDailyTrends(trendsFor(END, daysFor(END, { '2026-11-01': { nutrition: nutrition(1) } })))).toBe(false);
+    expect(isEmptyDailyTrends(trendsFor(END, daysFor(END, { '2026-11-01': { nutrition: nutrition(1, { proteinG: [1, 12] }) } })))).toBe(false);
   });
 });
 

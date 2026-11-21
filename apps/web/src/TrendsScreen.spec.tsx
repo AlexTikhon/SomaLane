@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
 import { loadingTrends, type TrendsSnapshot } from './daily-trends-controller.js';
-import { sparseTrends, trendsFixture } from './daily-trends-fixtures.js';
+import { NUTRITION_A, NUTRITION_B, NUTRITION_C, nutritionOf, nutritionTrends, sparseTrends, trendsFixture } from './daily-trends-fixtures.js';
 import { TrendsContent, TrendsScreen, TrendsView } from './TrendsScreen.js';
 
 const END = '2026-11-09';
@@ -105,7 +105,7 @@ describe('Trends screen', () => {
     expect(html.match(/<polyline /gu)).toHaveLength(1);
     expect(html).toContain('data-segment="2026-10-13..2026-10-14"');
     expect(html.match(/data-missing-date=/gu)).toHaveLength(25);
-    expect(html).toContain('<title>Wed, 14 Oct 2026: 0 steps</title>');
+    expect(html).toContain('<title>Steps, Wed, 14 Oct 2026: 0 steps</title>');
     expect(html).toContain('role="img"');
     expect(html).toContain('aria-label="Manually entered steps, 28 days, Tue, 13 Oct 2026 to Mon, 9 Nov 2026: 3 of 28 days have a value. The table below lists every date."');
     expect(html).toContain('<th scope="col">Steps</th>');
@@ -118,10 +118,91 @@ describe('Trends screen', () => {
     const html = ready(sparseTrends(), 'foodEnergyKcal');
     expect(html).toContain('Food energy recorded (kcal)</h2>');
     expect(html).toContain('Energy is recorded on 2 of 5 logged entries.');
-    expect(html).toContain('2 of 3 entries with energy');
+    expect(html).toContain('Partial: 2 of 3 entries with energy');
     expect(html).toContain('2 entries logged, no energy recorded');
     expect(html).toContain('it is not a complete food diary');
     expect(html).not.toContain('Manually entered steps');
+  });
+
+  it('shows each nutrition series with its figures, coverage, zero and missing states, and a Meal log action per row', () => {
+    const trends = nutritionTrends();
+    const fat = renderToStaticMarkup(
+      <TrendsContent metric="fatG" onOpenDay={noop} onOpenMealLog={noop} timeZone="Europe/Warsaw" trends={trends} />,
+    );
+    expect(fat).toContain('<h2 id="trends-series-title">Fat recorded (g)</h2>');
+    expect(fat).toContain('Manually entered</span>');
+    expect(fat).toContain('<dl aria-label="Fat over the range" class="trends-figures">');
+    expect(fat).toContain('<dt>Recorded total</dt><dd>5.3 g</dd>');
+    expect(fat).toContain('<dt>Days with a value</dt><dd>2 of 28 days</dd>');
+    expect(fat).toContain('<dt>Entries with a value</dt><dd>2 of 4 logged entries</dd>');
+    expect(fat).toContain('<dt>Days with logged entries</dt><dd>2 of 28 days</dd>');
+    // Date A's recorded zero: a dot on the baseline and a partial row; date C: no entries.
+    expect(fat).toContain(`data-date="${NUTRITION_A}"`);
+    expect(fat).toContain('<title>Fat, Mon, 2 Nov 2026: 0 g</title>');
+    expect(fat).toMatch(new RegExp(`<tr class="trends-table__partial" data-coverage="partial" data-date="${NUTRITION_A}">.*?>0 g<.*?Partial: 1 of 3 entries with fat`, 'u'));
+    expect(fat).toMatch(new RegExp(`<tr class="trends-table__missing" data-coverage="no-entries" data-date="${NUTRITION_C}">.*?Not recorded.*?No entry logged`, 'u'));
+    expect(fat).toContain(`aria-label="Open Meal log on Mon, 2 Nov 2026"`);
+    expect(fat.match(/>Meal log<\/button>/gu)).toHaveLength(28);
+    expect(fat.match(/>Open<\/button>/gu)).toHaveLength(28);
+    expect(fat).toContain('Meal log lists that date’s entries to edit or delete');
+
+    const protein = renderToStaticMarkup(
+      <TrendsContent metric="proteinG" onOpenDay={noop} onOpenMealLog={noop} timeZone="Europe/Warsaw" trends={trends} />,
+    );
+    expect(protein).toMatch(new RegExp(`data-coverage="none" data-date="${NUTRITION_B}">.*?Not recorded.*?1 entry logged, no protein recorded`, 'u'));
+    expect(protein).toContain('Protein is recorded on 2 of 4 logged entries.');
+    expect(protein).toContain('aria-label="Protein recorded (g), 28 days');
+
+    for (const metric of ['foodEnergyKcal', 'carbohydrateG'] as const) {
+      expect(renderToStaticMarkup(<TrendsContent metric={metric} onOpenDay={noop} onOpenMealLog={noop} timeZone="Europe/Warsaw" trends={trends} />)).toContain('>Meal log</button>');
+    }
+    // Weight, sleep and steps rows keep Open only.
+    expect(renderToStaticMarkup(<TrendsContent metric="steps" onOpenDay={noop} onOpenMealLog={noop} timeZone="Europe/Warsaw" trends={trends} />)).not.toContain('>Meal log</button>');
+  });
+
+  it('keeps a macro-only and a title-only range apart from an empty one', () => {
+    const macroOnly = ready(trendsFixture(END, { '2026-11-01': { nutrition: nutritionOf(1, { proteinG: [1, 25.5] }) } }), 'foodEnergyKcal');
+    expect(macroOnly).not.toContain('Nothing is recorded for these dates yet.');
+    expect(macroOnly).toContain('1 entry logged on 1 day, none with food energy recorded.');
+    const titleOnly = ready(trendsFixture(END, { '2026-11-01': { nutrition: nutritionOf(2) } }), 'fatG');
+    expect(titleOnly).not.toContain('Nothing is recorded for these dates yet.');
+    expect(titleOnly).toContain('2 entries logged on 1 day, none with fat recorded.');
+    expect(ready(trendsFixture(END), 'fatG')).toContain('Nothing is recorded for these dates yet.');
+  });
+
+  it("opens the Meal log on a row's date with the answer's range end and series, never the typed date", () => {
+    const opened: Array<[string, { endDate: string; metric: string }]> = [];
+    const trends = nutritionTrends('2026-11-05', END);
+    pressAll(
+      TrendsContent({
+        metric: 'proteinG',
+        onOpenDay: noop,
+        onOpenMealLog: (localDate, back) => opened.push([localDate, back]),
+        timeZone: 'Europe/Warsaw',
+        trends,
+      }),
+    );
+    expect(opened).toHaveLength(28);
+    expect(opened[0]).toEqual(['2026-11-05', { endDate: '2026-11-05', metric: 'proteinG' }]);
+    expect(opened.every(([, back]) => back.endDate === '2026-11-05' && back.metric === 'proteinG')).toBe(true);
+    // Through the view: a different date typed in the field does not change the way back of the shown answer.
+    const html = renderToStaticMarkup(
+      <TrendsView
+        endInput="2026-10-01"
+        metric="proteinG"
+        onChooseEnd={noop}
+        onChooseMetric={noop}
+        onOpenDay={noop}
+        onOpenMealLog={noop}
+        onRefresh={noop}
+        snapshot={{ endDate: '2026-11-05', load: { kind: 'ready', refreshing: false, trends } }}
+        timeZone="Europe/Warsaw"
+        today={END}
+      />,
+    );
+    expect(html).toContain('aria-label="Open Meal log on Thu, 5 Nov 2026"');
+    // While a new range loads, no row (and so no Meal log action) of the previous answer is shown.
+    expect(render({ endDate: '2026-11-01' }, { metric: 'proteinG' })).not.toContain('Meal log</button>');
   });
 
   it('shows a single weight without a change, and two recorded dates with the exact difference', () => {
@@ -140,8 +221,8 @@ describe('Trends screen', () => {
   });
 
   it('never writes judgements, targets, predictions, correlations or advice', () => {
-    const html = (['weightKg', 'sleepMinutes', 'steps', 'foodEnergyKcal'] as const)
-      .map((metric) => ready(sparseTrends(), metric))
+    const html = (['weightKg', 'sleepMinutes', 'steps', 'foodEnergyKcal', 'proteinG', 'carbohydrateG', 'fatG'] as const)
+      .flatMap((metric) => [ready(sparseTrends(), metric), ready(nutritionTrends(), metric)])
       .join('')
       .replaceAll('it sets no targets, makes no predictions and gives no advice', '');
     expect(html).not.toMatch(
