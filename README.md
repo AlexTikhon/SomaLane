@@ -47,8 +47,9 @@ and grows one vertical slice at a time. Package names, database identifiers, coo
 
 - **Today**: one day across all of the above, with actions that open each editor on that date and the day's
   activities and runs in the activity history.
-- **Trends**: the 28 dates ending on a chosen date (weight, sleep, steps, food energy), each with its coverage. Gaps
-  stay gaps; a missing value never counts as zero. Its Activity section shows one source and one activity type over the
+- **Trends**: the 28 dates ending on a chosen date (weight, sleep, steps, and recorded food energy, protein,
+  carbohydrate and fat), each with its coverage; every nutrient has its own day and entry coverage (ADR-0096). Gaps
+  stay gaps; a missing value never counts as zero. A nutrition date opens its Meal log, with a way back to the same range. Its Activity section shows one source and one activity type over the
   same dates (count, the source's own duration, distance, with coverage); sources are never added together.
 - **Weekly review**: one week's coverage, values and limitations, worded by code on every read, including the week's
   recorded nutrition from the meal log with its entry and day coverage (ADR-0093); totals cover only what was logged.

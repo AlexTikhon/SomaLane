@@ -4,6 +4,10 @@
   375 px viewport). Hosted CI: see the final report of the change.
 - Date: 2026-11-09
 - Extended by: ADR-0089 (an Activity section on the Trends screen, read by its own endpoint).
+- Amended by: [ADR-0096](0096-nutrition-trends-v2.md) (`daily-trends-2`: `foodEnergy` is replaced by `nutrition` with food
+  energy, protein, carbohydrate and fat, each with its own entry and day coverage; the meal statement becomes one
+  `GROUPING SETS` aggregate; a nutrition row opens the Meal log with a way back to Trends). The decisions below describe
+  `daily-trends-1` where they name `foodEnergy`.
 - Relates to: ADR-0074 (a day is a local calendar date with the zone of its first write; "today" by the server clock in
   the client's zone), ADR-0078/0079 (manual movement, server-owned provenance; recorded totals with explicit
   denominators), ADR-0082 (Today: one snapshot, stored-date attribution, scoped navigation state), ADR-0083 (meal entries

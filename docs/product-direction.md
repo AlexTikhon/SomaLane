@@ -111,7 +111,8 @@ decides "today"); a missing value is null and never counts as zero; each series 
 range; food energy keeps day and entry coverage apart and is never called a complete diary. The summary is modest and
 defined once (weight change only with two recorded dates, sleep average over recorded dates, recorded totals with their
 coverage). The chart never joins values across a missing date. No predictions, correlations, targets or advice; no
-active energy or macronutrients. Activities and GPS runs have their own section since ADR-0089 (below).
+active energy. Activities and GPS runs have their own section since ADR-0089, and protein, carbohydrate and fat join food
+energy since ADR-0096 (both below).
 
 **Immediate next milestone: the iPhone web pilot** ([ADR-0085](adr/0085-iphone-lan-pilot.md)). The setup is a Windows
 computer and an iPhone, without a Mac, so the next step uses the existing web app in Safari rather than a native client.
@@ -215,6 +216,19 @@ clarification or refusal case). That measurement predates a same-day correction 
 (`data-question-constraints-2`: relative dates and coordinated durations), so it is now stale (NOT_RUN) for the current
 code and no valid model evidence exists for it. Either way it is an engineering gate written from the same policy, not
 evidence on real questions, so interpretation **stays off by default**; enabling it is a separate decision.
+
+**Nutrition Trends v2** is [ADR-0096](adr/0096-nutrition-trends-v2.md): Trends shows food energy, protein, carbohydrate and
+fat over the same 28 dates (`daily-trends-2`), each with its own coverage: per date the logged entries and the entries
+recording the metric with their exact total; for the range the actual denominator, logged entries, days with entries and,
+per metric, recorded entries, recorded days and the exact total. PostgreSQL computes all of it in the existing meal
+statement, now one date-bounded `GROUPING SETS` aggregate over the four nutrients (at most 29 rows, served by the existing
+owner/date index), in the same three-statement read-only snapshot; the contract checks that dates and range agree. Missing
+stays null, a recorded 0 stays 0, a title-only entry is a logged entry, one nutrient's coverage says nothing about another,
+and coverage never means a complete food diary. The old `foodEnergy` fields are replaced, not duplicated. A nutrition row
+opens the Meal log on its stored date; "Back to Trends" returns to the same range end and series and reads them again, so
+edits and deletions show. The way back is scoped memory only and does not survive sign-out, ordinary navigation or a change
+of organization or session. No targets, balances, macro-derived calories, estimates, averages, comparisons or AI input.
+Verified on the workstation (Chromium only, including a 375 px viewport); no physical-device or hosted-CI evidence.
 
 **HealthKit remains deferred** until macOS/Xcode access exists: reading Apple Health needs a native app, which cannot be
 built or signed from Windows. Nothing in the web pilot depends on it, and phone or watch imports stay a later item of the

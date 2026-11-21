@@ -5508,3 +5508,38 @@ wire schema, contract, decision order, dataset, migration or dependency change; 
 **Model evidence.** The ADR-0095 39/40 PASS is a historical measurement of the `-1` code; it is stale (NOT_RUN) for the
 corrected code and there is no valid model evidence for it yet. Interpretation stays off by default. Changes are
 uncommitted.
+
+## Nutrition Trends v2: 28-day recorded nutrition with coverage and a Meal log drill-down (ADR-0096) (2026-11-21)
+
+**What changed.** On top of HEAD `fb861c5` (the pre-existing `openapi.json` modification was line endings only and is now
+regenerated with the new schema). Trends shows food energy, protein, carbohydrate and fat over the 28 dates
+(`daily-trends-2`): per date the logged entries and, per metric, the recorded entries and exact total; for the range the
+actual denominator, logged entries, days with entries and, per metric, recorded entries, recorded days and exact total.
+`foodEnergy` is replaced by one canonical `nutrition` part (no duplicate legacy fields; mapping in ADR-0096 and
+`reference.md`); the web series id `foodEnergyKcal` is kept. The existing meal statement became one date-bounded
+`GROUPING SETS ((local_date), ())` aggregate over the four nutrients (still three source statements, one REPEATABLE READ
+READ ONLY snapshot, owner and organization predicates, RLS, `source = 'manual'`, `no-store`, nothing stored); its range row
+is PostgreSQL's own aggregate and the contract refuses it unless it equals the sum of the dates. `nutritionTenthsOf` and
+the row parser moved unchanged to `apps/api/src/meals/meal-nutrition-summary.ts` (re-exported by the weekly review). The
+Trends card shows, for a nutrition series, the recorded total, days with a value, entries with a value and days with
+logged entries; rows say "No entry logged", "… no protein recorded", "Partial: 1 of 3 entries with fat" or "All …"; each
+nutrition row has **Meal log**, and the Meal log then offers **Back to Trends** (same range end and series, read again)
+beside **Back to Today**. The way back is scoped App memory, cleared by sign-out, ordinary navigation, use and any change
+of scope. No migration, dependency, cache, job or AI change. Report:
+`docs/reports/nutrition-trends-v2-verification-2026-11-21.md`.
+
+| Check | Result |
+|---|---|
+| Test database identity (read-only probe, before writes) | `127.0.0.1:5433/running_tracker_test`, server `172.18.0.2:5432`, PostgreSQL 17.5; runtime, owner and maintenance roles as themselves (`current_user` = `session_user`) |
+| Contracts `daily-trends.spec.ts` | **21 passed** |
+| Integration (sequential): daily-trends HTTP (23), daily-trends meals EXPLAIN (1), meals access, meals HTTP, weekly review HTTP, weekly-review meals EXPLAIN, weekly insights HTTP, data questions HTTP, daily overview HTTP | **9 files, 200 passed** |
+| EXPLAIN (100,000 synthetic entries, runtime role, RLS) | one `Index Scan using meals_owner_date_created_idx` (owner + date range in the index condition), 196 rows read, 29 rows out, 611 shared buffers, 1.34 ms |
+| Mutations (snapshot mode removed; protein summed as `float8`; date bound widened) | each failed one integration test; restored byte-identical |
+| Chromium `trends-nutrition` (new, 2), `trends`, `activity-trends` | **8 passed** |
+| Chromium `meal-log`, `weekly-review`, `ask-my-data`, `today`, `meal-draft` | **29 passed** |
+| `npm run verify` (`VITEST_MAX_WORKERS=2`) | exit **0**: scripts 115, API **2,691**, web **1,418**, contracts **325**, fixtures 14, simulator 3, build |
+| `npm run eval:data-questions -- --check --dataset-version v2` | **NOT_RUN** (exit 3, no inference call); unchanged — `daily-trends.ts` is in that fingerprint, and no valid saved report existed before this change |
+| `git diff --check` | clean |
+
+**Not established.** No physical iPhone/Safari evidence (the 375 px checks are Chromium with a wide font) and no hosted
+CI. Changes are uncommitted.
