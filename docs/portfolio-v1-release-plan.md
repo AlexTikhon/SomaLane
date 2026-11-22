@@ -1,7 +1,7 @@
 # SomaLane portfolio v1: release plan
 
-- Status: **active**. Step 1 of 10 (this document) is done; the **next task is step 2, the isolated 56-day synthetic
-  dataset**.
+- Status: **active**. Steps 1 (this document) and 2 (the isolated 56-date synthetic dataset) of 10 are done; the
+  **next task is step 3, navigation and first-use flow**.
 - Date: 2026-11-22. Baseline: `main` at `6f3dc46` (Nutrition Trends v2, ADR-0096).
 - Authority: this is the single source of truth for what portfolio v1 contains, which evidence it needs, and what is
   deferred. Where an older document names a different "next milestone" (for example the iPhone pilot of ADR-0085 as
@@ -135,6 +135,18 @@ run, and updates the [status table](#8-status) below. A step adds no feature bey
     comparison) show non-empty values with the coverage the dataset documents for named dates.
   - Nothing in it is real personal data; a runbook names what it contains.
 - **Not in this step.** No showcase, no navigation change, no deployment.
+- **Status: done (2026-11-22, fresh checks).** `npm run portfolio:dataset` ([runbook](runbooks/portfolio-dataset.md)):
+  its own Compose project and PostgreSQL server, isolation proven by the server's system identifier read inside the
+  owned container and over every TCP connection, writes through the application's services, a canonical digest
+  (default seed and anchor 2026-11-21: `sha256:b622…857d`). Evidence:
+  [verification report](reports/portfolio-dataset-verification-2026-11-22.md): 78 unit tests, `npm run verify`, 16
+  real-PostgreSQL tests on throwaway databases inside the dataset server (seeding, rerun, digest agreement,
+  interruption and resume, conflicts, concurrency, read models against the plan, summaries, provenance, coach and
+  outsider isolation), and a Chromium walkthrough of the populated screens. Two defects found by the independent review
+  (inherited variables could redirect the populated app; changed run data was accepted as complete) were fixed the same
+  day: a single launcher that takes its configuration only from the dataset's settings and proves its database targets
+  (`npm run portfolio:dataset:api`/`:web`), and full run-state validation plus a recorded-digest check in the core
+  writer; re-verified in the report's "Review repair" section.
 
 ### Step 3. Navigation and first-use flow
 
@@ -336,8 +348,8 @@ other inputs block the step named.
 | Step | Status | Evidence |
 |---|---|---|
 | 1. Release scope and current documentation | **Done** | This plan; progress entry of 2026-11-22 |
-| 2. Isolated 56-date synthetic dataset | **Next** | — |
-| 3. Navigation and first-use flow | Not started | — |
+| 2. Isolated 56-date synthetic dataset | **Done** | [Report](reports/portfolio-dataset-verification-2026-11-22.md); progress entry of 2026-11-22 (fresh checks; not run in CI) |
+| 3. Navigation and first-use flow | **Next** | — |
 | 4. Initial-bundle reduction | Not started | — |
 | 5. Public read-only showcase | Not started | — |
 | 6. WebKit gate and physical Safari | Not started | — |

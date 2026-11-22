@@ -14,7 +14,8 @@ and grows one vertical slice at a time. Package names, database identifiers, coo
 > **Status (2026-11-22): preparing portfolio v1.** Feature work is paused for a finite, ten-step release plan:
 > [docs/portfolio-v1-release-plan.md](docs/portfolio-v1-release-plan.md). It defines the release (a public, read-only
 > showcase of synthetic data plus the full app behind invite-only OpenID Connect), its mandatory gates and what is
-> deferred. **Next task: step 2, an isolated, reproducible synthetic dataset over 56 calendar dates.**
+> deferred. Steps 1 and 2 are done (step 2: an isolated, reproducible synthetic dataset over 56 calendar dates,
+> `npm run portfolio:dataset`). **Next task: step 3, navigation and first-use flow.**
 >
 > Today the app runs locally and in GitHub Actions (latest checked run: success for `6f3dc46`). The single-host
 > production profile is verified on a workstation but not deployed anywhere, sign-in has been tested against a test
@@ -157,6 +158,16 @@ npm run pilot:verify
 Phone setup, firewall, clean-up and the physical checklist:
 [docs/runbooks/iphone-lan-pilot.md](docs/runbooks/iphone-lan-pilot.md).
 
+### A populated, synthetic 56-day dataset
+
+```sh
+npm run portfolio:dataset    # own Compose project and PostgreSQL on 127.0.0.1:5442; seed, anchor and digest printed
+```
+
+It never touches the development or test database and never reads `.env`. It prints how to start the existing API
+(port 3300) and web app (port 5373) against it, and which dates to open in Today, the weekly review and Trends:
+[docs/runbooks/portfolio-dataset.md](docs/runbooks/portfolio-dataset.md).
+
 ## Tests and CI
 
 | Command | What it runs |
@@ -165,6 +176,7 @@ Phone setup, firewall, clean-up and the physical checklist:
 | `npm run test:integration` | API against a real PostgreSQL `_test` database: RLS, roles, HTTP, maintenance, backup and the restore drill (about 980 tests) |
 | `npm run test:e2e` | Playwright, Chromium plus a real OpenID Connect provider process (146 tests); `npm run test:e2e:firefox` runs an 18-test Firefox core gate |
 | `npm run test:e2e:smoke` | a 24-test pre-demo smoke on its own ports |
+| `npm run test:portfolio-dataset`, `npm run test:e2e:portfolio-dataset` | the synthetic dataset on throwaway databases inside its isolated server, and a Chromium walkthrough of the populated screens (after `npm run portfolio:dataset`; not in CI) |
 | `npm run deploy:verify`, `npm run transport:verify`, `npm run pilot:verify` | Docker profile checks: deployment, loopback TLS/HTTP2, iPhone pilot |
 
 The integration and browser suites need the test database first (`npm run db:up`, `npm run db:bootstrap:test`,
@@ -209,7 +221,7 @@ Firefox gate, on pushes to `main`, on pull requests and on demand. It reads no s
 - No real Mapbox basemap was rendered in a test. The AI features (search in words, weekly insights, meal drafts, Ask my
   data interpretation) are off by default: none has valid passing model evidence for the current code (Ask my data's
   one passing run is stale after a later constraints correction), and OpenAI has never been called.
-- Only step 1 of the portfolio v1 release plan is done, so its release gates are not met; which claims need which
+- Only steps 1 and 2 of the portfolio v1 release plan are done, so its release gates are not met; which claims need which
   evidence is listed in
   [the release plan](docs/portfolio-v1-release-plan.md#5-capability-claims-and-the-evidence-each-needs).
 - No phone or watch import, no FIT import and no HealthKit. GPX and TCX import cover one documented subset each (one

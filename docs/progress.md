@@ -5601,3 +5601,131 @@ row and step 6's dependency line were aligned with it.
 
 No test, build, inference, database command or deployment was run. Earlier results stay as recorded. **Next task:
 release step 2.** Changes are uncommitted.
+
+## Portfolio v1 release step 2: isolated 56-date synthetic dataset (2026-11-22)
+
+**What changed.** `npm run portfolio:dataset [-- --seed <label> --anchor YYYY-MM-DD]` ([runbook](runbooks/portfolio-dataset.md))
+prepares an isolated Compose project, `somalane-portfolio-dataset` (its own PostgreSQL server from the pinned PostGIS
+image, database `somalane_portfolio_demo`, network and volume, published on `127.0.0.1:5442` only; generated credentials
+under the ignored `.local/portfolio-dataset/`), proves isolation, runs the existing bootstrap and migration scripts
+against that database only, and seeds a deterministic synthetic dataset over 56 local dates (defaults: seed
+`somalane-portfolio-v1`, anchor = yesterday in Europe/Warsaw, so the 28-date range and its previous 28 dates are both
+complete). The pure planner, the isolation checks, the core writer, the canonical snapshot/digest and the command are in
+`apps/api/src/portfolio-dataset/`.
+
+- **Isolation**, enforced in the core writer as well as the CLI: `running_tracker` and `running_tracker_test` are
+  refused unconditionally (no flag, variable or option); only `somalane_portfolio_demo` or a throwaway
+  `somalane_portfolio_t_<12 hex>` database, only `127.0.0.1`, no URL query parameters (identity overrides refused by the
+  API's own parser, now exported), the role a URL names must match its use, `APP_ENV=production` refused. Before any
+  change: exactly one running container with the project's Compose labels, publishing only `5432/tcp` on loopback at the
+  URL's port, whose system identifier read inside the container (`docker exec`) equals the one every TCP connection
+  reports, together with database, `current_user = session_user` and `cluster_name`. Docker NAT is why the server's own
+  address is not compared. `.env`, `DATABASE_URL` and `TEST_*` are never read; child bootstrap/migration processes get
+  only the dataset URLs.
+- **Writes**: the owner role inserts only the demo runner, coach, organization and memberships; every record goes
+  through the existing service functions in `withAuthenticatedTenantTransaction` (runtime role, RLS in force, contract
+  schemas parsed first); GPX/TCX through the real importers; runs through `createRun`/`ingestRunPoints`/`applyRunCommand`
+  with the injected Clock for historical instants; summaries through `runSummaryPublicationOnce`. No summary, geometry or
+  provenance is fabricated; no AI provider exists in the path.
+- **Reruns**: stable operation keys from the seed; existing data is classified against the plan before any write
+  (empty, partial → resumed, complete → nothing written, anything else → refused with reasons); a PostgreSQL advisory
+  lock serializes seeds; `seed-state.json` records interrupted runs. No reset command.
+- **Manifest and digest**: counts, gaps, independently computed expectations for named selections, and a SHA-256 over
+  canonical JSON that leaves out only database/wall-clock metadata, `computed_at`, `archive_revision` and the
+  retention-owned raw points.
+- The browser walkthrough has its own Playwright config (`tests/e2e/playwright.portfolio-dataset.config.ts`); the main
+  Chromium project ignores `portfolio-dataset/` like `lan-pilot/`, and the existing guard in `scripts/lan-pilot.test.mjs`
+  was updated to that pattern. No schema, migration, public contract, production default, authentication rule, UI or
+  CI file changed. No ADR: the approach follows ADR-0039 (dedicated database) and the LAN pilot (own Compose project),
+  and inverts ADR-0039's owner bulk writes by design; the decisions are recorded in the runbook.
+
+Default dataset (anchor 2026-11-21): 2 users, 1 organization, 48 check-ins, 46 movement days, 27 manual activities, 2
+GPX and 2 TCX imports, 6 finished runs (2,178 points, current summaries, 1 shared with the coach), 121 meals, 2 unlogged
+dates; digest `sha256:b6222c858f464e8d4fe465b3f9c29a95f5c8f0f3e0cf3403b0021d49012e857d`.
+
+| Check (fresh, this change; [report](reports/portfolio-dataset-verification-2026-11-22.md)) | Result |
+|---|---|
+| `npm run portfolio:dataset` | isolation proven; 43 migrations; 291 writes; reruns 0 writes, same digest (also after the browser walkthrough); another seed refused, nothing written; an anchor of today refused |
+| Dataset unit tests (`src/portfolio-dataset`, 4 files) | 78 passed |
+| `npm run verify` | exit 0: scripts 115, API 2,769, web 1,418, contracts 325, fixtures 14, simulator 3, build |
+| `npm run test:portfolio-dataset` (throwaway databases in the dataset server) | 16 passed (twice consecutively on the final code; one earlier run of the same code had one transient `connect ETIMEDOUT` to the published port); databases dropped afterwards |
+| `npm run test:e2e:portfolio-dataset` (Chromium, isolated stack) | 1 passed |
+| `.env`, development server | unchanged (hash and time); no bootstrap, migration or seed reached it |
+| `git diff --check`, new files with `--no-index --check` | clean |
+
+Not established: real GPS accuracy, real device exports, Safari or phones, AI quality; the digest across
+PostgreSQL/PostGIS builds; the raw-purge path in a live session (expected, not observed). **Step 2 is done. Next task:
+release step 3, navigation and first-use flow.** Changes are uncommitted.
+
+## Portfolio v1 release step 2: review repair — isolated startup and run drift (2026-11-22)
+
+An independent review of step 2 confirmed two defects; both are fixed on top of the uncommitted step-2 work
+([report, "Review repair"](reports/portfolio-dataset-verification-2026-11-22.md#review-repair-2026-11-22-same-day),
+[runbook](runbooks/portfolio-dataset.md)).
+
+1. **Inherited variables could redirect the populated app.** The documented `node --env-file` launch let shell
+   variables win over the file and let the API fall back to `.env` (reproduced, configuration only: an inherited
+   `DATABASE_URL`/`MAINTENANCE_DATABASE_URL` to `127.0.0.1:5433/running_tracker` was accepted; an inherited
+   `API_PROXY_TARGET` redirected the web proxy). **Fix:** one launcher (`apps/api/src/portfolio-dataset/serve-cli.ts`;
+   `npm run portfolio:dataset:api` and `:web`, also used by the CLI's instructions, the runbook and the Playwright
+   configuration). The API's configuration source is only the dataset's generated settings and secrets, passed to
+   `loadEnvironment` with no `.env` file; it is asserted (loopback 3300, one origin, the demo identities, no OIDC,
+   metrics or journal export, AI off); the process environment is reduced to OS variables (no `PG*`); the configured
+   URLs are proven against the owned container as the runtime and maintenance roles; then `main()` starts through
+   `loadConfig`. Vite gets OS variables plus the one proxy target on 127.0.0.1:5373. No `api.env`/`web.env` is written.
+2. **Changed run data was accepted as complete.** `classifySnapshot()` accepted a stored snapshot changed in memory
+   (summary distance `999999`, no display geometry, start `2001-01-01`, finish payload `{}`), and the CLI recorded the
+   drifted digest. **Fix:** in the core writer, `validateRun` requires every run to be a state the plan's lifecycle,
+   the summary job and retention can produce (starts, per-batch uploads matching the planned points, revisions, the
+   exact finish command, a current summary of the current algorithm with valid statistics, geometry, the planned
+   duration and a distance within 2 %; `purging`/`purged` raw history only with a current summary). A complete dataset
+   must also match the digest recorded at completion before anything is written or replaced; the CLI writes the state
+   and manifest only after acceptance. The digest and the digested snapshot are unchanged.
+
+| Check (fresh, repaired code) | Result |
+|---|---|
+| Dataset unit tests (`src/portfolio-dataset`, 6 files) | 112 passed (34 new: poisoned-environment configuration probes with decoy listeners, launcher refusals, run drift and malformed partial runs, completion artifacts) |
+| `npm run test:portfolio-dataset` (throwaway databases in the dataset server, plus the poisoned-parent launcher test) | 25 passed: stored drift refused before writes (run checks and recorded digest), a real raw purge staying complete with the same digest, malformed partial uploads refused, existing positives kept; the real launcher from a poisoned parent and poisoned `.env` files served the demo dataset and never contacted a decoy |
+| `npm run portfolio:dataset:api`/`:web` from a poisoned shell (by hand) | listeners only on 127.0.0.1:3300 and :5373; verified targets printed without secrets |
+| `npm run test:e2e:portfolio-dataset` (through the launcher) | 1 passed |
+| `npm run portfolio:dataset` on the preserved demo | complete, `recorded digest: matched`, 0 writes, same digest; manifest byte-identical |
+| `npm run verify` | exit 0: scripts 115, API 2,803, web 1,418, contracts 325, fixtures 14, simulator 3, build |
+| `git diff --check`, new files with `--no-index --check` | clean |
+
+Remaining limits: the digest comparison needs the local record (`seed-state.json` or `manifest.json`); the raw purge
+was exercised on a throwaway database, not yet observed on the demo; the launcher's list of OS variables is fixed.
+Both findings are resolved, so **step 2 stays done; next task: release step 3, navigation and first-use flow.**
+Changes are uncommitted.
+
+## Portfolio v1 release step 2: remaining P2 — the recorded completion baseline is enforced before writes (2026-11-22)
+
+**Defect (reproduced).** With a completion digest recorded for these parameters, the core writer compared it before
+writing only when the stored dataset was `complete`. In an isolated throwaway database, a summary distance raised by
+0.5 m (within the run checks' tolerance) plus one deleted planned meal classified `partial`; the rerun with the recorded
+digest skipped the pre-write guard, performed 254 write operations, recreated the meal (120 → 121) and only then failed
+the final digest check, saying nothing was written. A deleted meal alone was silently re-completed, and an empty target
+with a recorded completion was seeded as a first seed.
+
+**Fix.** `baselineRefusal` in [`dataset-writer.ts`](../apps/api/src/portfolio-dataset/dataset-writer.ts), checked right
+after classification and before provisioning or any service write: with a recorded completion only that completion is
+accepted (complete, same digest, 0 writes; a legitimate raw purge stays there); a complete dataset with another digest
+and an empty or partial one are refused before writing. Without a record, first-seed interruption recovery and every
+existing validation are unchanged. `DatasetConflictError` now carries the attempt's write count and says "wrote
+nothing" only when it is 0; after writes it gives the count and says the committed writes stay (no rollback).
+`seedAndRecord` reports the same and still replaces no artifact on a refusal. No transaction framework, reset, new
+storage, schema, contract, launcher or dataset change. ([report](reports/portfolio-dataset-verification-2026-11-22.md#remaining-p2-finding-the-recorded-completion-baseline-2026-11-22-same-day),
+[runbook, section 6](runbooks/portfolio-dataset.md#6-reruns-interruptions-conflicts))
+
+| Check (fresh, this fix; earlier step-2 results are historical) | Result |
+|---|---|
+| New regression tests on the unfixed writer | 3 of 5 failed as predicted (drift + deleted meal reached the write hook; deleted meal alone and empty target accepted) |
+| Dataset unit tests (`src/portfolio-dataset`, 6 files) | 119 passed (7 new or updated: the guard per state, truthful conflict and CLI messages) |
+| `npm run test:portfolio-dataset` (identity verified first; throwaway databases in the dataset server only) | 30 passed (5 new): the reproduction, a deleted meal alone and an empty target refused through the core writer and through `seedAndRecord` with no write hook reached, every row, row version and timestamp unchanged, `seed-state.json`/`manifest.json` byte-identical with their times; an unchanged completion accepted with 0 writes; a genuine interrupted first seed resumed; raw purge still complete with the same digest |
+| `npm run verify` | exit 0 (after one typecheck fix in the new test helper): scripts 115, API 2,810, web 1,418, contracts 325, fixtures 14, simulator 3, build; the dataset suite rerun afterwards on the final test file, 30 passed |
+| Demo dataset and artifacts | unchanged (121 meals, 6 runs; `seed-state.json`, `manifest.json`, `.env` hashes and times identical); `openapi.json` line-ending rewrite from the contracts build restored |
+| `git diff --check`, new files with `--no-index --check` | clean |
+
+Remaining limits: without the local record a partial dataset is still resumed as a first seed (nothing else
+distinguishes them); an infrastructure failure while a completion is recorded is still recorded as `interrupted` and
+described as incomplete, although nothing is written on that path. The P2 finding is resolved and the required checks
+pass, so **step 2 is complete; next task: release step 3, navigation and first-use flow.** Changes are uncommitted.
