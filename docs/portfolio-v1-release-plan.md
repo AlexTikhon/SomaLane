@@ -1,0 +1,347 @@
+# SomaLane portfolio v1: release plan
+
+- Status: **active**. Step 1 of 10 (this document) is done; the **next task is step 2, the isolated 56-day synthetic
+  dataset**.
+- Date: 2026-11-22. Baseline: `main` at `6f3dc46` (Nutrition Trends v2, ADR-0096).
+- Authority: this is the single source of truth for what portfolio v1 contains, which evidence it needs, and what is
+  deferred. Where an older document names a different "next milestone" (for example the iPhone pilot of ADR-0085 as
+  the next step in a dated section of [product-direction.md](product-direction.md)), this plan takes precedence. Older
+  plans, reports and dated measurements are historical snapshots and are not rewritten.
+
+The project leaves open-ended slice-by-slice development and enters a finite release-preparation phase. The phase ends
+when the ten steps below are done and the mandatory gates hold. No new product feature belongs to this phase unless a
+step below names it.
+
+## 1. What portfolio v1 is
+
+**Product.** A personal activity, health and nutrition tracker with deterministic analytics and optional, experimental
+AI. Code computes every number; a model, when one is configured, only proposes, and the person confirms. Every AI
+feature is off by default and stays off in the release.
+
+**Primary journey** (what a visitor should see first and understand):
+
+> daily records → **Today** → **weekly review** → **Trends** → back to the original records
+
+Daily records are the check-in, movement, manual activities, GPX/TCX imports and the meal log. Today shows one day,
+the weekly review one Monday-to-Sunday week, Trends 28 dates (with the previous 28 for activity comparisons), and each
+of them leads back to the records it was computed from.
+
+**Secondary engineering demonstration** (what an engineer reviewing the project should be able to watch):
+
+> simulated run → offline / reload recovery → explicit live sharing with a coach → finished result and archive
+
+It uses the existing GPS simulator, IndexedDB buffer, fenced writer lease, SSE live board and revision-bound archive.
+It is a demonstration of failure handling, not a claim about phone GPS.
+
+**Publication model.** Two surfaces, both clearly labelled:
+
+1. **Public read-only showcase.** Openly accessible, labelled on every screen as a read-only showcase of synthetic
+   data. It is built from synthetic snapshots of the step-2 dataset, validated by the existing contracts
+   (`packages/contracts`) and rendered with the existing presentational components wherever that is practical. It
+   writes nothing and sends no request to a private API route.
+2. **Full hosted application.** The real app on one host with the existing production profile
+   ([ADR-0043](adr/0043-single-host-deployment-profile.md)), behind the existing invite-only OpenID Connect sign-in
+   ([ADR-0046](adr/0046-oidc-sign-in.md)). Only invited identities can use it.
+
+**Guardrails for both surfaces.**
+
+- No anonymous access to any private API route (the organization-scoped `/api/orgs/:orgId/...` routes and every other
+  route that requires a session). The showcase must not add an anonymous or "demo" path into the API.
+- Development sign-in stays off in production: `LOCAL_AUTH_ENABLED` must remain `false` when `APP_ENV=production`,
+  which the configuration already refuses otherwise (`apps/api/src/config/environment.ts`). The showcase must not
+  depend on the demo sign-in panel.
+- No real health data in the showcase, the screenshots or the portfolio materials.
+- No claim of production-grade operation, mobile GPS accuracy, continuous background recording or AI quality without
+  the evidence named in [section 5](#5-capability-claims-and-the-evidence-each-needs).
+
+## 2. Evidence vocabulary
+
+Every status statement in this plan and in the documents that link to it uses one of these kinds of evidence, and says
+which.
+
+| Kind | Meaning | Current example |
+|---|---|---|
+| **Hosted CI** | A GitHub Actions run of `.github/workflows/ci.yml` for a named commit, checked at its source | Run [44885261535](https://github.com/AlexTikhon/SomaLane/actions/runs/44885261535) for `6f3dc46`: conclusion `success`; jobs `verify`, `integration`, `e2e (chromium 1/3, 2/3, 3/3)` and `e2e (firefox-core)` succeeded, `e2e-report` skipped. Checked with `gh run view` on 2026-11-22 |
+| **Recorded local verification** | Commands run on the Windows workstation and written down in [progress.md](progress.md) or a report at the time | The ADR-0096 entry of 2026-11-21: `npm run verify` exit 0, focused integration and Chromium runs |
+| **Fresh check** | A command run in the current change and reported with it | For this step: link, path and diff checks only (see the progress entry) |
+| **Real-provider evidence** | Behaviour observed against a real external service (identity provider, Mapbox, OpenAI) | **None yet.** OIDC was tested only against a test provider and a local `oidc-provider` process |
+| **Physical-device evidence** | An owner's observation on a real phone, recorded in a report | **None yet.** [iphone-lan-pilot.md](reports/iphone-lan-pilot.md) lists every physical check as NOT RUN; D10 has 0 real traces |
+| **AI evaluation** | A frozen evaluation gate at the current code fingerprint | See [section 2.1](#21-ai-evaluation-status) |
+
+An earlier result is never presented as newly executed. A later step that changes code under a recorded result makes
+that result historical for the new code.
+
+### 2.1 AI evaluation status
+
+AI is off by default in code (`MEAL_DRAFTS_PROVIDER`, `DATA_QUESTIONS_PROVIDER` and `WEEKLY_INSIGHTS_PROVIDER` default to
+`off`; `RUN_SEARCH_AI_ENABLED` defaults to `false`) and stays off in every release surface.
+
+- **Meal "Draft from text"** ([ADR-0092](adr/0092-meal-draft-from-text.md)): the latest model measurement
+  ([meal-draft-v2-evaluation-2026-11-18.md](reports/meal-draft-v2-evaluation-2026-11-18.md), `qwen3:8b`, v2 sets) is a
+  **model FAIL on quality** with valid evidence: recall 81.0 % below the 85 % bar, 0 incorrectly accepted values,
+  failures 10.0 % at the limit. The deterministic verifier and challenge set passed. D11 (content-free diagnostics for
+  title/evidence failures) is **OPEN**.
+- **Ask my data** ([ADR-0094](adr/0094-ask-my-data.md), [ADR-0095](adr/0095-ask-my-data-guided-questions.md)): the
+  2026-11-19 v1 measurement failed. The 2026-11-20 v2 measurement **passed** (development 20/20, held-out 19/20), but it
+  was taken on the code before the same-day constraints correction (`data-question-constraints-2`); the offline gate
+  now reports it **NOT_RUN** (stale fingerprint), so there is **no valid model evidence for the current code**. The
+  **guided question builder and the predefined questions work without any model** and are the supported way to use the
+  feature.
+- **Weekly insights** ([ADR-0076](adr/0076-weekly-insights.md)) and **run search in words**
+  ([ADR-0057](adr/0057-natural-language-filter-proposals.md)): no model tried met the target; OpenAI has never been called.
+
+This phase reruns no inference, changes no evaluation dataset and weakens no gate.
+
+## 3. The ten release steps
+
+Each step is one bounded change (or a small, reviewed series), ends with a progress entry naming the checks actually
+run, and updates the [status table](#8-status) below. A step adds no feature beyond its outcome.
+
+### Step 1. Release scope and current documentation (this change)
+
+- **Outcome.** This plan exists; README, product direction, pause handoff, implementation plan and the interview package
+  link to it and no longer state outdated current facts (sessions in memory, iPhone pilot as the next milestone).
+- **Depends on.** Nothing.
+- **Acceptance.** The plan names the product, journeys, publication model, ten steps, gates, capability evidence,
+  deferrals and external inputs; every changed local link resolves; the interview package's architecture claims match
+  `apps/api/src/main.ts`; `git diff --check` is clean; no runtime file changed.
+
+### Step 2. Reproducible, isolated synthetic dataset over 56 calendar dates
+
+- **Outcome.** One documented command creates a synthetic dataset for one demo person (and the coach identity the
+  secondary demonstration needs) covering **56 consecutive local calendar dates**, so that a 28-date Trends range and
+  its previous 28 dates are both populated. It includes check-ins, movement, manual activities, at least one GPX and one
+  TCX import, finished simulated runs with published summaries, and meals with partial nutrition. Deliberate gaps and
+  partial records make every coverage statement meaningful (a missing value, a recorded zero and an unlogged day all
+  appear).
+- **Depends on.** Step 1.
+- **Acceptance.**
+  - It writes only to a **dedicated, isolated demo database** (its own database or its own Compose project), never to a
+    database shared with other work.
+  - It **unconditionally refuses** the existing development database (`running_tracker`) and the shared test database
+    (`running_tracker_test`). No flag, variable or option overrides this.
+  - It refuses any non-local target and `APP_ENV=production`.
+  - **Before any mutation** it verifies, read-only, the database it is actually connected to: the current database name,
+    the server endpoint and the expected role identities. It stops if any of them differs. Configuration values (URLs,
+    environment names) do not establish isolation on their own.
+  - Reruns are idempotent. If an explicit reset is added later, it operates only on the dedicated demo database that the
+    read-only check above has just verified.
+  - The same inputs (seed and anchor date, both documented) produce the same rows, and a test proves this, for example by
+    comparing a digest of the seeded values across two runs. Automated seed tests use their own isolated, throwaway
+    database, separate from the shared test database (`running_tracker_test`).
+  - Records are written through the existing contracts and rules (owner-only RLS, server-owned provenance, local dates),
+    not by bypassing them in ways the application could never produce.
+  - With the dataset loaded, Today, the weekly review and Trends (nutrition and activity, including the previous-period
+    comparison) show non-empty values with the coverage the dataset documents for named dates.
+  - Nothing in it is real personal data; a runbook names what it contains.
+- **Not in this step.** No showcase, no navigation change, no deployment.
+
+### Step 3. Navigation and first-use flow
+
+- **Outcome.** A first-time visitor (and the synthetic person) can follow the primary journey without knowing the app:
+  records → Today → weekly review → Trends → records. Today the page opens on Runner because Runner's startup restores
+  and recovers an active run (`apps/web/src/App.tsx`, ADR-0082), and the weekly review lives inside the Check-in tab
+  (`DailyCheckInScreen.tsx`). This step makes the journey discoverable while keeping both properties below.
+- **Depends on.** Step 2 (to check the flow with populated data).
+- **Acceptance.**
+  - The primary journey is reachable from the primary navigation and covered by a Chromium end-to-end scenario on the
+    step-2 dataset.
+  - **Active-run recovery is preserved**: a reload during a recorded run still restores and resumes it, whatever view
+    opens first (the existing `reload-offline`, `runner-recovery` and takeover scenarios pass unchanged in intent).
+  - **Capture lifetime is preserved**: navigating away from Runner does not stop capture, uploads or the writer lease
+    (the ownership described in [pause-handoff.md](pause-handoff.md), "Product and operational state retained").
+  - The Firefox core gate still passes.
+- **Not in this step.** No new screen content, no new analytics, no routing library unless the step's ADR or progress
+  entry justifies it.
+
+### Step 4. Measured initial-bundle reduction
+
+- **Outcome.** Secondary screens (for example Coach, Archive, the importers, the AI panels) load on demand instead of
+  with the first page. Mapbox GL's JavaScript is already loaded dynamically (`apps/web/src/mapbox-runtime.js`); only its
+  stylesheet is imported eagerly.
+- **Depends on.** Step 3 (the navigation decides what is primary).
+- **Acceptance.**
+  - The initial JavaScript and CSS sizes (raw and gzip) are measured with one documented command before and after, at
+    named commits, and the reduction is reported as measured, without a promised target.
+  - Runner recovery and capture code are not deferred behind a lazy boundary that a reload must wait for.
+  - Loading and failure states of a lazily loaded screen are tested; the full Chromium suite and the Firefox core gate
+    pass.
+- **Not in this step.** No dependency replacement or framework change.
+
+### Step 5. Public read-only synthetic showcase
+
+- **Outcome.** A read-only showcase of the primary journey, built from synthetic snapshots of the step-2 dataset and
+  served without sign-in.
+- **Depends on.** Steps 2, 3 and 4.
+- **Acceptance.**
+  - Snapshots are generated reproducibly from the step-2 dataset and validated by the existing contract schemas in a
+    test; the showcase renders them with existing presentational components where practical.
+  - Every screen carries a visible "read-only showcase, synthetic data" label and a link to the invite-only application.
+  - An end-to-end test proves the showcase sends **no request to any private API route** and performs no write.
+  - The production configuration guard is unchanged: `LOCAL_AUTH_ENABLED=true` with `APP_ENV=production` is still
+    refused, and the showcase build contains no demo sign-in.
+  - AI sections are absent or shown as "off by default" with no model output presented as product behaviour.
+- **Not in this step.** No hosting (step 8), no anonymous API endpoint, no editable demo.
+
+### Step 6. Bounded WebKit/mobile coverage and physical Safari observations
+
+- **Outcome.** A bounded WebKit gate in Playwright (desktop and a phone-sized viewport, in the spirit of the 18-test
+  Firefox core gate), and the owner's physical Safari observations on an iPhone recorded in
+  [iphone-lan-pilot.md](reports/iphone-lan-pilot.md) using the existing LAN pilot
+  ([runbook](runbooks/iphone-lan-pilot.md)).
+- **Depends on.** Step 3 (the flow being checked). Physical observations need the owner's iPhone and time to run the
+  checklist, an optional external input ([section 7](#7-external-inputs-needed-later)).
+- **Acceptance.**
+  - The WebKit gate's scenarios are listed, it has run, and its result is recorded; failures are fixed or listed as known
+    limitations. Playwright WebKit is recorded as WebKit automation, not as Safari.
+  - The physical checklist is either recorded (with the report's privacy rules) or explicitly left NOT RUN. If it is not
+    run, no iPhone or Safari compatibility is claimed and the release is described as desktop-scoped.
+- **Not in this step.** No background recording, no GPS accuracy work (D10 stays PARTIAL unless real traces are
+  analysed), no native app.
+
+### Step 7. Real OIDC provider verification and reproducible provisioning
+
+- **Outcome.** Sign-in works against one real OpenID Connect provider chosen by the owner, and
+  [identity-provider.md](runbooks/identity-provider.md) gives reproducible provisioning steps (client registration,
+  redirect URI, invited identities, secret file) for that provider.
+- **Depends on.** Step 1; needs **identity-provider configuration** (external input). The final confirmation on the
+  hosted origin is part of step 9.
+- **Acceptance.** Recorded real-provider evidence, without secrets or personal identifiers: an invited identity signs in
+  and out; an uninvited identity is refused; a restart keeps the session (ADR-0080); the runbook's "Verification against
+  a real provider: Not performed" row is updated with what was and was not observed.
+- **Not in this step.** No provider-side logout, no second provider, no session-management UI.
+
+### Step 8. Reproducible single-host deployment
+
+- **Outcome.** The full application and the showcase run on one host with the existing production profile
+  ([deployment.md](runbooks/deployment.md)): nginx with a real certificate, file-based secrets, AI off,
+  `LOCAL_AUTH_ENABLED=false`, the step-7 provider configured.
+- **Depends on.** Steps 5 and 7; needs **hosting, DNS and a TLS certificate** (external inputs).
+- **Acceptance.** The deployment is reproduced from the runbook alone on a clean host (or the runbook is corrected until
+  it is); `npm run deploy:verify`-equivalent checks of the profile pass for the host, recorded without secrets; the
+  deletion-journal directory and backup destination are named, and whether they are really off-host is stated, not
+  assumed.
+- **Not in this step.** No multi-replica, orchestration, managed database or microservices.
+
+### Step 9. Hosted critical-flow smoke and isolated backup/restore verification
+
+- **Outcome.** Evidence that the hosted surfaces work and that the hosted data can be restored.
+- **Depends on.** Step 8.
+- **Acceptance.**
+  - A smoke against the hosted origin covers: real sign-in; the primary journey; the secondary demonstration (simulated
+    run, offline/reload recovery, sharing, finish, archive); the showcase's labels; an anonymous request to a private
+    route answering `401`.
+  - A backup made on the host (`backup:create`) is restored into an **isolated** environment, never over the hosted
+    database, following the documented order including `restore:reapply-deletions`, `restore:reapply-access`,
+    `restore:reapply-erasures` and `restore:clear-sessions`; the result is verified and recorded. Measured times describe
+    that drill only; no production RPO/RTO is claimed.
+- **Not in this step.** No monitoring stack, alerting service or load test against the host.
+
+### Step 10. Portfolio materials and release tag
+
+- **Outcome.** README and screenshots from synthetic data, a current interview package (the full editorial rewrite
+  deferred from step 1), a `CHANGELOG`, a recorded licence decision by the owner, and a release tag.
+- **Depends on.** Steps 1–9.
+- **Acceptance.** Every public claim maps to a row of [section 5](#5-capability-claims-and-the-evidence-each-needs)
+  whose evidence exists; the tag points at a commit with a successful hosted CI run; the licence decision (including
+  "no licence, all rights reserved", if chosen) is written down; the status table below is final.
+- **Not in this step.** No new features or late fixes outside a recorded defect.
+
+## 4. Mandatory release gates
+
+Portfolio v1 is published only when all of these hold.
+
+| Gate | Holds when | Step |
+|---|---|---|
+| G1 Scope | This plan is current and the status table is final | 1, 10 |
+| G2 Synthetic dataset | The 56-date dataset is reproducible and isolated | 2 |
+| G3 Primary journey | Records → Today → weekly review → Trends → records works on the dataset in Chromium, with the Firefox core gate passing; active-run recovery and capture lifetime unchanged | 3 |
+| G4 Bundle | Before/after initial-bundle measurements are recorded | 4 |
+| G5 Showcase safety | Showcase is labelled, read-only and synthetic; no anonymous private-route access; development sign-in refused in production | 5, 9 |
+| G6 WebKit gate | The bounded WebKit gate has run and its result is recorded | 6 |
+| G7 Real identity provider | Invite-only sign-in verified against the real provider on the hosted origin | 7, 9 |
+| G8 Deployment | Reproducible single-host deployment from the runbook | 8 |
+| G9 Hosted verification | Hosted smoke and an isolated restore recorded | 9 |
+| G10 Defaults | Every AI provider off in the hosted configuration | 8, 9 |
+| G11 CI and materials | Successful hosted CI for the tagged commit; changelog, licence decision, tag | 10 |
+
+Physical-device evidence is **not** a mandatory gate. Without it the release is described as desktop-scoped.
+
+## 5. Capability claims and the evidence each needs
+
+A capability may be advertised only when its evidence exists. Otherwise the release materials either omit it or state
+the limit.
+
+| Claim | Evidence required | Current status (2026-11-22) |
+|---|---|---|
+| Works in desktop Chromium; Firefox core flows | Hosted CI for the commit | Met for `6f3dc46` (run 44885261535) |
+| WebKit automation | Step-6 gate result | Not run (no WebKit project exists) |
+| **iPhone / Safari compatibility** | Physical Safari checklist recorded on an iPhone | **NOT RUN**: must not be claimed |
+| **Mobile GPS accuracy** | Analysed real-device traces (D10) | **0 traces**, D10 PARTIAL: must not be claimed |
+| **Continuous or background recording** | Physical observation of a designed background mode | Not designed (capture is foreground only): must not be claimed |
+| Real sign-in | Step-7 real-provider evidence | Test provider only |
+| Hosted / deployed | Steps 8 and 9 | Not deployed |
+| Backup and restore of hosted data | Step-9 isolated restore | Local drills only ([p12-4-restore-drill.md](reports/p12-4-restore-drill.md)); no production RPO/RTO |
+| Real map basemap | A real Mapbox token rendering on the hosted origin | Never rendered; the app works without a token |
+| **AI quality** (any feature) | A passing frozen gate at the current fingerprint **and** a separate decision to enable | Meal drafts FAIL; Ask my data stale (NOT_RUN); weekly insights and run search below target: must not be claimed |
+| Performance and load | The P11 measurements with their stated boundaries | Workstation only ([p11-5-measurements-after.md](reports/p11-5-measurements-after.md)) |
+| **Production-grade**, multi-replica or high availability | Not pursued in v1 | Must not be claimed |
+
+## 6. Deferred work
+
+Not part of portfolio v1. Each stays recorded where it is; nothing here is closed by this plan.
+
+- **Product.** FIT import; HealthKit and any native app (needs macOS/Xcode); phone or watch imports; additional health
+  metrics; retrieval over a knowledge base (RAG); a general chat coach; multi-activity GPX/TCX and overlap detection;
+  per-category coach grants; a stored profile time zone.
+- **AI.** Further AI-quality experiments and model tuning for meal drafts, Ask my data interpretation, weekly insights
+  and run search; **D11** (meal-draft diagnostics, [decision-backlog.md](decision-backlog.md)) stays OPEN.
+- **Engineering.** Microservices; multi-replica support (login admission limits, run-search, meal-draft and
+  data-question admission, the weekly-insight queue, the archive tile cache, the SSE hub, maintenance runners and
+  metrics are still per process, ADR-0081 "Explicit boundaries"); maintenance candidate fairness, durable retries and
+  whole-job/I/O cancellation (ADR-0069, ADR-0070); a session list or "sign out everywhere"; provider-side logout; real
+  Mapbox auth/telemetry failure behaviour.
+- **Evidence.** **D10** stays PARTIAL until real traces are analysed; physical-device evidence beyond the step-6
+  checklist.
+
+**Known limitations that remain true** (documented, not fixed in v1): an erasure not yet exported when the host is lost
+can come back after a restore (one export interval plus any backlog,
+[recovery limits](runbooks/deletion-journal-and-recovery.md#failure-modes-and-honest-limits)); two devices editing the
+same day overwrite each other; tables do not use `FORCE ROW LEVEL SECURITY`, so owner credentials must never reach the
+API; revoked live data already delivered cannot be recalled; the archive tile cache and SSE hub are per process.
+
+## 7. External inputs needed later
+
+Each input must be confirmed or configured before the step that needs it starts. Having an input available is not the
+same as having it verified: availability means it can be used, and verification is recorded evidence from the step
+itself. This plan makes no claim about whether hosting, a domain, a certificate or a provider account is available yet.
+The existing documentation records that the owner has an iPhone ([ADR-0085](adr/0085-iphone-lan-pilot.md)), but every
+physical Safari check is still NOT RUN ([iphone-lan-pilot.md](reports/iphone-lan-pilot.md)). Optional inputs do not
+block the release: the physical iPhone checklist (a desktop-scoped release does not need it) and the Mapbox token. All
+other inputs block the step named.
+
+| Input | Needed by | Owner's decision or action |
+|---|---|---|
+| Hosting: one Linux host with Docker Compose v2 | Step 8 | Provider, size, cost and access |
+| DNS name for the hosted origin | Steps 7–8 | Domain and records |
+| TLS certificate for that name | Step 8 | Issuer and renewal method |
+| Identity-provider tenant, client registration, invited identities | Step 7 | Provider choice and configuration |
+| Off-host storage for backups and the deletion journal | Steps 8–9 | Location and key custody |
+| Physical iPhone with Safari on the workstation's Wi-Fi | Step 6 (optional for a desktop-scoped release) | Time to run and record the checklist (the device is recorded as available; the checks are NOT RUN) |
+| Optional public Mapbox token restricted to the origin | Step 8 (optional) | Whether to show a real basemap |
+| Licence decision | Step 10 | Licence or "all rights reserved" |
+
+## 8. Status
+
+| Step | Status | Evidence |
+|---|---|---|
+| 1. Release scope and current documentation | **Done** | This plan; progress entry of 2026-11-22 |
+| 2. Isolated 56-date synthetic dataset | **Next** | — |
+| 3. Navigation and first-use flow | Not started | — |
+| 4. Initial-bundle reduction | Not started | — |
+| 5. Public read-only showcase | Not started | — |
+| 6. WebKit gate and physical Safari | Not started | — |
+| 7. Real OIDC provider | Not started (external input) | — |
+| 8. Single-host deployment | Not started (external input) | — |
+| 9. Hosted smoke and isolated restore | Not started | — |
+| 10. Materials, changelog, licence, tag | Not started | — |

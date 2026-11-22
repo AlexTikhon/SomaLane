@@ -5543,3 +5543,61 @@ of scope. No migration, dependency, cache, job or AI change. Report:
 
 **Not established.** No physical iPhone/Safari evidence (the 375 px checks are Chromium with a wide font) and no hosted
 CI. Changes are uncommitted.
+
+## Portfolio v1 release scope and current documentation (release step 1 of 10) (2026-11-22)
+
+**What changed (documentation only).** On top of HEAD `6f3dc46` (clean tree). New
+[portfolio-v1-release-plan.md](portfolio-v1-release-plan.md), the authoritative definition of portfolio v1: the product
+(tracker with deterministic analytics, AI experimental and off by default), the primary journey (records → Today →
+weekly review → Trends → records), the secondary engineering demonstration (simulated run → offline/reload recovery →
+live sharing → result and archive), the publication model (a public, labelled, read-only synthetic showcase plus the
+full app behind invite-only OIDC; no anonymous private-route access, no development sign-in in production), ten ordered
+steps with outcomes, dependencies and acceptance criteria, mandatory gates, the evidence each capability claim needs,
+deferrals (D10/D11 kept open) and the external inputs needed later (hosting, DNS, TLS, identity provider, off-host
+storage, device access, licence decision). README, product direction, pause handoff and implementation plan gained
+current-status sections that link to it; their dated sections are labelled historical, not rewritten. README's AI
+section now covers meal drafts and Ask my data, and its migration (43) and ADR (96) counts are current. The interview
+package keeps its stories, with current-tense corrections: sessions and pending OIDC logins are in PostgreSQL (diagram,
+story D, story F, scaling, follow-ups), a restart keeps them, other per-process state still limits the deployment to one
+API instance, restore-time session clearing is a separate policy, and the SSE hub checks the session store once per
+poll cycle (ADR-0080 Decision 4). No ADR was created; no runtime, UI, database, dependency, CI or generated file changed.
+
+| Check | Result |
+|---|---|
+| Baseline | `git status` clean, HEAD `6f3dc46da5d4…` as expected |
+| Hosted CI for `6f3dc46` (`gh run view 44885261535`) | `completed` / `success`, push to `main`: `verify`, `integration`, `e2e (chromium 1/3, 2/3, 3/3)`, `e2e (firefox-core)` success; `e2e-report` skipped |
+| Architectural claims against code | `apps/api/src/main.ts` wires `PostgresSessionStore` and `PostgresPendingLoginStore` with no in-memory fallback; admission limits (OIDC login, run search, meal drafts, data questions), the tile scheduler/cache, the SSE hub, the weekly-insight service, metrics and maintenance runners are constructed per process; `LOCAL_AUTH_ENABLED` is refused with `APP_ENV=production` (`apps/api/src/config/environment.ts`); every AI provider defaults to `off` (run search: `RUN_SEARCH_AI_ENABLED=false`); the web app opens on Runner and the weekly review is inside the Check-in screen; `mapbox-gl` JS is already a dynamic import |
+| Relative links and anchors in the seven changed files (scratch script; a negative test confirmed it reports missing files and anchors) | 213 checked, 0 failures |
+| `npm run` scripts and paths named in the release plan | all exist (`backup:create`, `deploy:verify`, `restore:reapply-deletions`, `restore:reapply-access`, `restore:reapply-erasures`, `restore:clear-sessions`, `verify`; cited source and runbook paths) |
+| `git diff --check` | clean |
+
+No test suite, build, inference or database command was run for this change; results quoted from earlier entries are
+historical. **Remaining gates:** every gate in the plan except the scope part of G1. **Next task: release step 2, an
+isolated, reproducible synthetic dataset over 56 calendar dates.** Changes are uncommitted.
+
+## Portfolio v1 release step 1: review correction — dataset isolation and external inputs (2026-11-22)
+
+**What changed (documentation only, [release plan](portfolio-v1-release-plan.md)).** Two findings from the independent
+review of step 1, on top of the uncommitted step-1 work (preserved unchanged). (1) Step 2's acceptance criteria no
+longer allow the development or test database "unless explicitly designated". They now require a dedicated, isolated
+demo database or Compose project; unconditional refusal of `running_tracker` and `running_tracker_test` with no
+override; refusal of non-local targets and `APP_ENV=production`; a read-only check of the connected database name,
+server endpoint and role identities before any mutation, because configuration values alone do not establish isolation;
+idempotent reruns, with any later reset limited to the verified demo database; and automated seed tests on their own
+throwaway database, separate from `running_tracker_test`. No tooling or configuration scheme is chosen. (2) The
+external-inputs introduction no longer says "None of these exist yet". It says inputs must be confirmed or configured
+before their step, that availability and verification are distinct, that the documentation records an iPhone
+(ADR-0085) while every physical Safari check is NOT RUN, and that the iPhone checklist (for a desktop-scoped release)
+and the Mapbox token are optional. It makes no availability claim about hosting, domains or accounts. The iPhone table
+row and step 6's dependency line were aligned with it.
+
+| Check | Result |
+|---|---|
+| Database names and iPhone record against sources | `.env.example` names `running_tracker` (development) and `running_tracker_test` (test); ADR-0085 line 14 records the owner's iPhone; `docs/reports/iphone-lan-pilot.md` lists the physical checks as NOT RUN |
+| Other step-1 files untouched by this correction | `git diff --stat` for README, implementation plan, interview, pause handoff and product direction identical to the end of step 1; nothing staged |
+| Relative links and anchors in the release plan (same scratch script as step 1) | 27 checked, 0 failures (includes the new `#7-external-inputs-needed-later` anchor) |
+| Consistency of the plan | No remaining "designated" exception; G2, step 6 and the section 7 table agree with the new wording |
+| `git diff --check`; whitespace check of the untracked plan (`git diff --no-index --check`) | clean; no whitespace errors |
+
+No test, build, inference, database command or deployment was run. Earlier results stay as recorded. **Next task:
+release step 2.** Changes are uncommitted.

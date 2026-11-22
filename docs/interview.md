@@ -1,6 +1,16 @@
 # Running Tracker: interview package
 
-Current freeze: 2026-11-06. The [latest verification](reports/freeze-verification-2026-11-06.md)
+> **Current status (2026-11-22).** The project (now SomaLane) is preparing portfolio v1 under
+> [portfolio-v1-release-plan.md](portfolio-v1-release-plan.md); a full editorial rewrite of this package is release
+> step 10. Until then the stories below stay as written, with these current-tense corrections applied in place:
+> **sessions and pending OIDC logins are in PostgreSQL** (ADR-0080, ADR-0081), so an ordinary API restart keeps them;
+> other process-local state (login and AI admission limits, the SSE hub, the tile cache, the weekly-insight queue,
+> maintenance runners, metrics) still makes one API instance the supported deployment; and clearing sessions at restore
+> is a deliberate restore policy, separate from restart behaviour. Hosted CI now runs on every push to `main` (latest
+> checked: [run 44885261535](https://github.com/AlexTikhon/SomaLane/actions/runs/44885261535), success, `6f3dc46`).
+> Counts and dates below are snapshots from when they were recorded.
+
+Freeze of 2026-11-06 (historical). The [latest verification](reports/freeze-verification-2026-11-06.md)
 and [architecture review](reports/architecture-review-2026-11-06.md) supersede older
 snapshot counts below. ADR-0070 adds process-local maintenance failure backoff and
 retry/recovery visibility; it does not establish candidate fairness, filesystem
@@ -67,7 +77,7 @@ flowchart LR
 
   subgraph API["Express 5 API: one Node process"]
     direction TB
-    SESS["Session manager<br/>in-memory store, cookie + CSRF<br/>OIDC or local dev login"]
+    SESS["Session manager<br/>cookie + CSRF, OIDC or local dev login<br/>sessions + pending logins kept in PostgreSQL"]
     RUNS["Runs, commands, points, shares<br/>idempotent by command id and seq"]
     LTR["Live-track snapshot / changes<br/>fixed revision, HMAC cursors"]
     HUB["SSE hub<br/>2 s poll grouped by user+org,<br/>per-connection session checks"]
@@ -81,6 +91,7 @@ flowchart LR
     RLS[("Tables under RLS<br/>runs, run_points, run_summaries,<br/>run_shares, memberships ...")]
     CAPS["SECURITY DEFINER capabilities<br/>summary publish, deletion, purge"]
     OUTBOX[("Journal outboxes<br/>deletions, access restrictions")]
+    AUTH[("app_private sessions + pending OIDC logins<br/>no table grants, narrow functions only")]
   end
 
   FILES[("Journal files<br/>DELETION_JOURNAL_DIR, meant to be off-host")]
@@ -95,6 +106,8 @@ flowchart LR
   ARCH --> SEARCH
   SEARCH -.->|"explicit click only"| LLM
   SESS --- RUNS
+  SESS -->|"runtime role, SECURITY DEFINER functions"| AUTH
+  HUB -.->|"one session check per poll cycle"| SESS
   RUNS -->|"runtime role, tenant transaction"| RLS
   LTR --> RLS
   HUB -->|"short runtime-role transaction"| RLS
@@ -274,8 +287,10 @@ checked only at connect time, the coach would keep receiving positions.
   before the response stays open, so an open stream holds no connection.
 - One scheduler polls every 2 s and groups subscriptions by user and organization, so tabs of one identity share one
   short read. Each poll checks membership and reads the RLS-filtered live state in one runtime-role transaction.
-- Session validity is per connection. The hub keeps a digest of the session, not the cookie, and rechecks the store
-  before the poll, publish, drain and heartbeat. A timer closes the stream exactly at session expiry.
+- Session validity is per connection. The hub keeps a digest of the session, not the cookie. Since ADR-0080 the
+  session store is in PostgreSQL, and each poll cycle starts with one store check per distinct open session; only
+  confirmed connections receive that cycle's state, and a failed or negative check closes them (fail closed).
+  Heartbeats and drains no longer ask the store. A timer closes the stream exactly at session expiry.
 - Membership loss closes the user's streams for that organization. Grant loss produces a complete state without the
   run, which replaces any older pending state.
 - Backpressure: only the newest unsent state is kept, and a writer blocked for 10 s is closed. Connections (64) and
@@ -298,8 +313,9 @@ Load (P11.5, one workstation, 10 SSE observers): fresh point to observer stream 
 stress, measured to the SSE event and not to the rendered screen. Rehearsal 2026-10-24: the coach's card appeared
 1.9 s after the share and disappeared 1.9–2.1 s after the revoke.
 
-**Limits.** All of this lives in one process, with an in-memory session store, so an API restart ends every stream
-and every session. The real HTTP/2 path was verified against the local nginx profile only (`transport:verify`).
+**Limits.** The hub lives in one process, so an API restart ends every open stream and the client goes through its
+reconnect path above. The sessions themselves survive the restart, because they are in PostgreSQL (ADR-0080), so a
+reconnect after the restart is authorized by the existing cookie. Several API instances were never run. The real HTTP/2 path was verified against the local nginx profile only (`transport:verify`).
 No SSE pending-buffer size is exported, so "stable buffer" is not confirmed by measurement.
 
 ### E. Revision-bound summaries, tracks and archive tiles
@@ -392,7 +408,9 @@ nothing about a production RTO.
 
 **Limits.** The code cannot verify that the journal directory is really off-host; that and backup scheduling, off-host
 copies, key custody and the backup-age alert belong to the operator ([deployment.md](runbooks/deployment.md)). Sessions
-do not survive a restore: they live in process memory, so everyone signs in again. No production RPO or RTO exists.
+and pending OIDC logins do not survive a restore, by policy: backups exclude their rows, and `restore:clear-sessions`
+deletes any that a hand-made dump carried before the database is reopened (ADR-0080, ADR-0081), so everyone signs in
+again. That is separate from an ordinary API restart, which keeps sessions. No production RPO or RTO exists.
 
 ## Likely follow-up questions
 
@@ -447,7 +465,8 @@ Playwright against the real API and database (115 tests in Chromium plus OIDC, 1
 2026-10-28) and a 24-test pre-demo smoke in Chromium and Firefox (both passed once on 2026-10-28; see
 `docs/reports/pause-verification.md`); Docker verifiers for the production profile, the TLS/HTTP/2 transport and the
 restore drill. One GitHub-hosted CI run passed, on 2026-10-14 for commit `83f804f`, with 87 browser tests then; later commits
-have workstation runs only.
+had workstation runs only at the time. *(Since then hosted CI runs on every push to `main`; the latest checked run,
+44885261535 for `6f3dc46` on 2026-11-21, succeeded.)*
 
 **"Is the sign-in real?"** The production path is OpenID Connect with PKCE, state and nonce, invite-only. It was
 tested only against an in-process test provider and a real `oidc-provider` process in Chromium. The demo uses a
@@ -456,18 +475,24 @@ development login that the API refuses in production and that production builds 
 **"Where is the AI?"** An optional box turns a sentence into a proposal for the search filters; the person still
 presses Apply. It is off by default. The OpenAI path has never been called with a real key. A local Ollama run
 (`qwen3:8b`, CPU only, 2026-10-14) missed the 10 s deadline for every search case and answered two other cases with
-one wrong outcome. So: no accuracy claim, and the deterministic search is the product.
+one wrong outcome. So: no accuracy claim, and the deterministic search is the product. *(Later AI features follow the
+same rule and are also off by default: meal "Draft from text" failed its latest quality gate (2026-11-18), and "Ask my
+data" works through predefined and guided questions without a model; its one passing model run is stale after a
+constraints correction. See the [release plan](portfolio-v1-release-plan.md#21-ai-evaluation-status).)*
 
-**"What would you do next?"** Real-device GPS traces (the tooling exists, but no recording has been analysed yet:
-D10), a real identity provider, a shared session store if there is ever a second API instance, and a hosted CI run
-of the current commit.
+**"What would you do next?"** The portfolio v1 release plan answers this now: a synthetic 56-day dataset, a public
+read-only showcase, a real identity provider, a single-host deployment with a hosted smoke and an isolated restore.
+Real-device GPS traces (D10) and phone checks gate only the claims that depend on them. The shared session store is
+done (sessions and pending logins in PostgreSQL); a second API instance would still need the remaining per-process
+state reviewed.
 
 ## Scaling: what I would change, and when
 
-**Implemented now.** One API process on one host, with PostgreSQL on the same host in the production profile. Inside
-that process: the session store and OIDC login store (memory, bounded by `SESSION_STORE_MAX_ENTRIES`), the SSE hub
-(64 connections), the tile cache and its admission (32 MiB, 2 active and 16 queued generations) and the maintenance
-jobs. Maintenance work already claims rows with advisory locks or `SKIP LOCKED`, and duplicate concurrent summary
+**Implemented now.** One API process on one host, with PostgreSQL on the same host in the production profile.
+Sessions and pending OIDC logins are in PostgreSQL (ADR-0080, ADR-0081; capacity `SESSION_STORE_MAX_ENTRIES` is per
+database), so they survive a restart and are shared by any instance on the same database. Still inside the process:
+the SSE hub (64 connections), the tile cache and its admission (32 MiB, 2 active and 16 queued generations), the login
+and AI admission limits, the weekly-insight queue, metrics and the maintenance jobs. Maintenance work already claims rows with advisory locks or `SKIP LOCKED`, and duplicate concurrent summary
 publishers are tested, but a deployment with several API instances was never run.
 
 **Measured** (P11.5, [p11-5-measurements-after.md](reports/p11-5-measurements-after.md)): one Ryzen AI 7 350
@@ -485,10 +510,12 @@ round, two overlapping tile streams; 3 runs per group, client-measured over loop
 
 **Proposed, not implemented.** Each item is conditional on a signal that has not been observed yet.
 
-- *If a second API instance is needed* (availability or CPU): the in-memory session store is the first blocker, since
-  every restart already signs everyone out. Move sessions to PostgreSQL or Redis, or accept sticky routing as a stopgap.
-  SSE needs no shared state because each instance polls the database, but database poll load grows with instances ×
-  (user, organization) groups. The revision-keyed tile cache stays correct per process and only its hit rate drops;
+- *If a second API instance is needed* (availability or CPU): sessions and pending OIDC logins are already shared
+  through PostgreSQL, so the session store is no longer the blocker. What remains per process: the login admission
+  limits (N instances admit N times as many), the run-search, meal-draft and data-question admission limits, the
+  weekly-insight queue and metrics; the maintenance runners' and journals' single-instance assumptions were not
+  reviewed (ADR-0081, "Explicit boundaries"). SSE needs no shared state because each instance polls the database, but
+  database poll load grows with instances × (user, organization) groups. The revision-keyed tile cache stays correct per process and only its hit rate drops;
   a shared cache is the SDD's suggestion (§14).
 - *If the live poll cycle approaches 2 s* (a metric already exported) or the latency floor matters: commit
   notifications to wake the poll, keeping the periodic full read for recovery. SSE → WebSocket would not change this.
@@ -527,7 +554,9 @@ all (point to the drill report instead).
   smoke, not the rest of the suite. Nothing was run in Safari or a mobile browser, OIDC sign-in in Firefox was not
   tested, the real map runtime ran only in Chromium (against a local empty style), and the real Mapbox basemap was
   not rendered anywhere.
-- CI: one GitHub-hosted run passed, for `83f804f` on 2026-10-14; later commits, including the pause verification of
-  2026-10-28 ([pause-verification.md](reports/pause-verification.md)), have workstation runs only.
+- CI: hosted runs cover verify, integration, three Chromium shards and the Firefox core gate on every push to `main`
+  (latest checked: 44885261535 for `6f3dc46`, success). The pause verification of 2026-10-28
+  ([pause-verification.md](reports/pause-verification.md)) predates that and had workstation runs only. CI says nothing
+  about Safari, phones or a deployed host.
 - AI search quality: no OpenAI call has ever been made, and local Ollama missed the deadline on this CPU.
 - Production: no host, no users, no traffic model, no RPO or RTO. Everything measured ran on one workstation.

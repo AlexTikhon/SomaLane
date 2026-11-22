@@ -13,6 +13,25 @@ the new work is added beside them, one small vertical slice at a time.
 This document records the roadmap and the principles every later slice must follow. It is a direction, not a
 commitment to dates or to every item below.
 
+## Current status (2026-11-22): portfolio v1 release preparation
+
+Slice-by-slice feature work is paused. The project is in a finite release phase defined by
+[portfolio-v1-release-plan.md](portfolio-v1-release-plan.md), which is authoritative for scope, gates, evidence and
+deferrals. In short:
+
+- **Product for v1:** the tracker with deterministic analytics; AI stays experimental and off by default.
+- **Primary journey:** daily records → Today → weekly review → Trends → original records. **Secondary demonstration:**
+  simulated run → offline/reload recovery → explicit live sharing → finished result and archive.
+- **Publication:** a public, clearly labelled read-only showcase of synthetic snapshots, plus the full hosted app behind
+  the existing invite-only OpenID Connect sign-in.
+- **Deferred beyond v1:** FIT, HealthKit, RAG (roadmap item 4), a general chat coach, additional health metrics,
+  microservices, multi-replica support, maintenance fairness and durable retries, further AI-quality experiments; D10
+  and D11 stay open.
+- **Next task:** release step 2, an isolated, reproducible synthetic dataset over 56 calendar dates.
+
+The roadmap and the per-slice sections below are kept as written. Where a dated section names a "next milestone", it is
+historical; the release plan decides what comes next.
+
 ## Roadmap
 
 1. **Data foundation.**
@@ -59,7 +78,7 @@ commitment to dates or to every item below.
 - **No derived health numbers without a definition.** Nothing estimates calories from steps or similar; a value is
   either what the person or a device reported, or a computation with its own decision record.
 
-## Current step
+## Slices so far (written as each slice landed; historical, see "Current status" above)
 
 Step 1 is complete when ADR-0072 is accepted: a generic `activities` table (manual entry only), owner-only RLS,
 idempotent create, keyset listing, hard delete and an Activity tab.
@@ -114,12 +133,14 @@ coverage). The chart never joins values across a missing date. No predictions, c
 active energy. Activities and GPS runs have their own section since ADR-0089, and protein, carbohydrate and fat join food
 energy since ADR-0096 (both below).
 
-**Immediate next milestone: the iPhone web pilot** ([ADR-0085](adr/0085-iphone-lan-pilot.md)). The setup is a Windows
+**The iPhone web pilot** ([ADR-0085](adr/0085-iphone-lan-pilot.md)); named the immediate next milestone on 2026-11-09,
+it is no longer that: its physical Safari checklist is now part of release step 6 and gates only an iPhone-compatibility
+claim, not a desktop-scoped release (see the [release plan](portfolio-v1-release-plan.md)). The setup is a Windows
 computer and an iPhone, without a Mac, so the next step uses the existing web app in Safari rather than a native client.
 An isolated, opt-in stack (its own Compose project, database and volume; synthetic demo people only; both AI providers
 off) is served over HTTPS on the computer's private Wi-Fi address, with a certificate from its own name-constrained
 local authority that the owner trusts on the phone, and the existing demo sign-in. It is verified on the workstation
-(`npm run pilot:verify`, `npm run pilot:e2e`); the milestone is reached when the owner has run the physical Safari
+(`npm run pilot:verify`, `npm run pilot:e2e`); the pilot is complete when the owner has run the physical Safari
 checklist (`docs/reports/iphone-lan-pilot.md`: trusted HTTPS, Today, editors, Trends, inputs, session, foreground GPS,
 screen-lock observation) and its defects are triaged. The pilot's sign-in is the development session, so it is for
 synthetic data only; real health data needs real sign-in and the deployment profile first.

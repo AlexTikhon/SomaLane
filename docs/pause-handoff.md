@@ -1,6 +1,24 @@
-# Pause handoff (updated 2026-11-06)
+# Pause handoff (current status 2026-11-22; historical sections from 2026-11-06)
 
-## Resumed on 2026-11-06 with a new direction
+## Current status (2026-11-22): portfolio v1 release preparation
+
+- **Where things stand.** `main` at `6f3dc46` (Nutrition Trends v2, ADR-0096). Hosted CI for that commit succeeded
+  ([run 44885261535](https://github.com/AlexTikhon/SomaLane/actions/runs/44885261535): verify, integration, three
+  Chromium shards, Firefox core). Nothing is deployed; no real identity provider and no physical device has been used.
+- **What governs the work now.** [portfolio-v1-release-plan.md](portfolio-v1-release-plan.md): ten ordered steps,
+  mandatory gates, the evidence each public claim needs, deferrals and the external inputs needed later (hosting, DNS,
+  identity-provider configuration, device access). Step 1 (scope and documentation) is done.
+- **Next task.** Step 2: an isolated, reproducible synthetic dataset over 56 calendar dates. Do not start later steps
+  first, and do not resume feature slices outside the plan.
+- **Facts that changed since the sections below were written.** Sessions (ADR-0080) and pending OIDC logins
+  (ADR-0081) are in PostgreSQL: an ordinary API restart keeps them, and `restore:clear-sessions` clears both after a
+  restore. Other state is still per process (login and AI admission limits, the weekly-insight queue, the tile cache,
+  the SSE hub, maintenance runners, metrics), so one API instance remains the supported deployment. Hosted CI runs on
+  every push to `main`. All AI features remain off by default.
+- **Returning.** The restart and verification instructions below still apply, with those corrections. For a
+  documentation-only change: relative links and `git diff --check`.
+
+## Resumed on 2026-11-06 with a new direction (historical)
 
 The pause below has ended. The project is resumed as a broader activity, health and nutrition tracker with an AI
 coach on a local Ollama model; the roadmap and the principles every later slice must follow are in
@@ -79,7 +97,9 @@ failure. Investigate that boundary against a real provider before participant us
   They do not provide per-candidate fairness, durable attempts or whole-job/I/O
   cancellation. An idle successful cycle does not prove backlog progress.
 - AI search is optional/off by default. Sessions, OIDC login transactions and
-  retry state remain process-local and are lost on API restart.
+  retry state remain process-local and are lost on API restart. *(Superseded:
+  since ADR-0080/0081 sessions and pending OIDC logins are in PostgreSQL and
+  survive an ordinary restart; maintenance retry state is still per process.)*
 
 ## Returning to the project
 
@@ -90,7 +110,8 @@ failure. Investigate that boundary against a real provider before participant us
    dependency/lockfile state. Browser installation when needed:
    `cd tests/e2e; npx playwright install chromium firefox; cd ../..`.
 3. Run `npm run demo:doctor`, then `npm run demo:up`. Ctrl+C stops that stack and
-   keeps PostgreSQL data. Authenticate again after restarting the API.
+   keeps PostgreSQL data. *(Since ADR-0080 a restart of the API keeps sessions
+   until their expiry; signing in again is no longer required.)*
 4. Use separate browser profiles/contexts for runner and coach. Follow
    [the rehearsal](runbooks/demo.md). Two tabs in one profile share a session.
    The map token is absent on this workstation; statistics and tokenless demo
@@ -137,4 +158,6 @@ hosted CI; Safari/WebKit/mobile browser evidence; actual provider OIDC/basemap a
 Mapbox auth/telemetry failure behavior; production hosting and off-host
 backup/journal recovery; durable sessions; maintenance candidate fairness and
 whole-job/I/O cancellation. No migration, dependency update, push or deployment
-belongs to this closeout.
+belongs to this closeout. *(As of 2026-11-22: durable sessions are done
+(ADR-0080/0081) and hosted CI runs per push; the remaining items are placed in
+the [release plan](portfolio-v1-release-plan.md) as release steps or deferrals.)*

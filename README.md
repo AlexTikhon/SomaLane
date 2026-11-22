@@ -11,10 +11,15 @@ It started as **Running Tracker**, a learning project in GPS run capture, live c
 and grows one vertical slice at a time. Package names, database identifiers, cookies and environment variables keep the
 `running-tracker` names; only the product and the visible app are called SomaLane.
 
-> **Status (2026-11-09).** Runs locally and in CI, with a single-host production profile that has been verified on a
-> workstation but not deployed anywhere. There is no real identity provider yet, so local use signs in with fixed demo
-> people. Use synthetic data only. The next milestone is an iPhone web pilot in Safari over LAN HTTPS
-> ([ADR-0085](docs/adr/0085-iphone-lan-pilot.md)); HealthKit is deferred until a Mac with Xcode is available.
+> **Status (2026-11-22): preparing portfolio v1.** Feature work is paused for a finite, ten-step release plan:
+> [docs/portfolio-v1-release-plan.md](docs/portfolio-v1-release-plan.md). It defines the release (a public, read-only
+> showcase of synthetic data plus the full app behind invite-only OpenID Connect), its mandatory gates and what is
+> deferred. **Next task: step 2, an isolated, reproducible synthetic dataset over 56 calendar dates.**
+>
+> Today the app runs locally and in GitHub Actions (latest checked run: success for `6f3dc46`). The single-host
+> production profile is verified on a workstation but not deployed anywhere, sign-in has been tested against a test
+> OpenID Connect provider only, and nothing has been checked on a physical phone. Local use signs in with fixed demo
+> people; use synthetic data only. HealthKit is deferred until a Mac with Xcode is available.
 
 ## What it does
 
@@ -59,7 +64,13 @@ and grows one vertical slice at a time. Package names, database identifiers, coo
 - Weekly insights from a **local** Ollama model that writes only about numbers the API computed, and must cite them
   exactly.
 - "Describe the search in words" for My runs (OpenAI or local Ollama) proposes filters that you then apply.
-- Neither has met its quality target on the models tried, and both stay off unless configured.
+- **Draft from text** in the Meal log (above). Its latest model measurement (2026-11-18) failed the quality bar (recall
+  81.0 % below 85 %, no incorrect value accepted).
+- **Ask my data** on Today (ADR-0094, ADR-0095): one read-only question answered by exactly one existing deterministic
+  read. Predefined questions and the guided question builder **need no model**. Interpreting typed questions with a
+  local model is optional: its last passing measurement predates a same-day correction of the question constraints, so
+  there is no valid model evidence for the current code.
+- None of these has met its quality target for the current code, and all stay off unless configured.
 
 ## Principles
 
@@ -94,11 +105,11 @@ Details and the roadmap: [docs/product-direction.md](docs/product-direction.md).
 | `apps/web` | React 19 web app (Vite) |
 | `packages/contracts` | Zod schemas shared by API and web; generates `openapi/openapi.json` |
 | `packages/fixtures`, `tools/simulator` | deterministic test data and a GPS simulator |
-| `db/migrations` | 40 SQL migrations, checksummed and applied in order |
+| `db/migrations` | 43 SQL migrations (`0000`–`0042`), checksummed and applied in order |
 | `infra/` | Compose files (development, loopback TLS, production, iPhone pilot), nginx proxy, API images |
 | `scripts/` | setup, demo, profile verification, pilot tooling, and their tests |
 | `tests/e2e` | Playwright browser suite (Chromium, an OpenID Connect project, a Firefox core gate) |
-| `docs/` | design, 88 decision records, runbooks, reports and the progress log |
+| `docs/` | release plan, design, 96 decision records, runbooks, reports and the progress log |
 
 ## Quick start
 
@@ -177,10 +188,11 @@ Firefox gate, on pushes to `main`, on pull requests and on demand. It reads no s
 
 | Document | Use it for |
 |---|---|
+| [docs/portfolio-v1-release-plan.md](docs/portfolio-v1-release-plan.md) | **current**: release scope, the ten steps, gates, evidence required per claim, deferrals |
 | [docs/reference.md](docs/reference.md) | the detailed reference: API behaviour, data rules, configuration and verification for every feature |
 | [docs/SDD.md](docs/SDD.md) | the system design |
-| [docs/adr/](docs/adr/) | one decision record per slice (ADR-0001 to ADR-0090) |
-| [docs/product-direction.md](docs/product-direction.md) | roadmap, principles and the next milestone |
+| [docs/adr/](docs/adr/) | one decision record per slice (ADR-0001 to ADR-0096) |
+| [docs/product-direction.md](docs/product-direction.md) | roadmap, principles and each slice's summary |
 | [docs/progress.md](docs/progress.md) | what was built and how it was verified, entry by entry |
 | [docs/runbooks/](docs/runbooks/) | how to run, demo, deploy, back up and pilot it |
 | [docs/reports/](docs/reports/) | measurements, reviews and verification reports |
@@ -194,7 +206,11 @@ Firefox gate, on pushes to `main`, on pull requests and on demand. It reads no s
 - The browser suite runs in Chromium, with a bounded Firefox gate. Nothing has run in Safari, on a phone or with real
   GPS yet; the iPhone pilot's physical checks are pending
   ([docs/reports/iphone-lan-pilot.md](docs/reports/iphone-lan-pilot.md)).
-- No real Mapbox basemap was rendered in a test. The AI features (search in words, weekly insights, meal drafts) are off
-  by default: no model tried so far met their quality targets, and OpenAI has never been called.
+- No real Mapbox basemap was rendered in a test. The AI features (search in words, weekly insights, meal drafts, Ask my
+  data interpretation) are off by default: none has valid passing model evidence for the current code (Ask my data's
+  one passing run is stale after a later constraints correction), and OpenAI has never been called.
+- Only step 1 of the portfolio v1 release plan is done, so its release gates are not met; which claims need which
+  evidence is listed in
+  [the release plan](docs/portfolio-v1-release-plan.md#5-capability-claims-and-the-evidence-each-needs).
 - No phone or watch import, no FIT import and no HealthKit. GPX and TCX import cover one documented subset each (one
   track or one activity, summary only); multi-activity files and overlap detection between sources do not exist.
