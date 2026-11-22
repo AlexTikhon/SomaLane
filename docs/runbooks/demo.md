@@ -185,6 +185,11 @@ in 3.3 min (201 s); see `docs/reports/pause-verification.md`.
 separate browser profiles, or an ordinary and a private window, side by side: one for the Runner, one for the Coach.
 Two tabs of one profile are one person (section 3).
 
+Since release step 3 ([ADR-0097](../adr/0097-navigation-and-first-use-flow.md)) the page opens on **Today**, also
+after a reload during a run. Runner, Coach and Archive are under **Runs** in the navigation; the steps below open them
+by name. If the Runner window shows any other view during a run, a **Run status** bar above it says whether the run is
+recording, paused or still synchronizing, with **Go to Runner**; capture and upload continue meanwhile.
+
 | # | Do | Expect |
 |---|---|---|
 | 1 | Runner window: **Demo runner**. Coach window: **Demo coach**. | Each shows "Signed in" and organization `…0000` selected; nothing is typed. |

@@ -536,6 +536,13 @@ driven twice in two isolated headless Chromium contexts against a real `demo:up`
 and 85 s of automated time, most of it the 10 s simulator capture and the wait for the summary worker. Plan 5–7
 minutes with talking.
 
+The page now opens on **Today** (release step 3, [ADR-0097](adr/0097-navigation-and-first-use-flow.md)); open Runner
+and Coach from the navigation's **Runs** group. For the primary journey (Today → Weekly review → Trends → records) on
+populated synthetic data, use the portfolio dataset instead
+([runbooks/portfolio-dataset.md](runbooks/portfolio-dataset.md#5-review-the-populated-app)). A useful engineering
+point: switching views or reloading on Today does not stop capture or move the writer lease, because App, not a screen,
+owns those lifetimes.
+
 Without a Mapbox token, show the coach's card and the "N points · rev R" track count changing, and the runner's
 **My runs** card. Do not promise that the coach sees a shared *finished* route: the Coach tab lists live runs only,
 and **My runs** lists only the signed-in person's own runs.

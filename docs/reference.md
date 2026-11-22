@@ -250,6 +250,23 @@ Cache-Control: no-store
 
 The Check-in tab's **Movement** section (below the check-in history) has its own date, "Steps (optional)" and "Active energy (kcal)" fields, the source line "Manually entered", Save, Delete after confirmation and a 14-day history; it says that phone and watch synchronization is not connected yet. A confirmed save or deletion of movement refreshes the weekly review (in the week it shows) and never the AI insight.
 
+## Navigation and the primary journey
+
+Decided in [ADR-0097](adr/0097-navigation-and-first-use-flow.md) (release step 3). A fresh page or a reload opens
+**Today**. The one navigation landmark ("Application view") leads with **Today**, **Weekly review** and **Trends**, then
+the groups **Records** (Check-in, Meal log, Activity) and **Runs** (Runner, Coach, Archive). App still owns run
+restoration, capture, uploads, authority reads and the writer lease, whatever view is shown, and no effect changes the
+view. Away from Runner, a **Run status** region says Recording (only while capture has an active watch), Paused,
+Synchronizing (a request in flight or points waiting) or Needs attention, with **Go to Runner**; it is derived from
+existing state, with no request or polling.
+
+Date policy (`apps/web/src/journey-navigation.ts`): Today's **Weekly review** opens the week containing Today's date; a
+direct opening uses the week kept for the current scope, else the current week; the review's **28-day trends ending …**
+ends on the week's Sunday when the week is complete and on today otherwise, never later; ordinary navigation keeps
+Today's date, the review's week and the Trends range and series. All of it is App memory, scoped to session, person and
+organization, and cleared by sign-out. The Weekly review view reuses the Check-in tab's review section and controller;
+the optional AI insight stays in the Check-in tab.
+
 ## Today
 
 Decided in [ADR-0082](adr/0082-today-daily-overview.md). `GET /api/orgs/:orgId/daily-overview/:localDate?timeZone=<IANA>` returns one day of the signed-in person's own records, read in one `REPEATABLE READ READ ONLY` transaction and never stored (`Cache-Control: no-store`, errors included). The date must not be before 2000-01-01 nor after today in `timeZone` by server time.
@@ -266,7 +283,7 @@ Decided in [ADR-0082](adr/0082-today-daily-overview.md). `GET /api/orgs/:orgId/d
 | `meals` | `count`, `source: "manual"`, and for each of `energyKcal`, `proteinG`, `carbohydrateG`, `fatG`: `recordedEntries` (entries with that value) and `total` (exact sum over exactly those entries; `null` when none, `0` for recorded zeros). No title | The meal entries **logged for the date** (ADR-0083) |
 | `provenance` | `computed_by_app`, `persisted: false`, `single_read_only_transaction`, `daily-overview-4`, the computation time | |
 
-Manual activities and GPS runs are never added together, movement is never added to either, nothing is estimated, and a missing value is unknown, never 0. The web **Today** view (first in the navigation; the page still opens on Runner, whose run recovery is unchanged) defaults to today in the browser's zone, can pick an earlier date, has a manual Refresh and no polling, and keeps its date while you look at other views. "Add/Edit check-in" and "Add/Edit movement" open the existing editors on the Check-in tab for the selected date; "Add a meal"/"Open meal log" opens the Meal log on that date; "Open Activities" and "Open Runner" open those views. Opening Today again reads the day again, so edits and deletions show at once.
+Manual activities and GPS runs are never added together, movement is never added to either, nothing is estimated, and a missing value is unknown, never 0. The web **Today** view (the start view since [ADR-0097](adr/0097-navigation-and-first-use-flow.md); Runner's run recovery runs in the background whatever view is shown) defaults to today in the browser's zone, can pick an earlier date, has a manual Refresh and no polling, and keeps its date while you look at other views. "Add/Edit check-in" and "Add/Edit movement" open the existing editors on the Check-in tab for the selected date; "Add a meal"/"Open meal log" opens the Meal log on that date; "Open Activities" and "Open Runner" open those views. Opening Today again reads the day again, so edits and deletions show at once.
 
 ### Ask my data (ADR-0094, ADR-0095)
 

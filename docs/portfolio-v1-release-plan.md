@@ -1,7 +1,7 @@
 # SomaLane portfolio v1: release plan
 
-- Status: **active**. Steps 1 (this document) and 2 (the isolated 56-date synthetic dataset) of 10 are done; the
-  **next task is step 3, navigation and first-use flow**.
+- Status: **active**. Steps 1 (this document), 2 (the isolated 56-date synthetic dataset) and 3 (navigation and
+  first-use flow) of 10 are done; the **next task is step 4, measured initial-bundle reduction**.
 - Date: 2026-11-22. Baseline: `main` at `6f3dc46` (Nutrition Trends v2, ADR-0096).
 - Authority: this is the single source of truth for what portfolio v1 contains, which evidence it needs, and what is
   deferred. Where an older document names a different "next milestone" (for example the iPhone pilot of ADR-0085 as
@@ -165,6 +165,15 @@ run, and updates the [status table](#8-status) below. A step adds no feature bey
   - The Firefox core gate still passes.
 - **Not in this step.** No new screen content, no new analytics, no routing library unless the step's ADR or progress
   entry justifies it.
+- **Status: done (2026-11-22, fresh checks).** [ADR-0097](adr/0097-navigation-and-first-use-flow.md): the page opens on
+  Today; the navigation leads with Today, Weekly review (its own view, composed of the existing review section) and
+  Trends, then Records and Runs; a documented date policy (Today → the week of its date; Sunday or today, never later,
+  for review → Trends); a compact Run status away from Runner. No routing library. Run recovery, capture, uploads and the
+  writer lease stay owned by App. Evidence: [verification report](reports/navigation-first-use-verification-2026-11-22.md):
+  `npm run verify`, the full Chromium/OIDC suite 192 passed (with the new primary-journey spec: journey, scope and late
+  answers, capture and upload for the same run while Today and the Weekly review are shown, reload on Today restoring
+  the same run and writer, 375 px and keyboard), the Firefox core gate 18 passed, and the journey on the step-2 dataset
+  (read-only; dataset fingerprint unchanged). Not run in CI.
 
 ### Step 4. Measured initial-bundle reduction
 
@@ -349,8 +358,8 @@ other inputs block the step named.
 |---|---|---|
 | 1. Release scope and current documentation | **Done** | This plan; progress entry of 2026-11-22 |
 | 2. Isolated 56-date synthetic dataset | **Done** | [Report](reports/portfolio-dataset-verification-2026-11-22.md); progress entry of 2026-11-22 (fresh checks; not run in CI) |
-| 3. Navigation and first-use flow | **Next** | — |
-| 4. Initial-bundle reduction | Not started | — |
+| 3. Navigation and first-use flow | **Done** | [Report](reports/navigation-first-use-verification-2026-11-22.md); progress entry of 2026-11-22 (fresh checks; not run in CI) |
+| 4. Initial-bundle reduction | **Next** | — |
 | 5. Public read-only showcase | Not started | — |
 | 6. WebKit gate and physical Safari | Not started | — |
 | 7. Real OIDC provider | Not started (external input) | — |

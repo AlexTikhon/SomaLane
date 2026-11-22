@@ -3,6 +3,8 @@
 - Status: accepted; implemented and verified locally (unit, real PostgreSQL integration, Chromium end-to-end including a
   375 px viewport). Hosted CI: see the final report of the change.
 - Date: 2026-11-08
+- Amended by: [ADR-0097](0097-navigation-and-first-use-flow.md) (release step 3: Today is now the start view; Runner's
+  recovery is unchanged and independent of the view).
 - Relates to: ADR-0074 (a check-in belongs to a local calendar date; "today" by the server clock in the client's zone),
   ADR-0078 (manual movement with server-owned provenance; sources never added), ADR-0077/0079 (the weekly review's one
   snapshot, explicit coverage and code-written wording), ADR-0072/0073 (owner-only activities), ADR-0056 (local day

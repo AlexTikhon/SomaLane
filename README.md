@@ -51,14 +51,20 @@ and grows one vertical slice at a time. Package names, database identifiers, coo
 
 ### Views
 
-- **Today**: one day across all of the above, with actions that open each editor on that date and the day's
-  activities and runs in the activity history.
+The page opens on **Today**. The navigation leads with Today, Weekly review and Trends; the editors (Check-in, Meal
+log, Activity) and the run views (Runner, Coach, Archive) follow in two groups. While a run records or still has data
+to send, a compact status above every other view says so and leads back to Runner (ADR-0097).
+
+- **Today**: one day across all of the above, with actions that open each editor on that date, the week's review and
+  Trends, and the day's activities and runs in the activity history.
 - **Trends**: the 28 dates ending on a chosen date (weight, sleep, steps, and recorded food energy, protein,
   carbohydrate and fat), each with its coverage; every nutrient has its own day and entry coverage (ADR-0096). Gaps
   stay gaps; a missing value never counts as zero. A nutrition date opens its Meal log, with a way back to the same range. Its Activity section shows one source and one activity type over the
   same dates (count, the source's own duration, distance, with coverage); sources are never added together.
 - **Weekly review**: one week's coverage, values and limitations, worded by code on every read, including the week's
   recorded nutrition from the meal log with its entry and day coverage (ADR-0093); totals cover only what was logged.
+  Its own view (also shown in the Check-in tab), with a way on to Trends ending on the week's Sunday, or today while the
+  week is in progress.
 
 ### Optional AI, off by default
 
@@ -203,7 +209,7 @@ Firefox gate, on pushes to `main`, on pull requests and on demand. It reads no s
 | [docs/portfolio-v1-release-plan.md](docs/portfolio-v1-release-plan.md) | **current**: release scope, the ten steps, gates, evidence required per claim, deferrals |
 | [docs/reference.md](docs/reference.md) | the detailed reference: API behaviour, data rules, configuration and verification for every feature |
 | [docs/SDD.md](docs/SDD.md) | the system design |
-| [docs/adr/](docs/adr/) | one decision record per slice (ADR-0001 to ADR-0096) |
+| [docs/adr/](docs/adr/) | one decision record per slice (ADR-0001 to ADR-0097) |
 | [docs/product-direction.md](docs/product-direction.md) | roadmap, principles and each slice's summary |
 | [docs/progress.md](docs/progress.md) | what was built and how it was verified, entry by entry |
 | [docs/runbooks/](docs/runbooks/) | how to run, demo, deploy, back up and pilot it |

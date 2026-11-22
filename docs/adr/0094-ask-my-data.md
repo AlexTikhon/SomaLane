@@ -3,7 +3,7 @@
 - Status: accepted; implemented and verified on the workstation (Chromium, real PostgreSQL). Question interpretation is
   **off by default**; its frozen real-model gate **failed** on quality (see "Measurement").
 - Date: 2026-11-19
-- Amended by: [ADR-0095](0095-ask-my-data-guided-questions.md) (guided questions, question constraints, prompt 2, evaluation v2); the measurement below is historical and now stale evidence for the current code.
+- Amended by: [ADR-0095](0095-ask-my-data-guided-questions.md) (guided questions, question constraints, prompt 2, evaluation v2); the measurement below is historical and now stale evidence for the current code. [ADR-0097](0097-navigation-and-first-use-flow.md): "Open the weekly review" now opens the Weekly review view on the answer's week, not the Check-in tab.
 - Amends: nothing. ADR-0082 (Today), ADR-0077/0079/0093 (weekly review) and ADR-0089/0090 (activity trends and their
   comparison) are read, never changed. The meal-draft pipeline (ADR-0092), its gate and its historical evidence are
   untouched.

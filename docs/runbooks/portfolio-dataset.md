@@ -157,11 +157,18 @@ Named selections for the default parameters (`--anchor 2026-11-21`; the command 
 | Screen | Selection | What it shows |
 |---|---|---|
 | Today | Date **2026-11-21** | check-in (sleep 6 h 56 min, weight 70.73 kg, a note), 8,424 steps / 492.6 kcal, 3 meals including a recorded-zero coffee, a walk, one finished GPS run of 6.72 km |
-| Weekly review (Check-in tab) | Week **2026-11-09 – 2026-11-15** | 6 movement days (54,613 steps over 5), 14 meals on 5 days with partial nutrient coverage, a TCX swim, a GPS run, the unlogged date 2026-11-11 |
+| Weekly review (its own view; also in the Check-in tab) | Week **2026-11-09 – 2026-11-15** | 6 movement days (54,613 steps over 5), 14 meals on 5 days with partial nutrient coverage, a TCX swim, a GPS run, the unlogged date 2026-11-11 |
 | Trends, nutrition | End date **2026-11-21** | 61 entries on 22 of 28 days; 2026-10-29 no entry logged; 2026-11-14 partial (1 of 2 entries with fat); 2026-11-21 recorded zeros; 2026-11-20 a title-only dinner |
 | Trends, activity | Source **Manual**, type **Run**, end date 2026-11-21 | compared with 2026-09-27 – 2026-10-24: +1 (+12.5 %), +1:05:01 (+19.5 %), +11.60 km (+18.8 %) |
 | Archive → My runs → View details | the run of 2026-11-21 | finished, current summary: 6.72 km, 34:00 |
 | Coach | sign in as **Demo coach** | the coach's Today is empty: check-ins, movement, meals and activities are owner-only; only the shared run is visible |
+
+**The primary journey** (release step 3, [ADR-0097](../adr/0097-navigation-and-first-use-flow.md)). After **Demo
+runner** the page is on **Today**. Set the date to **2026-11-15** (the review week's Sunday) → **Weekly review** (Today's
+button) opens the week 9–15 Nov → **28-day trends ending Sun 15 Nov 2026** (a completed week ends on its Sunday) → a
+nutrition series, then a row's **Meal log** (and **Back to Trends**) or **Open** (Today on that date). The navigation's
+**Weekly review** button reopens the week you chose. The walkthrough's second test follows exactly this, with the
+selections read from the manifest.
 
 When the API runs, its maintenance jobs run too: the raw points of runs finished more than seven days ago are purged
 (retention, migrations 0014–0015), while their summaries stay. That is expected and does not change the digest.

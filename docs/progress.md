@@ -5729,3 +5729,42 @@ Remaining limits: without the local record a partial dataset is still resumed as
 distinguishes them); an infrastructure failure while a completion is recorded is still recorded as `interrupted` and
 described as incomplete, although nothing is written on that path. The P2 finding is resolved and the required checks
 pass, so **step 2 is complete; next task: release step 3, navigation and first-use flow.** Changes are uncommitted.
+
+## Portfolio v1 release step 3: navigation and first-use flow (ADR-0097) (2026-11-22)
+
+**Outcome.** The primary journey (daily records → Today → Weekly review → Trends → records) can be followed from the
+primary navigation. Decided in [ADR-0097](adr/0097-navigation-and-first-use-flow.md):
+
+- **Start view: Today.** `START_VIEW` replaces Runner as the initial view. App's restoration, authority reads, capture,
+  uploads and writer lease are unchanged and independent of the view, and no effect changes the view. A reload during a
+  run opens Today while the run resumes in the background.
+- **Navigation.** One "Application view" landmark: Today, **Weekly review**, Trends first (larger), then the named
+  groups Records (Check-in, Meal log, Activity) and Runs (Runner, Coach, Archive). Each group gets its own row at 520 px
+  and below.
+- **Weekly review view.** `WeeklyReviewScreen` composes the existing `WeeklyReviewPanel` and controller (level-1
+  heading, a Trends action). Mounted only while shown, keyed by scope. No AI section here; the Check-in tab is unchanged.
+  Today has a **Weekly review** action. An Ask-my-data answer opens this view instead of the Check-in tab.
+- **Date policy** (`journey-navigation.ts`): Today → the week containing its date; a direct opening uses the kept week,
+  else the current week; review → Trends ends on Sunday for a completed week, today otherwise, never later. Ordinary
+  navigation keeps the selections. All of it is App memory, scoped to session, person and organization, and cleared on
+  sign-out.
+- **Run status** (`run-attention.ts`, `RunStatusNotice.tsx`): Recording (only with an active capture watch), Paused,
+  Synchronizing, or Needs attention, derived from existing state, with **Go to Runner**. No request or polling.
+
+No API, contract, schema, migration, storage format, dataset, dependency or routing library changed.
+
+| Check (fresh, this change) | Result |
+|---|---|
+| Database identity before write-based browser runs (read-only) | `running_tracker_test` on the `running-tracker` container (system id `…4838`) as runtime, maintenance and owner roles; the portfolio server is another cluster (`…6329`) |
+| Focused web unit tests | 115 passed (10 files; new specs for the date policy, the run status, the Weekly review view; updated App, navigation intent and Today specs) |
+| `npm run verify` | exit 0: scripts 115, API 2,810, web 1,440, contracts 325, fixtures 14, simulator 3, build; the contracts build's line-ending-only rewrite of `openapi.json` restored |
+| Chromium, focused (new `primary-journey.spec.ts` plus the specs whose start-view assumption changed) | 36 passed |
+| `npm run test:e2e` (full Chromium + OIDC) | first run 188 passed, 4 failed (two `net::ERR_ADDRESS_IN_USE` blank pages from Vite, one Ask-my-data interpretation error, all environmental and passing on rerun; one genuine: the OIDC expiry test did not open Runner, fixed in the test). Second run on the final code: **192 passed** (19.0 min) |
+| `npm run test:e2e:firefox` | **18 passed** |
+| `npm run test:e2e:portfolio-dataset` (verified launcher, read-only) | **2 passed**, including the new journey test driven by `manifest.json`; dataset fingerprint (13 record tables) and manifest/seed-state hashes unchanged; step-2 screenshots restored byte-identical |
+| `git diff --check`, new files with `--no-index --check` | clean |
+
+Evidence and limits: [verification report](reports/navigation-first-use-verification-2026-11-22.md). Not run: hosted
+CI, the pre-demo smoke, integration tests (no server code changed), WebKit, Safari or a phone. A pre-existing narrow
+Trends action column at 1280 px is recorded there for a later pass. Step 3's acceptance criteria hold, so **step 3 is
+done; next task: release step 4, measured initial-bundle reduction.** Changes are uncommitted.
