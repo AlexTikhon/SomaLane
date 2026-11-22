@@ -5768,3 +5768,79 @@ Evidence and limits: [verification report](reports/navigation-first-use-verifica
 CI, the pre-demo smoke, integration tests (no server code changed), WebKit, Safari or a phone. A pre-existing narrow
 Trends action column at 1280 px is recorded there for a later pass. Step 3's acceptance criteria hold, so **step 3 is
 done; next task: release step 4, measured initial-bundle reduction.** Changes are uncommitted.
+
+## Portfolio v1 release step 4: measured initial-bundle reduction (ADR-0098) (2026-11-22)
+
+**Outcome.** The first page no longer carries the secondary views. Decided in
+[ADR-0098](adr/0098-initial-bundle-reduction.md):
+
+- **Measurement.** `npm run measure:web-bundle` (`scripts/measure-web-bundle.mjs`): Vite's production build with a
+  manifest and an empty env directory; initial = the entry and its static closure with their CSS, checked against the
+  built `index.html`; deferred chunks reported separately; `--ref <commit>` for a commit; an uncommitted candidate is
+  identified by git tree ids.
+- **One deferred chunk.** Coach, Archive, Activity, Check-in, Meal log and Runner's result load through
+  `secondary-views.ts` the first time one of them opens. Today (with Ask my data), the Weekly review, Trends, Runner,
+  the Run status and everything App owns for run recovery, capture, uploads and the writer lease stay initial. One chunk
+  rather than one per view because Chromium keeps a failed module failed for the page (probe in the report), so a
+  shared deferred chunk would make a retry impossible.
+- **Loading and failure** (`DeferredView.tsx`, `deferred-module.ts`): "Opening …" in the view's area, an alert with
+  **Try again** on failure, Back to Runner for the result view; no React.lazy, Suspense, error boundary, navigation or
+  reload. Try again imports again and, if that fails, imports the failed same-origin URL with `?retry=N`, accepting
+  only a module with the six view exports.
+- **Mapbox stylesheet** loads with the runtime through one retryable `<link>`; the archive canvas rule got two classes
+  so it still beats Mapbox's `.mapboxgl-map`.
+
+| Measure (same settings) | `a3bf4e2` | Candidate | Change |
+|---|---|---|---|
+| Initial JS raw / gzip | 799,724 / 220,581 B | 625,755 / 175,156 B | −173,969 / −45,425 B |
+| Initial CSS raw / gzip | 91,478 / 13,681 B | 43,020 / 8,276 B | −48,458 / −5,405 B |
+| Deferred `secondary-views` chunk raw / gzip | — | 179,628 / 46,896 B | fetched when a secondary view first opens |
+
+| Check (fresh, this change) | Result |
+|---|---|
+| Database identity before write-based browser runs (read-only) | `running_tracker_test` on `running-tracker-postgres-1` (system id `…4838`) as runtime, maintenance and owner roles; the portfolio server is another cluster (`…6329`) |
+| New unit tests | `deferred-module`, `DeferredView`, `initial-bundle-boundary` (static graph from `main.tsx`; a mutation adding a static import failed it), `mapbox-runtime`, `scripts/web-bundle.test.mjs` |
+| `npm run verify` | exit 0: scripts 122, API 2,810, web 1,462, contracts 325, fixtures 14, simulator 3, build; the contracts build's line-ending-only rewrite of `openapi.json` restored |
+| `npm run test:e2e:production-build` (production build, `vite preview`) | **5 passed** (4 Chromium, 1 Firefox): cold-load chunk requests, loading/failure/Try again, leaving and organization change during the import, recording and reload with the chunk unavailable. A mutation reducing Try again to a plain re-import failed in Chromium and passed in Firefox |
+| `npm run test:e2e` (full Chromium + OIDC, dev servers) | first run 190 passed, 2 failed (authority-reconciliation:123, the Runner finish reached `error`; run-sharing:19, the page never rendered its navigation); both passed when rerun alone. Second run on the final code: 190 passed, 2 failed (ask-my-data:141, trends-nutrition:77; both traces show `net::ERR_ADDRESS_IN_USE` on `/api` requests through the dev proxy); both passed when rerun alone. Every test passed in at least one full run; neither full run was free of failures |
+| `npm run test:e2e:firefox` | **18 passed** |
+| `npm run test:e2e:portfolio-dataset` (read-only) | **2 passed**; dataset digest `sha256:b6222c85…857d` and manifest/seed-state hashes unchanged; screenshots restored byte-identical |
+| `git diff --check`, new files with `--no-index --check` | clean (15 new files) |
+
+Evidence and limits: [verification report](reports/initial-bundle-verification-2026-11-22.md). Not run: hosted CI, the
+pre-demo smoke, integration tests (no server code changed), WebKit or Safari (whose import errors name no URL). The
+production check's build has no Mapbox token, so the map stylesheet path is covered by unit and development-server map
+tests only. The candidate's commit reference is pending. Step 4's acceptance criteria hold, so **step 4 is done; next
+task: release step 5, the public read-only synthetic showcase.** Changes are uncommitted.
+
+> **Corrected the same day (see the next entry):** that conclusion was wrong. The acceptance criterion "the full
+> Chromium suite … pass[es]" had no successful full run, so step 4 is **implemented; verification pending**, not done.
+
+## Portfolio v1 release step 4: status correction and independent review (2026-11-22)
+
+**Status: implemented; verification pending.** Step 4 was recorded as done above although its required full
+Chromium/OIDC gate has no successful full run. Documentation-only correction: README, the
+[release plan](portfolio-v1-release-plan.md#step-4-measured-initial-bundle-reduction),
+[ADR-0098](adr/0098-initial-bundle-reduction.md) and the
+[verification report](reports/initial-bundle-verification-2026-11-22.md) now say so. The measured savings,
+implementation details and earlier test results are unchanged. Application code, tests and acceptance criteria are
+unchanged.
+
+Independent review evidence, recorded separately from the author's checks:
+
+| Check | Result |
+|---|---|
+| `npm run verify` and E2E typecheck | passed |
+| `npm run test:e2e:production-build` | **5/5** |
+| `npm run test:e2e:firefox` (Firefox core) | **18/18** |
+| `npm run test:e2e:portfolio-dataset` (walkthrough) | **2/2**; dataset unchanged |
+| Full `npm run test:e2e` (Chromium + OIDC) | 190 passed, 2 failed during startup with `net::ERR_NETWORK_CHANGED` and `net::ERR_ADDRESS_IN_USE` |
+| The two affected cases, rerun | each passed twice |
+
+No functional code defect was identified. **Completion requires a successful full Chromium/OIDC run, or a CI run, for
+the candidate; individual reruns do not close that gate.**
+
+Checks for this correction (fresh): `git diff --check` and Markdown-link checks of the changed files only. No
+application suite was rerun (documentation only).
+
+**Next task: close step 4's full-suite gate before advancing to release step 5.** Changes are uncommitted.

@@ -14,8 +14,11 @@ and grows one vertical slice at a time. Package names, database identifiers, coo
 > **Status (2026-11-22): preparing portfolio v1.** Feature work is paused for a finite, ten-step release plan:
 > [docs/portfolio-v1-release-plan.md](docs/portfolio-v1-release-plan.md). It defines the release (a public, read-only
 > showcase of synthetic data plus the full app behind invite-only OpenID Connect), its mandatory gates and what is
-> deferred. Steps 1 and 2 are done (step 2: an isolated, reproducible synthetic dataset over 56 calendar dates,
-> `npm run portfolio:dataset`). **Next task: step 3, navigation and first-use flow.**
+> deferred. Steps 1 to 3 are done (step 2: an isolated, reproducible synthetic dataset over 56 calendar dates,
+> `npm run portfolio:dataset`; step 3: Today-first navigation, ADR-0097). Step 4 (the secondary views load on demand,
+> measured with `npm run measure:web-bundle`, ADR-0098) is **implemented; verification pending**: its full
+> Chromium/OIDC gate has no successful full run yet. **Next task: close step 4's full-suite gate (a successful full
+> Chromium/OIDC run or a CI run for the candidate) before advancing to step 5.**
 >
 > Today the app runs locally and in GitHub Actions (latest checked run: success for `6f3dc46`). The single-host
 > production profile is verified on a workstation but not deployed anywhere, sign-in has been tested against a test
@@ -183,6 +186,7 @@ It never touches the development or test database and never reads `.env`. It pri
 | `npm run test:e2e` | Playwright, Chromium plus a real OpenID Connect provider process (146 tests); `npm run test:e2e:firefox` runs an 18-test Firefox core gate |
 | `npm run test:e2e:smoke` | a 24-test pre-demo smoke on its own ports |
 | `npm run test:portfolio-dataset`, `npm run test:e2e:portfolio-dataset` | the synthetic dataset on throwaway databases inside its isolated server, and a Chromium walkthrough of the populated screens (after `npm run portfolio:dataset`; not in CI) |
+| `npm run measure:web-bundle`, `npm run test:e2e:production-build` | the initial JavaScript and CSS of the production build, raw and gzip (`-- --ref <commit>` for a commit), and a Chromium/Firefox check of that build's chunk requests and of loading, failure and retry of the on-demand views (ADR-0098; not in CI) |
 | `npm run deploy:verify`, `npm run transport:verify`, `npm run pilot:verify` | Docker profile checks: deployment, loopback TLS/HTTP2, iPhone pilot |
 
 The integration and browser suites need the test database first (`npm run db:up`, `npm run db:bootstrap:test`,
@@ -209,7 +213,7 @@ Firefox gate, on pushes to `main`, on pull requests and on demand. It reads no s
 | [docs/portfolio-v1-release-plan.md](docs/portfolio-v1-release-plan.md) | **current**: release scope, the ten steps, gates, evidence required per claim, deferrals |
 | [docs/reference.md](docs/reference.md) | the detailed reference: API behaviour, data rules, configuration and verification for every feature |
 | [docs/SDD.md](docs/SDD.md) | the system design |
-| [docs/adr/](docs/adr/) | one decision record per slice (ADR-0001 to ADR-0097) |
+| [docs/adr/](docs/adr/) | one decision record per slice (ADR-0001 to ADR-0098) |
 | [docs/product-direction.md](docs/product-direction.md) | roadmap, principles and each slice's summary |
 | [docs/progress.md](docs/progress.md) | what was built and how it was verified, entry by entry |
 | [docs/runbooks/](docs/runbooks/) | how to run, demo, deploy, back up and pilot it |

@@ -1,7 +1,9 @@
 # SomaLane portfolio v1: release plan
 
 - Status: **active**. Steps 1 (this document), 2 (the isolated 56-date synthetic dataset) and 3 (navigation and
-  first-use flow) of 10 are done; the **next task is step 4, measured initial-bundle reduction**.
+  first-use flow) of 10 are done. Step 4 (measured initial-bundle reduction) is **implemented; verification pending**:
+  its full Chromium/OIDC gate has no successful full run. The **next task is to close step 4's full-suite gate** (a
+  successful full Chromium/OIDC run or a CI run for the candidate) before advancing to step 5.
 - Date: 2026-11-22. Baseline: `main` at `6f3dc46` (Nutrition Trends v2, ADR-0096).
 - Authority: this is the single source of truth for what portfolio v1 contains, which evidence it needs, and what is
   deferred. Where an older document names a different "next milestone" (for example the iPhone pilot of ADR-0085 as
@@ -188,6 +190,27 @@ run, and updates the [status table](#8-status) below. A step adds no feature bey
   - Loading and failure states of a lazily loaded screen are tested; the full Chromium suite and the Firefox core gate
     pass.
 - **Not in this step.** No dependency replacement or framework change.
+- **Status: implemented; verification pending (2026-11-22, fresh checks).** First recorded as done; corrected the
+  same day because the acceptance criterion "the full Chromium suite … pass[es]" has no successful full run.
+  [ADR-0098](adr/0098-initial-bundle-reduction.md): Coach, Archive,
+  Activity, Check-in, Meal log and Runner's result load on demand as one chunk; Today, the Weekly review, Trends, Runner
+  and everything App owns for run recovery and capture stay in the first page. The Mapbox stylesheet loads with the map
+  runtime. Measured with `npm run measure:web-bundle` (same settings, baseline `a3bf4e2`, candidate commit pending):
+  initial JS 799,724 → 625,755 B raw, 220,581 → 175,156 B gzip; initial CSS 91,478 → 43,020 B raw, 13,681 → 8,276 B
+  gzip; the deferred chunk is 179,628 B raw / 46,896 B gzip. Evidence:
+  [verification report](reports/initial-bundle-verification-2026-11-22.md): a production-build browser check
+  (`npm run test:e2e:production-build`: chunk requests, loading, failure and a real retry in Chromium and Firefox,
+  scope changes, recording and reload with the chunk unavailable), `npm run verify`, the full Chromium/OIDC suite (two
+  runs of 190 passed and 2 failed each, four different tests, each passing when rerun alone; two traced to
+  `ERR_ADDRESS_IN_USE` on API requests), the Firefox core gate 18 passed, and the read-only dataset walkthrough. Not run
+  in CI.
+- **Independent review (recorded 2026-11-22).** `npm run verify` and the E2E typecheck passed; production-build tests
+  5/5; Firefox core 18/18; portfolio walkthrough 2/2 with the dataset unchanged. Full Chromium/OIDC run: 190 passed, 2
+  failed during startup with `ERR_NETWORK_CHANGED` and `ERR_ADDRESS_IN_USE`; both affected cases passed twice each on
+  rerun. No functional code defect was identified. Details in the report's
+  [independent review](reports/initial-bundle-verification-2026-11-22.md#independent-review-recorded-2026-11-22).
+- **To complete step 4:** a successful full Chromium/OIDC run, or a CI run, for the candidate. Rerunning individual
+  failed cases does not close this gate.
 
 ### Step 5. Public read-only synthetic showcase
 
@@ -359,8 +382,8 @@ other inputs block the step named.
 | 1. Release scope and current documentation | **Done** | This plan; progress entry of 2026-11-22 |
 | 2. Isolated 56-date synthetic dataset | **Done** | [Report](reports/portfolio-dataset-verification-2026-11-22.md); progress entry of 2026-11-22 (fresh checks; not run in CI) |
 | 3. Navigation and first-use flow | **Done** | [Report](reports/navigation-first-use-verification-2026-11-22.md); progress entry of 2026-11-22 (fresh checks; not run in CI) |
-| 4. Initial-bundle reduction | **Next** | — |
-| 5. Public read-only showcase | Not started | — |
+| 4. Initial-bundle reduction | **Implemented; verification pending** (next: a successful full Chromium/OIDC run or CI run for the candidate) | [Report](reports/initial-bundle-verification-2026-11-22.md), including its independent review; progress entries of 2026-11-22 (fresh checks; candidate commit pending; not run in CI; no full Chromium/OIDC run free of failures) |
+| 5. Public read-only showcase | Not started (after step 4's gate closes) | — |
 | 6. WebKit gate and physical Safari | Not started | — |
 | 7. Real OIDC provider | Not started (external input) | — |
 | 8. Single-host deployment | Not started (external input) | — |

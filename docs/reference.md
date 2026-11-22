@@ -260,6 +260,13 @@ view. Away from Runner, a **Run status** region says Recording (only while captu
 Synchronizing (a request in flight or points waiting) or Needs attention, with **Go to Runner**; it is derived from
 existing state, with no request or polling.
 
+The first page holds Today, the Weekly review, Trends, Runner and the Run status
+([ADR-0098](adr/0098-initial-bundle-reduction.md), release step 4). Coach, Archive, Activity, Check-in, Meal log and
+Runner's result load on demand, as one chunk, the first time one of them opens. While it loads, the view's area says
+"Opening …"; if it fails, the area says so and offers **Try again** (a real new fetch, also in Chromium), while
+navigation, the Run status and any run in progress carry on. Nothing reloads the page. The Mapbox stylesheet loads with
+the map runtime. `npm run measure:web-bundle` reports the production build's initial JavaScript and CSS.
+
 Date policy (`apps/web/src/journey-navigation.ts`): Today's **Weekly review** opens the week containing Today's date; a
 direct opening uses the week kept for the current scope, else the current week; the review's **28-day trends ending …**
 ends on the week's Sunday when the week is complete and on today otherwise, never later; ordinary navigation keeps
