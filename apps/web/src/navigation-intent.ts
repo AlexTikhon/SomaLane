@@ -8,19 +8,57 @@ import type { TodayAction } from './daily-overview.js';
 // organization) they were made in and are ignored under any other scope, so a date chosen or an editor intent made by
 // one person or organization never opens for another, and nothing survives a sign-out.
 
-export type AppView = 'activity' | 'archive' | 'checkin' | 'coach' | 'meals' | 'runner' | 'today' | 'trends';
+export type AppView = 'activity' | 'archive' | 'checkin' | 'coach' | 'meals' | 'review' | 'runner' | 'today' | 'trends';
 
 /**
- * Opens an existing editor on one date: one of the Check-in tab's two editors, or the Meal log (ADR-0083); or the Check-in
- * tab's weekly review on the week starting `localDate` (ADR-0094).
+ * The view a fresh page shows (release step 3). Runner's restoration, recovery, capture, uploads and writer lease are owned
+ * by App whatever view is shown, so the start view does not wait for them, and no later effect changes the view.
  */
+export const START_VIEW: AppView = 'today';
+
+export interface NavigationEntry {
+  label: string;
+  view: AppView;
+}
+
+/** The primary journey, first and most prominent: one day, its week, 28 dates. */
+export const primaryNavigation: readonly NavigationEntry[] = [
+  { label: 'Today', view: 'today' },
+  { label: 'Weekly review', view: 'review' },
+  { label: 'Trends', view: 'trends' },
+];
+
+/** Everything else, in two groups: where records are entered, and the run recorder with what builds on it. */
+export const secondaryNavigation: readonly { label: string; entries: readonly NavigationEntry[] }[] = [
+  {
+    entries: [
+      { label: 'Check-in', view: 'checkin' },
+      { label: 'Meal log', view: 'meals' },
+      { label: 'Activity', view: 'activity' },
+    ],
+    label: 'Records',
+  },
+  {
+    entries: [
+      { label: 'Runner', view: 'runner' },
+      { label: 'Coach', view: 'coach' },
+      { label: 'Archive', view: 'archive' },
+    ],
+    label: 'Runs',
+  },
+];
+
+/** Opens an existing editor on one date: one of the Check-in tab's two editors, or the Meal log (ADR-0083). */
 export interface EditorIntent {
   localDate: string;
   scope: string;
-  section: 'check-in' | 'meals' | 'movement' | 'weekly-review';
+  section: 'check-in' | 'meals' | 'movement';
 }
 
-/** The date Today shows, or the end date of the Trends range (ADR-0084), kept while the person navigates elsewhere and back. */
+/**
+ * The date Today shows, the end date of the Trends range (ADR-0084), or the Monday of the week the Weekly review shows
+ * (release step 3), kept while the person navigates elsewhere and back.
+ */
 export interface KeptDate {
   localDate: string;
   scope: string;
@@ -78,9 +116,18 @@ export function navigationFromTrendsRow(
 }
 
 /**
+ * The Weekly review's Trends action: Trends with the range ending on `endDate`, which the review chose by the journey's
+ * date policy (journey-navigation.ts, never after today). The series and Activity choices kept for Trends stay as they are.
+ */
+export function navigationFromReview(endDate: string, scope: string): { trendsEnd: KeptDate; view: AppView } {
+  return { trendsEnd: { localDate: endDate, scope }, view: 'trends' };
+}
+
+/**
  * The view a Today action opens and, for the editors, the intent that carries the selected date. The Trends action
  * carries the selected date as the end of its range instead (`trendsEnd`); it opens no editor. A history action carries
- * the date, zone and source the Activity history opens on (`history`).
+ * the date, zone and source the Activity history opens on (`history`). The weekly review action opens the Weekly review
+ * view on its week (`reviewWeek`), which becomes the week kept for that view.
  */
 export function navigationFor(
   action: TodayAction,
@@ -88,6 +135,7 @@ export function navigationFor(
 ): {
   editor: EditorIntent | null;
   history?: HistoryIntent;
+  reviewWeek?: KeptDate;
   trendsActivity?: KeptActivitySelection;
   trendsEnd?: KeptDate;
   view: AppView;
@@ -106,7 +154,7 @@ export function navigationFor(
     case 'trends':
       return { editor: null, trendsEnd: { localDate: action.localDate, scope }, view: 'trends' };
     case 'weekly-review':
-      return { editor: { localDate: action.weekStart, scope, section: 'weekly-review' }, view: 'checkin' };
+      return { editor: null, reviewWeek: { localDate: action.weekStart, scope }, view: 'review' };
     case 'activity-trends':
       return {
         editor: null,
@@ -123,10 +171,10 @@ export function navigationFor(
   }
 }
 
-/** The intent for the Check-in tab only (its two editors and its weekly review); a Meal log intent is not one. */
+/** The intent for the Check-in tab only (its two editors); a Meal log intent is not one. */
 export function checkInIntentOf(
   intent: EditorIntent | null,
-): { localDate: string; section: 'check-in' | 'movement' | 'weekly-review' } | undefined {
+): { localDate: string; section: 'check-in' | 'movement' } | undefined {
   if (intent === null || intent.section === 'meals') return undefined;
   return { localDate: intent.localDate, section: intent.section };
 }

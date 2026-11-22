@@ -53,6 +53,7 @@ test('the writer\'s New run clears its uploaded finished run, survives a reload 
   await expect(page.getByRole('button', { name: 'Start run' })).toBeVisible();
   expect((await readDurableRunnerState(page, scenario.runnerUserId)).activeRunId).toBeNull();
   await page.reload();
+  await runner.showView();
   await expect(runner.card('Recording').value).toHaveText('idle');
   expect((await readDurableRunnerState(page, scenario.runnerUserId)).activeRunId).toBeNull();
 
@@ -130,6 +131,7 @@ test('a stale tab\'s New run cannot clear the run another writer epoch started',
 
   // After a reload A recovers B's run, not an empty pointer, and the points are still there.
   await page.reload();
+  await tabA.showView();
   await expect(tabA.card('Recording').value).toHaveText('recording');
   await expect(tabA.card('Writer').value).toHaveText('conflict', { timeout: 20_000 });
   const reloaded = await readDurableRunnerState(page, scenario.runnerUserId);

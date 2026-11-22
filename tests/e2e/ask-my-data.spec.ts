@@ -113,7 +113,8 @@ test('2. fake interpretation: the plan is reviewed first, then executed once int
 
   // The source action opens the existing weekly review on the same week.
   await answer.getByRole('button', { name: 'Open the weekly review' }).click();
-  await expect(page.getByRole('heading', { level: 2, name: 'Weekly review' })).toBeFocused();
+  await expect(page.getByRole('heading', { level: 1, name: 'Weekly review' })).toBeFocused();
+  await expect(navigation(page).getByRole('button', { exact: true, name: 'Weekly review' })).toHaveAttribute('aria-current', 'page');
 });
 
 test('3. an ambiguous source asks for an explicit choice, which becomes a plan to review', async ({ demoScenario, environment, page }) => {
@@ -435,7 +436,8 @@ test('10. guided weekly nutrition with interpretation off: choices, review, then
   expect(seen.answers.map((plan) => [plan.operation, plan.period.symbol])).toEqual([['weekly_review', 'current_week']]);
   expect(seen.interpretations).toBe(0);
   await answer.getByRole('button', { name: 'Open the weekly review' }).click();
-  await expect(page.getByRole('heading', { level: 2, name: 'Weekly review' })).toBeFocused();
+  await expect(page.getByRole('heading', { level: 1, name: 'Weekly review' })).toBeFocused();
+  await expect(navigation(page).getByRole('button', { exact: true, name: 'Weekly review' })).toHaveAttribute('aria-current', 'page');
 });
 
 test('11. guided GPX then TCX comparison with an explicit source and type; changing the source drops the reviewed plan', async ({ demoScenario, environment, page }) => {

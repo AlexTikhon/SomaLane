@@ -28,6 +28,8 @@ test.describe('organization discovery in the browser', () => {
 
     await expectSignedIn(page, scenario.runnerUserId);
     await expectOrganizationSelected(page, scenario.orgId);
+    // The page opens on Today (release step 3); the Runner view is where a run is started.
+    await new RunnerPage(page).showView();
     // No field asks for an identifier, and with one organization there is nothing to choose from either.
     await expect(page.getByLabel('Organization ID')).toHaveCount(0);
     await expect(page.getByRole('textbox')).toHaveCount(0);
@@ -67,6 +69,7 @@ test.describe('organization discovery in the browser', () => {
 
     await page.goto('/');
     await expectSignedIn(page, scenario.runnerUserId);
+    await new RunnerPage(page).showView();
 
     // Two memberships and no way to know which is meant: nothing is chosen, and nothing can be started.
     const picker = organizationRegion(page).getByRole('combobox', { name: 'Organization' });
@@ -146,6 +149,7 @@ test.describe('organization discovery in the browser', () => {
     ]);
     await page.reload();
     await expect(picker).toHaveValue('');
+    await new RunnerPage(page).showView();
     await expect(page.getByRole('button', { name: 'Start run' })).toBeDisabled();
   });
 
@@ -168,6 +172,7 @@ test.describe('organization discovery in the browser', () => {
     const empty = page.getByRole('status', { name: 'Organization' });
     await expect(empty.getByText('No organization yet')).toBeVisible();
     await expect(empty.getByText(/Ask the organizer/)).toBeVisible();
+    await new RunnerPage(page).showView();
     await expect(page.getByRole('button', { name: 'Start run' })).toBeDisabled();
     await expect(page.getByRole('alert')).toHaveCount(0);
 

@@ -42,7 +42,15 @@ export class RunnerPage {
 
   private async openRunnerView(origin = '/'): Promise<void> {
     await this.page.goto(origin);
-    await this.page.getByRole('navigation', { name: 'Application view' }).getByRole('button', { name: 'Runner' }).click();
+    await this.showView();
+  }
+
+  // Shows the Runner view of the page as it is. A fresh page or a reload opens on Today (release step 3); the run's
+  // restoration, capture, uploads and writer lease do not depend on which view is shown, so this is only presentation.
+  async showView(): Promise<void> {
+    const button = this.page.getByRole('navigation', { name: 'Application view' }).getByRole('button', { exact: true, name: 'Runner' });
+    await button.click();
+    await expect(button).toHaveAttribute('aria-current', 'page');
   }
 
   async useSimulator(): Promise<void> {
@@ -132,11 +140,13 @@ export class RunnerPage {
     return Number(match[1]);
   }
 
-  // Reloads the page and waits until this tab owns the writer lease again, without any user action and well
-  // before its previous lease could have expired. Whether the recording state comes back is for the caller to
-  // assert afterwards; this method only waits for the lease.
+  // Reloads the page and waits until this tab owns the writer lease again, without any recording action and well
+  // before its previous lease could have expired. The reloaded page opens on Today; showing the Runner view to read its
+  // cards is navigation only and starts, claims or retries nothing. Whether the recording state comes back is for the
+  // caller to assert afterwards; this method only waits for the lease.
   async reload(): Promise<void> {
     await this.page.reload();
+    await this.showView();
     await expect(this.card('Writer').value).toHaveText('owned', { timeout: reloadOwnershipTimeoutMs });
   }
 

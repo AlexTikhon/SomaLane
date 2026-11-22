@@ -214,7 +214,7 @@ test('a result read arriving after leaving Runner or signing out cannot reopen t
     await expect(details(page)).toBeVisible();
     await page.getByRole('button', { name: 'Sign out', exact: true }).click(); await expectSignedOut(page);
     release.resolve();
-    await signIn(context, environment, scenario.coachUserId); await page.reload();
+    await signIn(context, environment, scenario.coachUserId); await page.reload(); await runner.showView();
     await expect(runner.card('Recording').value).toHaveText('idle');
     await expect(details(page)).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'View result', exact: true })).toHaveCount(0);

@@ -45,11 +45,12 @@ test('Today: saves through the existing editors, shows the day, keeps the date, 
 
   await signInDemoRunner(page, environment.demoWebOrigin, demoScenario.runnerUserId, demoScenario.orgId);
 
-  // Branding, and Today first in the navigation while Runner stays the start view.
+  // Branding, and Today first in the navigation and the start view (release step 3).
   await expect(page).toHaveTitle('SomaLane');
   await expect(page.getByLabel('SomaLane', { exact: true })).toContainText('SomaLane');
   await expect(navigation(page).getByRole('button').first()).toHaveText('Today');
-  await expect(navigation(page).getByRole('button', { name: 'Runner' })).toHaveAttribute('aria-current', 'page');
+  await expect(navigation(page).getByRole('button', { name: 'Today', exact: true })).toHaveAttribute('aria-current', 'page');
+  await expect(navigation(page).getByRole('button', { name: 'Runner', exact: true })).not.toHaveAttribute('aria-current');
 
   await openToday(page);
   const screen = page.getByRole('region', { exact: true, name: 'Today' });

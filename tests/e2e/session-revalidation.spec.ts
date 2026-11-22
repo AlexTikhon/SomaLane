@@ -161,6 +161,7 @@ test.describe('session revalidation', () => {
     await expect(page.getByText(/Your session ended/)).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Sign out' })).toHaveCount(0);
     // The run is neither resumed nor touched: no capture, and everything durable is still there.
+    await runner.showView();
     await expect(runner.card('Capture').value).toHaveText('idle');
     expect((await readDurableRunnerState(page, scenario.runnerUserId)).activeRunId).toBe(runId);
 

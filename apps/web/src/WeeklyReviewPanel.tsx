@@ -6,7 +6,7 @@ import type {
   WeeklyReviewMovement,
   WeeklyReviewTcxImportedActivities,
 } from '@running-tracker/contracts';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 
 import { activityTypeLabels } from './activity-form.js';
 import { formatActiveEnergy, formatSteps, movementSourceLabel } from './daily-movement.js';
@@ -17,7 +17,8 @@ import { loadingReview, WeeklyReviewController, type ReviewSnapshot } from './we
 import { formatWeek } from './weekly-insight.js';
 import { MEAL_COVERAGE_EXPLANATION, mealDayRows, mealWeekRows } from './weekly-review-meals.js';
 
-// The Weekly review section of the Check-in tab: the primary, deterministic description of a week. Every sentence and
+// The Weekly review: the primary, deterministic description of a week, shown by its own view (release step 3) and as a
+// section of the Check-in tab. Every sentence and
 // number is computed by the app from the person's own records on each read; no AI model is involved. The optional AI
 // insight is a separate section below it with its own lifecycle, so its failures never hide this one.
 
@@ -294,6 +295,10 @@ export function ReviewContent({ review }: { review: WeeklyReview }) {
 }
 
 export interface ReviewPanelViewProps {
+  /** Navigation actions of the view that shows the section (its own view's Trends action), under the week picker. */
+  actions?: ReactNode;
+  /** 1 when the section is a view of its own (its heading is the page's), 2 (the default) in the Check-in tab. */
+  headingLevel?: 1 | 2 | undefined;
   onRefresh: () => void;
   onSelectWeek: (weekStart: string) => void;
   snapshot: ReviewSnapshot;
@@ -301,14 +306,15 @@ export interface ReviewPanelViewProps {
 }
 
 /** Everything the section shows, from one snapshot. Pure, so every state is testable without a DOM. */
-export function ReviewPanelView({ onRefresh, onSelectWeek, snapshot, weeks }: ReviewPanelViewProps) {
+export function ReviewPanelView({ actions, headingLevel = 2, onRefresh, onSelectWeek, snapshot, weeks }: ReviewPanelViewProps) {
   const { load } = snapshot;
+  const Heading = headingLevel === 1 ? 'h1' : 'h2';
   const busy = load.kind === 'loading' || (load.kind === 'ready' && load.refreshing);
   const state = load.kind === 'ready' && load.refreshing ? 'refreshing' : load.kind;
   return (
     <section aria-labelledby="review-title" className="review-panel search-results">
       <div className="insight-panel__heading">
-        <h2 id="review-title" tabIndex={-1}>Weekly review</h2>
+        <Heading id="review-title" tabIndex={-1}>Weekly review</Heading>
         <p className="insight-panel__positioning">
           <span className="review-badge">Computed by the app</span> Counted from your own check-ins, manual activities, GPS
           runs, manually entered movement and logged meals each time you open it. No AI model writes this section. It describes what was recorded; it is not medical
@@ -326,6 +332,7 @@ export function ReviewPanelView({ onRefresh, onSelectWeek, snapshot, weeks }: Re
         </label>
         <button disabled={busy} onClick={onRefresh} type="button">{busy ? 'Updating…' : 'Refresh'}</button>
       </div>
+      {actions}
       <div aria-busy={busy} aria-live="polite" className="insight-panel__body" data-review-state={state}>
         {load.kind === 'loading' && <p className="search-results__loading">Loading the review for {formatWeek(snapshot.weekStart)}…</p>}
         {(load.kind === 'error' || load.kind === 'access-denied') && (
@@ -341,6 +348,8 @@ export function ReviewPanelView({ onRefresh, onSelectWeek, snapshot, weeks }: Re
 }
 
 export interface WeeklyReviewPanelProps {
+  actions?: ReactNode;
+  headingLevel?: 1 | 2 | undefined;
   onSelectWeek: (weekStart: string) => void;
   orgId: string;
   /**
@@ -354,7 +363,7 @@ export interface WeeklyReviewPanelProps {
   weeks: readonly { label: string; weekStart: string }[];
 }
 
-export function WeeklyReviewPanel({ onSelectWeek, orgId, refreshKey, signal, timeZone, weekStart, weeks }: WeeklyReviewPanelProps) {
+export function WeeklyReviewPanel({ actions, headingLevel, onSelectWeek, orgId, refreshKey, signal, timeZone, weekStart, weeks }: WeeklyReviewPanelProps) {
   const controller = useRef<WeeklyReviewController | null>(null);
   const weekRef = useRef(weekStart);
   weekRef.current = weekStart;
@@ -384,5 +393,14 @@ export function WeeklyReviewPanel({ onSelectWeek, orgId, refreshKey, signal, tim
     controller.current?.refresh();
   }, [refreshKey]);
 
-  return <ReviewPanelView onRefresh={() => controller.current?.refresh()} onSelectWeek={onSelectWeek} snapshot={snapshot} weeks={weeks} />;
+  return (
+    <ReviewPanelView
+      actions={actions}
+      headingLevel={headingLevel}
+      onRefresh={() => controller.current?.refresh()}
+      onSelectWeek={onSelectWeek}
+      snapshot={snapshot}
+      weeks={weeks}
+    />
+  );
 }

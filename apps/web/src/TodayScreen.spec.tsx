@@ -268,6 +268,44 @@ describe('Today screen', () => {
     expect(render()).toContain('aria-label="Open 28-day trends ending on Thu, 5 Nov 2026" type="button">28-day trends</button>');
   });
 
+  it('opens the Weekly review on the week that contains the shown date, and not for an invalid date (release step 3)', () => {
+    const pressed = (shown: string, dateInput: string) => {
+      const actions: TodayAction[] = [];
+      const element = TodayView({
+        dateInput,
+        onAction: (action) => actions.push(action),
+        onChooseDate: noop,
+        onRefresh: noop,
+        snapshot: { ...loadingOverview(shown) },
+        timeZone: 'Europe/Warsaw',
+        today: TODAY,
+      });
+      const visit = (node: unknown): void => {
+        if (Array.isArray(node)) return node.forEach(visit);
+        if (node === null || typeof node !== 'object' || !('props' in node)) return;
+        const { props, type } = node as { props: { 'aria-label'?: string; children?: unknown; disabled?: boolean; onClick?: () => void }; type: unknown };
+        if (type === 'button' && props['aria-label']?.startsWith('Weekly review') && !props.disabled) props.onClick?.();
+        visit(props.children);
+      };
+      visit(element);
+      return actions;
+    };
+    // Thursday 5 Nov is in the week of Monday 2 Nov; Sunday 8 Nov (today) closes the same week.
+    expect(pressed(DAY, DAY)).toEqual([{ kind: 'weekly-review', weekStart: '2026-11-02' }]);
+    expect(pressed(TODAY, TODAY)).toEqual([{ kind: 'weekly-review', weekStart: '2026-11-02' }]);
+    expect(pressed('2026-11-01', '2026-11-01')).toEqual([{ kind: 'weekly-review', weekStart: '2026-10-26' }]);
+    // A future date typed in the field: nothing opens.
+    expect(pressed(DAY, '2026-11-09')).toEqual([]);
+    expect(render()).toContain('aria-label="Weekly review of 2 Nov – 8 Nov 2026" type="button">Weekly review</button>');
+    // 1–2 Jan 2000 are allowed dates, but their week (from Monday 27 Dec 1999) is not one the review supports.
+    expect(pressed('2000-01-01', '2000-01-01')).toEqual([]);
+    expect(pressed('2000-01-02', '2000-01-02')).toEqual([]);
+    expect(renderToStaticMarkup(
+      <TodayView dateInput="2000-01-02" onAction={noop} onChooseDate={noop} onRefresh={noop} snapshot={loadingOverview('2000-01-02')} timeZone="Europe/Warsaw" today={TODAY} />,
+    )).toContain('aria-label="Weekly review" disabled="" type="button">Weekly review</button>');
+    expect(pressed('2000-01-03', '2000-01-03')).toEqual([{ kind: 'weekly-review', weekStart: '2000-01-03' }]);
+  });
+
   it('shows the meal card: no entry, and an action that opens the Meal log on the date (ADR-0083)', () => {
     const html = ready(overviewFixture());
     expect(html).toContain('<h2 id="today-meals-title">Meals</h2>');

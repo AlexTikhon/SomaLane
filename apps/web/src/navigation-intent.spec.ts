@@ -1,8 +1,36 @@
 import { describe, expect, it } from 'vitest';
 
-import { afterHistoryIntentApplied, checkInIntentOf, inScope, mealIntentDateOf, navigationFor, navigationFromTrendsRow } from './navigation-intent.js';
+import {
+  afterHistoryIntentApplied,
+  checkInIntentOf,
+  inScope,
+  mealIntentDateOf,
+  navigationFor,
+  navigationFromReview,
+  navigationFromTrendsRow,
+  primaryNavigation,
+  secondaryNavigation,
+  START_VIEW,
+} from './navigation-intent.js';
 
 const SCOPE = '0|user-a|org-a';
+
+describe('application navigation (release step 3)', () => {
+  it('starts on Today and leads with the primary journey', () => {
+    expect(START_VIEW).toBe('today');
+    expect(primaryNavigation.map((entry) => entry.view)).toEqual(['today', 'review', 'trends']);
+  });
+
+  it('keeps every other view reachable, exactly once, in two named groups', () => {
+    expect(secondaryNavigation.map((group) => [group.label, group.entries.map((entry) => entry.label)])).toEqual([
+      ['Records', ['Check-in', 'Meal log', 'Activity']],
+      ['Runs', ['Runner', 'Coach', 'Archive']],
+    ]);
+    const views = [...primaryNavigation, ...secondaryNavigation.flatMap((group) => group.entries)].map((entry) => entry.view);
+    expect(new Set(views).size).toBe(views.length);
+    expect([...views].sort()).toEqual(['activity', 'archive', 'checkin', 'coach', 'meals', 'review', 'runner', 'today', 'trends']);
+  });
+});
 
 describe('Today navigation', () => {
   it('opens the check-in and movement editors of the Check-in tab with the selected date', () => {
@@ -67,11 +95,15 @@ describe('Today navigation', () => {
     expect(inScope(null, SCOPE)).toBeNull();
   });
 
-  it('opens the weekly review on the week of an answer and Trends on its source and type (ADR-0094)', () => {
+  it('opens the Weekly review view on the week of Today or an answer, and Trends on its source and type (ADR-0094)', () => {
     const review = navigationFor({ kind: 'weekly-review', weekStart: '2026-11-09' }, SCOPE);
-    expect(review).toEqual({ editor: { localDate: '2026-11-09', scope: SCOPE, section: 'weekly-review' }, view: 'checkin' });
-    expect(checkInIntentOf(review.editor)).toEqual({ localDate: '2026-11-09', section: 'weekly-review' });
+    // Its own view now (release step 3), with the week kept for it under this scope; no Check-in editor is involved.
+    expect(review).toEqual({ editor: null, reviewWeek: { localDate: '2026-11-09', scope: SCOPE }, view: 'review' });
+    expect(checkInIntentOf(review.editor)).toBeUndefined();
     expect(mealIntentDateOf(review.editor)).toBeNull();
+    for (const other of ['1|user-a|org-a', '0|user-b|org-a', '0|user-a|org-b', null]) {
+      expect(inScope(review.reviewWeek ?? null, other), String(other)).toBeNull();
+    }
     expect(navigationFor({ kind: 'activity-trends', localDate: '2026-11-17', source: 'gpx', type: 'ride' }, SCOPE)).toEqual({
       editor: null,
       trendsActivity: { measure: 'count', scope: SCOPE, source: 'gpx', type: 'ride' },
@@ -93,6 +125,11 @@ describe('Today navigation', () => {
     expect(inScope(next.trendsReturn, SCOPE)).toBe(next.trendsReturn);
     for (const other of ['1|user-a|org-a', '0|user-b|org-a', '0|user-a|org-b']) expect(inScope(next.trendsReturn, other)).toBeNull();
     expect(inScope(next.trendsReturn, null)).toBeNull();
+  });
+
+  it('opens Trends from the Weekly review on the end date it names, scoped, without touching the kept series', () => {
+    expect(navigationFromReview('2026-11-15', SCOPE)).toEqual({ trendsEnd: { localDate: '2026-11-15', scope: SCOPE }, view: 'trends' });
+    expect(inScope(navigationFromReview('2026-11-15', SCOPE).trendsEnd, '0|user-a|org-b')).toBeNull();
   });
 
   it('consumes a history intent once applied, and never a newer one, even for the same day (ADR-0088)', () => {

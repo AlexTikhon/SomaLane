@@ -23,6 +23,8 @@ import {
   type TodayAction,
 } from './daily-overview.js';
 import { DailyOverviewController, loadingOverview, type OverviewReader, type OverviewSnapshot } from './daily-overview-controller.js';
+import { weekContaining } from './journey-navigation.js';
+import { formatWeek } from './weekly-insight.js';
 import { movementSourceLabel } from './daily-movement.js';
 import { mealSourceLabel, mealsSummary, mealTotalRows } from './meal-log.js';
 import { readDailyOverview, type CsrfCredentials } from './runner-api.js';
@@ -229,6 +231,7 @@ export function TodayView({ ask, dateInput, onAction, onChooseDate, onRefresh, s
   const state = load.kind === 'ready' && load.refreshing ? 'refreshing' : load.kind;
   const dateProblem = checkInDateProblem(dateInput, today);
   const dateLabel = formatCheckInDate(snapshot.localDate);
+  const week = weekContaining(snapshot.localDate, today);
   return (
     <section aria-labelledby="today-title" className="activity-shell today-shell">
       <div className="search-panel__heading">
@@ -256,6 +259,15 @@ export function TodayView({ ask, dateInput, onAction, onChooseDate, onRefresh, s
           Go to today
         </button>
         <button disabled={busy} onClick={onRefresh} type="button">{busy ? 'Updating…' : 'Refresh'}</button>
+        {/* The week that contains the shown date (journey-navigation.ts), in the Weekly review view. */}
+        <button
+          aria-label={week === null ? 'Weekly review' : `Weekly review of ${formatWeek(week)}`}
+          disabled={dateProblem !== null || week === null}
+          onClick={() => { if (week !== null) onAction({ kind: 'weekly-review', weekStart: week }); }}
+          type="button"
+        >
+          Weekly review
+        </button>
         <button
           aria-label={`Open 28-day trends ending on ${dateLabel}`}
           disabled={dateProblem !== null}

@@ -73,6 +73,7 @@ test('a Pause answer held across a takeover cannot restore the run that another 
 
   // A reload restores what the new epoch left, not the old answer.
   await page.reload();
+  await runner.showView();
   await expect(runner.card('Recording').value).toHaveText('idle');
   expect((await readDurableRunnerState(page, scenario.runnerUserId)).activeRunId).toBeNull();
   // The Pause was sent once, before the takeover; the server keeps it under its own revision.

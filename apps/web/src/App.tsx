@@ -16,8 +16,13 @@ import {
   inScope,
   mealIntentDateOf,
   navigationFor,
+  navigationFromReview,
   navigationFromTrendsRow,
+  primaryNavigation,
+  secondaryNavigation,
+  START_VIEW,
   type AppView,
+  type NavigationEntry,
   type EditorIntent,
   type HistoryIntent,
   type KeptActivitySelection,
@@ -27,6 +32,9 @@ import {
 } from './navigation-intent.js';
 import { TodayScreen } from './TodayScreen.js';
 import { TrendsScreen } from './TrendsScreen.js';
+import { WeeklyReviewScreen } from './WeeklyReviewScreen.js';
+import { runAttention } from './run-attention.js';
+import { RunStatusNotice } from './RunStatusNotice.js';
 import { CaptureController, type CaptureState } from './capture-controller.js';
 import { localDemoEnabled } from './demo-sign-in.js';
 import { DemoSignIn } from './DemoSignIn.js';
@@ -131,9 +139,14 @@ export function App() {
   // null until the stored choice has been restored: capture must not start, and the select must not change,
   // before then, or a restored Simulator run would briefly start the Device GPS.
   const [captureSourceKind, setCaptureSourceKind] = useState<CaptureSourceKind | null>(null);
-  // The page still opens on Runner, whose startup restores and recovers an active run; Today is first in the navigation
-  // but is not the start view (ADR-0082).
-  const [activeView, setActiveView] = useState<AppView>('runner');
+  // A fresh page opens on Today (release step 3). Runner's restoration and recovery of an active run, its capture,
+  // uploads and writer lease are owned by App below, whatever view is shown, and never switch the view.
+  const [activeView, setActiveView] = useState<AppView>(START_VIEW);
+  // The week the Weekly review shows, kept like Today's date; null until a week is chosen or opened from Today, so a
+  // direct opening shows the current week. Set only by the person's choices, never by a default.
+  const [reviewWeek, setReviewWeek] = useState<KeptDate | null>(null);
+  // Whether the Weekly review was opened by a contextual action (Today, an "Ask my data" answer), which moves focus to it.
+  const [reviewFocus, setReviewFocus] = useState(false);
   // Today's selected date, kept while the person looks at other views, and the editor a Today action opens. Both are
   // tied to the scope they were made in (navigation-intent.ts) and forgotten on sign-out.
   const [todayDate, setTodayDate] = useState<KeptDate | null>(null);
@@ -189,6 +202,7 @@ export function App() {
     setCapture({ status: 'idle' });
     setWriter({ status: 'unclaimed' });
     setTodayDate(null);
+    setReviewWeek(null);
     setEditorIntent(null);
     setHistoryIntent(null);
     setTrendsEnd(null);
@@ -836,11 +850,14 @@ export function App() {
   }, [viewScope]);
   // A navigation button opens a view as it always did: with no editor intent. Changing views never touches the run's
   // capture, upload queue, writer lease or recovery, which App owns whatever view is shown.
+  // Kept selections (Today's date, the review's week, the Trends range and series) are left as they are, so ordinary
+  // navigation returns to them instead of to new defaults.
   const openView = (view: AppView) => {
     setRunnerResult(null);
     setEditorIntent(null);
     setHistoryIntent(null);
     setTrendsReturn(null);
+    setReviewFocus(false);
     setActiveView(view);
   };
   const openFromToday = (action: TodayAction) => {
@@ -852,18 +869,24 @@ export function App() {
     setTrendsReturn(null);
     if (next.trendsEnd) setTrendsEnd(next.trendsEnd);
     if (next.trendsActivity) setTrendsActivity(next.trendsActivity);
+    if (next.reviewWeek) setReviewWeek(next.reviewWeek);
+    setReviewFocus(next.view === 'review');
     setActiveView(next.view);
   };
-  const navigation: Array<{ label: string; view: AppView }> = [
-    { label: 'Today', view: 'today' },
-    { label: 'Trends', view: 'trends' },
-    { label: 'Runner', view: 'runner' },
-    { label: 'Coach', view: 'coach' },
-    { label: 'Archive', view: 'archive' },
-    { label: 'Activity', view: 'activity' },
-    { label: 'Check-in', view: 'checkin' },
-    { label: 'Meal log', view: 'meals' },
-  ];
+  // The Weekly review's Trends action: the range ends on the date the review's policy chose (its Sunday, or today).
+  const openTrendsFromReview = (endDate: string) => {
+    if (viewScope === null) return;
+    const next = navigationFromReview(endDate, viewScope);
+    setTrendsEnd(next.trendsEnd);
+    openView(next.view);
+  };
+  // Shown above every other view while a run or its synchronization is in progress or needs attention (release step 3).
+  const attention = activeView === 'runner' ? null : runAttention({ capture, runner, storage, writer });
+  const navigationButton = ({ label, view }: NavigationEntry) => (
+    <button aria-current={activeView === view ? 'page' : undefined} key={view} onClick={() => openView(view)} type="button">
+      {label}
+    </button>
+  );
   const scopedIntent = inScope(editorIntent, viewScope);
   const checkInIntent = checkInIntentOf(scopedIntent);
   const scopedHistory = inScope(historyIntent, viewScope);
@@ -900,11 +923,16 @@ export function App() {
           <span className="brand-mark" aria-hidden="true">SL</span>
           <span>SomaLane</span>
         </div>
+        {/* One navigation landmark: the primary journey first and most prominent, then the other views in two groups. */}
         <nav className="view-switcher" aria-label="Application view">
-          {navigation.map(({ label, view }) => (
-            <button aria-current={activeView === view ? 'page' : undefined} key={view} onClick={() => openView(view)} type="button">
-              {label}
-            </button>
+          <div aria-label="Your days and weeks" className="view-switcher__primary" role="group">
+            {primaryNavigation.map(navigationButton)}
+          </div>
+          {secondaryNavigation.map((group) => (
+            <div aria-labelledby={`view-group-${group.label}`} className="view-switcher__group" key={group.label} role="group">
+              <span className="view-switcher__label" id={`view-group-${group.label}`}>{group.label}</span>
+              {group.entries.map(navigationButton)}
+            </div>
           ))}
         </nav>
         <div className="service-health" aria-label="Service health">
@@ -936,6 +964,8 @@ export function App() {
       {localDemo && session.status === 'required' && (
         <DemoSignIn onSignedIn={refreshSession} sessionUnknown={session.reason === 'unreachable'} />
       )}
+
+      {attention !== null && <RunStatusNotice attention={attention} onOpenRunner={() => openView('runner')} />}
 
       <div hidden={activeView !== 'runner'}>
         {/* Presentation changes only: the uploader, request queue and writer lifetime remain owned by App. */}
@@ -1043,6 +1073,26 @@ export function App() {
           />
         ) : (
           <section className="coach-prerequisite" role="status">{viewPrerequisite('daily overview')}</section>
+        )
+      )}
+
+      {activeView === 'review' && (
+        session.status === 'ready' && selectedOrgId !== null && viewScope !== null ? (
+          // The Weekly review on its own (release step 3): the existing section and controller, mounted only while open and
+          // keyed like Today, so every opening reads the week again and nothing crosses a change of scope. Its week is kept
+          // here, for this scope only.
+          <WeeklyReviewScreen
+            key={viewScope}
+            focusOnOpen={reviewFocus}
+            initialWeek={inScope(reviewWeek, viewScope)?.localDate ?? null}
+            onOpenTrends={openTrendsFromReview}
+            onSelectWeek={(weekStart) => setReviewWeek({ localDate: weekStart, scope: viewScope })}
+            orgId={selectedOrgId}
+            signal={session.signal}
+            timeZone={resultTimeZone}
+          />
+        ) : (
+          <section className="coach-prerequisite" role="status">{viewPrerequisite('weekly review')}</section>
         )
       )}
 

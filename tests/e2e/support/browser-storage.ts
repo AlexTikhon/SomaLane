@@ -114,6 +114,44 @@ export async function readDurableRunStatus(page: Page, userId: string): Promise<
   );
 }
 
+export interface DurableWriterLease {
+  readonly expiresAt: string;
+  readonly fencingToken: string;
+  readonly ownerId: string;
+  readonly releasedAt: string | null;
+}
+
+// The user's writer lease record as IndexedDB holds it (apps/web/src/runner-storage.ts), or null when there is none.
+// A test uses it to tell whether a page kept, released or re-acquired recording ownership, whatever view it shows.
+export async function readDurableWriterLease(page: Page, userId: string): Promise<DurableWriterLease | null> {
+  return page.evaluate(
+    async ({ name, user }) => {
+      const database = await new Promise<IDBDatabase>((resolve, reject) => {
+        const request = indexedDB.open(name);
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error ?? new Error('Unable to open IndexedDB'));
+      });
+      try {
+        const record = await new Promise<Record<string, unknown> | undefined>((resolve, reject) => {
+          const request = database.transaction('leases', 'readonly').objectStore('leases').get(user);
+          request.onsuccess = () => resolve(request.result as Record<string, unknown> | undefined);
+          request.onerror = () => reject(request.error ?? new Error('Unable to read the lease'));
+        });
+        if (record === undefined) return null;
+        return {
+          expiresAt: String(record.expiresAt),
+          fencingToken: String(record.fencingToken),
+          ownerId: String(record.ownerId),
+          releasedAt: typeof record.releasedAt === 'string' ? record.releasedAt : null,
+        };
+      } finally {
+        database.close();
+      }
+    },
+    { name: databaseName, user: userId },
+  );
+}
+
 // What another tab leaves behind after it took the writer lease over under the next fencing epoch, settled every
 // lifecycle request this user had queued, moved off the active run and closed: one transaction over the lease, the
 // queue and the profile, written behind the page's back. Buffered points and run records are left as they are. The

@@ -25,7 +25,7 @@ import { afterConfirmedChange, initialRefreshKeys, type CheckInChange, type Chec
 import { DailyMovementSection } from './DailyMovementSection.js';
 import { defaultTimeZone } from './run-search.js';
 import { deleteDailyMetrics, listDailyMetrics, putDailyMetrics, readDailyMetrics, type CsrfCredentials } from './runner-api.js';
-import { formatWeek, recentWeeks } from './weekly-insight.js';
+import { recentWeeks } from './weekly-insight.js';
 import { WeeklyInsightPanel } from './WeeklyInsightPanel.js';
 import { WeeklyReviewPanel } from './WeeklyReviewPanel.js';
 
@@ -39,8 +39,9 @@ export interface DailyCheckInScreenProps {
   /**
    * A navigation intent from Today (ADR-0082): open `section`'s editor on `localDate` and move focus to it. Read when the
    * screen mounts only; the other editor opens on today as usual. A date after today, or not a real date, is ignored.
+   * A week's review opens in the Weekly review view, not here (release step 3).
    */
-  intent?: { localDate: string; section: 'check-in' | 'movement' | 'weekly-review' } | undefined;
+  intent?: { localDate: string; section: 'check-in' | 'movement' } | undefined;
 }
 
 const scaleOptions = (low: number, high: number) =>
@@ -176,16 +177,10 @@ export function DailyCheckInScreen({ csrf, intent, nowMs, orgId, signal }: Daily
   // read the week again. A saved or deleted movement day changes the review only (ADR-0079).
   const [refreshKeys, setRefreshKeys] = useState<CheckInRefreshKeys>(initialRefreshKeys);
   const refreshAfter = (change: CheckInChange) => setRefreshKeys((keys) => afterConfirmedChange(keys, change));
-  // The week shown by the Weekly review and the optional AI insight below it, chosen in the review section. An "Ask my
-  // data" answer (ADR-0094) opens it on its week, which is offered even when it is older than the usual list.
-  const reviewWeek = intent?.section === 'weekly-review' && checkInDateProblem(intent.localDate, today) === null ? intent.localDate : null;
-  const weeks = useMemo(() => {
-    const recent = recentWeeks(today);
-    return reviewWeek === null || recent.some((week) => week.weekStart === reviewWeek)
-      ? recent
-      : [...recent, { label: `Week: ${formatWeek(reviewWeek)}`, weekStart: reviewWeek }];
-  }, [reviewWeek, today]);
-  const [weekStart, setWeekStart] = useState(() => reviewWeek ?? weeks[0]!.weekStart);
+  // The week shown by the Weekly review and the optional AI insight below it, chosen in the review section. A week opened
+  // from Today or an "Ask my data" answer opens in the Weekly review view instead (release step 3).
+  const weeks = useMemo(() => recentWeeks(today), [today]);
+  const [weekStart, setWeekStart] = useState(() => weeks[0]!.weekStart);
   const dayController = useRef<CheckInDayController | null>(null);
   const historyController = useRef<CheckInHistoryController | null>(null);
   const heading = useRef<HTMLHeadingElement>(null);
@@ -253,8 +248,6 @@ export function DailyCheckInScreen({ csrf, intent, nowMs, orgId, signal }: Daily
   // Opened from Today's check-in action: focus lands on this screen's heading, as after a deletion.
   useEffect(() => {
     if (opening.focus === 'check-in') heading.current?.focus();
-    // Opened from an "Ask my data" answer (ADR-0094): focus lands on the weekly review's heading.
-    if (opening.focus === 'weekly-review') document.getElementById('review-title')?.focus();
   }, [opening]);
 
   const chooseDate = (value: string) => {

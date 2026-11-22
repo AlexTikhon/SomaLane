@@ -75,6 +75,7 @@ test.describe('explicit sign out', () => {
     await expect(page.getByRole('link', { name: 'Sign in' })).toBeVisible();
     // The organization they had selected is no longer shown, and nothing can be started.
     await expect(organizationRegion(page)).toHaveCount(0);
+    await new RunnerPage(page).showView();
     await expect(page.getByRole('button', { name: 'Start run' })).toBeDisabled();
     // The cookie left the browser, and the server answers 401 to the session and to the protected reads.
     expect((await context.cookies()).some((cookie) => cookie.name === sessionCookieName)).toBe(false);

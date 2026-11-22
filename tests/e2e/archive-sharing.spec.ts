@@ -211,6 +211,7 @@ test('archive sharing: a run shared from the Runner tab is still managed from My
 
     // After a reload the run is still not the active run, and still managed from My runs.
     await page.reload();
+    await runner.showView();
     await expect(runner.card('Recording').value).toHaveText('idle');
     expect((await readDurableRunnerState(page, scenario.runnerUserId)).activeRunId).toBeNull();
     await myRuns.open();

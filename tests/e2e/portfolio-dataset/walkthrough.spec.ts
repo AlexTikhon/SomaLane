@@ -21,8 +21,9 @@ interface Manifest {
     finishedRun: { distanceM: string; observedDurationS: string; runId: string };
     nutritionTrends: { dates: Record<'missing' | 'partial' | 'recordedZeros' | 'titleOnly', Nutrition & { localDate: string }>; range: Nutrition & { daysWithEntries: number } };
     today: { manualActivities: Record<string, number>; meals: Nutrition; recordedRuns: number };
-    weeklyReview: { meals: Nutrition & { daysWithEntries: number }; week: { end: string; start: string } };
+    weeklyReview: { checkInDays: number; meals: Nutrition & { daysWithEntries: number }; week: { end: string; start: string } };
   };
+  gaps: { meals: string[]; unlogged: string[] };
   parameters: { anchorDate: string; timeZone: string };
   ranges: { current: { startDate: string }; previous: { endDate: string; startDate: string } };
 }
@@ -33,6 +34,16 @@ const screenshots = resolve(import.meta.dirname, '..', '..', '..', '.local', 'po
 const navigation = (page: Page) => page.getByRole('navigation', { name: 'Application view' });
 const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const dayMonthYear = (date: string) => `${String(Number(date.slice(8, 10)))} ${months[Number(date.slice(5, 7)) - 1]!} ${date.slice(0, 4)}`;
+
+const addDays = (date: string, days: number) => {
+  const [year, month, day] = date.split('-').map(Number) as [number, number, number];
+  return new Date(Date.UTC(year, month - 1, day + days)).toISOString().slice(0, 10);
+};
+const dateInZone = (zone: string, instantMs: number) => {
+  const parts = new Intl.DateTimeFormat('en-US', { day: '2-digit', month: '2-digit', timeZone: zone, year: 'numeric' }).formatToParts(new Date(instantMs));
+  const field = (type: string) => parts.find((part) => part.type === type)?.value ?? '';
+  return `${field('year')}-${field('month')}-${field('day')}`;
+};
 
 async function signIn(page: Page, who: 'Demo coach' | 'Demo runner'): Promise<void> {
   await page.goto('/');
@@ -142,4 +153,83 @@ test('the populated primary screens: Today, weekly review, nutrition and activit
   await navigation(page).getByRole('button', { name: 'Today', exact: true }).click();
   await page.getByRole('region', { exact: true, name: 'Today' }).getByLabel('Date').fill(anchor);
   await expect(page.getByRole('region', { exact: true, name: 'Today' }).getByText(/^Nothing is recorded for /u)).toBeVisible();
+});
+
+// Release step 3: the primary journey on the dataset, read-only, with every selection and expectation from the manifest.
+// Today on the last day of the manifest's review week → that week's review → Trends ending on the date the policy names
+// → the records behind a Trends row (the Meal log and Today), and back.
+test('the primary journey: a fresh page opens Today, then Today → Weekly review → Trends → the original records', async ({ page }) => {
+  const apiFailures: string[] = [];
+  const expectedNotFound = /^404 \/api\/orgs\/[^/]+\/(?:daily-metrics\/\d{4}-\d{2}-\d{2}|daily-movement\/\d{4}-\d{2}-\d{2}|insights\/weekly)$/u;
+  page.on('response', (response) => {
+    const path = new URL(response.url()).pathname;
+    const answer = `${String(response.status())} ${path}`;
+    if (path.startsWith('/api/orgs/') && response.status() >= 400 && !expectedNotFound.test(answer)) apiFailures.push(answer);
+  });
+  const { week } = manifest.expected.weeklyReview;
+  const zone = manifest.parameters.timeZone;
+  // The documented policy: Sunday for a completed week, today while the week is in progress.
+  const todayInZone = dateInZone(zone, Date.now());
+  const trendsEnd = week.end < todayInZone ? week.end : todayInZone;
+  // A date of the week with logged meals and records (not a meal gap and not an unlogged date).
+  const recordDate = [0, 1, 2, 3, 4, 5, 6]
+    .map((offset) => addDays(week.start, offset))
+    .filter((date) => !manifest.gaps.meals.includes(date) && !manifest.gaps.unlogged.includes(date))
+    .at(-1)!;
+
+  await signIn(page, 'Demo runner');
+  // A fresh signed-in page opens Today.
+  await expect(navigation(page).getByRole('button', { name: 'Today', exact: true })).toHaveAttribute('aria-current', 'page');
+  const today = page.getByRole('region', { exact: true, name: 'Today' });
+  await today.getByLabel('Date').fill(week.end);
+  await expect(today.locator('[data-overview-state]')).toHaveAttribute('data-overview-state', 'ready');
+  await expect(today.getByText(/^Nothing is recorded for /u)).toHaveCount(0);
+
+  // Today → Weekly review: the week containing the date, on its own view.
+  await today.getByRole('button', { name: /^Weekly review of / }).click();
+  await expect(navigation(page).getByRole('button', { name: 'Weekly review', exact: true })).toHaveAttribute('aria-current', 'page');
+  const review = page.getByRole('region', { exact: true, name: 'Weekly review' });
+  await expect(page.getByRole('heading', { level: 1, name: 'Weekly review' })).toBeFocused();
+  await expect(review.getByLabel('Week')).toHaveValue(week.start);
+  await expect(review.locator('[data-review-state]')).toHaveAttribute('data-review-state', 'ready');
+  const coverage = review.getByRole('region', { name: 'Coverage' });
+  await expect(coverage.locator('div').filter({ has: page.getByText('Days with check-in values', { exact: true }) }).locator('dd'))
+    .toHaveText(`${String(manifest.expected.weeklyReview.checkInDays)} of 7`);
+  const meals = review.getByRole('region', { name: 'Recorded nutrition' });
+  const loggedEntries = manifest.expected.weeklyReview.meals.loggedEntries;
+  await expect(meals.locator('.review-movement__totals > div').filter({ has: page.getByText('Logged entries', { exact: true }) }).locator('dd'))
+    .toHaveText(new RegExp(`^${String(loggedEntries)} entries `, 'u'));
+  await page.screenshot({ fullPage: true, path: resolve(screenshots, 'journey-weekly-review.png') });
+
+  // Weekly review → Trends, ending on the date the policy names.
+  await review.getByRole('button', { name: /^Open 28-day trends ending on / }).click();
+  const trends = page.getByRole('region', { exact: true, name: 'Trends' });
+  await expect(trends.getByLabel('End date')).toHaveValue(trendsEnd);
+  await expect(page.locator('[data-trends-state]')).toHaveAttribute('data-trends-state', 'ready');
+  await trends.getByRole('radio', { exact: true, name: 'Protein' }).check();
+  const rows = trends.getByRole('region', { exact: true, name: 'Every date' }).locator('tbody tr');
+  await expect(rows).toHaveCount(28);
+  await expect(rows.first()).toHaveAttribute('data-date', trendsEnd);
+  await expect(rows.last()).toHaveAttribute('data-date', addDays(trendsEnd, -27));
+  await page.screenshot({ fullPage: true, path: resolve(screenshots, 'journey-trends.png') });
+
+  // Trends → the original records: the date's meals, and back to the same range and series.
+  const row = trends.locator(`tr[data-date="${recordDate}"]`);
+  await row.getByRole('button', { name: /^Open Meal log on / }).click();
+  const mealLog = page.getByRole('region', { exact: true, name: 'Meal log' });
+  await expect(mealLog.getByLabel('Date')).toHaveValue(recordDate);
+  await expect(mealLog.getByRole('button', { name: 'Back to Trends' })).toBeVisible();
+  await mealLog.getByRole('button', { name: 'Back to Trends' }).click();
+  await expect(trends.getByLabel('End date')).toHaveValue(trendsEnd);
+  await expect(trends.getByRole('radio', { exact: true, name: 'Protein' })).toBeChecked();
+  // ... and the whole day on Today.
+  await trends.locator(`tr[data-date="${recordDate}"]`).getByRole('button', { name: /^Open Today on / }).click();
+  await expect(today.getByLabel('Date')).toHaveValue(recordDate);
+  await expect(today.locator('[data-overview-state]')).toHaveAttribute('data-overview-state', 'ready');
+  await expect(today.getByRole('region', { exact: true, name: 'Meals' }).getByRole('button', { name: /^Open meal log for / })).toBeVisible();
+
+  // A direct opening of the Weekly review keeps the week chosen above.
+  await navigation(page).getByRole('button', { name: 'Weekly review', exact: true }).click();
+  await expect(review.getByLabel('Week')).toHaveValue(week.start);
+  expect(apiFailures).toEqual([]);
 });

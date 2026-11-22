@@ -24,7 +24,7 @@ describe('App', () => {
     expect(markup).toMatch(/<button type="button">Check-in<\/button>/u);
   });
 
-  it('shows the SomaLane brand, with Today first in the navigation and Runner still the start view', () => {
+  it('shows the SomaLane brand and opens on Today, with the primary journey first and the other views grouped', () => {
     const markup = renderToStaticMarkup(<App />);
 
     expect(markup).toContain('<div class="brand" aria-label="SomaLane"><span class="brand-mark" aria-hidden="true">SL</span><span>SomaLane</span></div>');
@@ -32,16 +32,34 @@ describe('App', () => {
     const navigation = /<nav class="view-switcher" aria-label="Application view">(.*?)<\/nav>/u.exec(markup)?.[1] ?? '';
     expect([...navigation.matchAll(/<button[^>]*>([^<]+)<\/button>/gu)].map((match) => match[1])).toEqual([
       'Today',
+      'Weekly review',
       'Trends',
+      'Check-in',
+      'Meal log',
+      'Activity',
       'Runner',
       'Coach',
       'Archive',
-      'Activity',
-      'Check-in',
-      'Meal log',
     ]);
-    expect(navigation).toContain('<button aria-current="page" type="button">Runner</button>');
-    expect(navigation).toContain('<button type="button">Today</button>');
+    // Today is the start view; nothing else is marked current.
+    expect(navigation).toContain('<button aria-current="page" type="button">Today</button>');
+    expect(navigation.match(/aria-current/gu)).toHaveLength(1);
+    // The primary journey is its own labelled group; the others are groups named by their visible labels.
+    expect(navigation).toMatch(
+      /^<div aria-label="Your days and weeks" class="view-switcher__primary" role="group"><button aria-current="page" type="button">Today<\/button><button type="button">Weekly review<\/button><button type="button">Trends<\/button><\/div>/u,
+    );
+    expect(navigation).toContain('<div aria-labelledby="view-group-Records" class="view-switcher__group" role="group"><span class="view-switcher__label" id="view-group-Records">Records</span>');
+    expect(navigation).toContain('<div aria-labelledby="view-group-Runs" class="view-switcher__group" role="group"><span class="view-switcher__label" id="view-group-Runs">Runs</span>');
+  });
+
+  it('keeps Runner mounted but hidden on a fresh page, so its restoration does not depend on the visible view', () => {
+    const markup = renderToStaticMarkup(<App />);
+
+    // The Runner view is in the document from the first render, inside a hidden container.
+    expect(markup).toMatch(/<div hidden="">(?:(?!<\/main>).)*Runner console · P05\.5/u);
+    // Before a session there is nothing to restore and no run status to show.
+    expect(markup).not.toContain('aria-label="Run status"');
+    expect(markup).toContain('An active session is required before the daily overview can open.');
   });
 
   it('never asks for an organization identifier', () => {

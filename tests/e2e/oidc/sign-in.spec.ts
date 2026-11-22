@@ -262,6 +262,8 @@ test.describe('OpenID Connect sign-in in a real browser', () => {
     await expectSignedIn(page, provisioned.userId);
     const runner = new RunnerPage(page);
     await expectOrganizationSelected(page, provisioned.orgId);
+    // The page opens on Today (release step 3); runs are started from the Runner view.
+    await runner.showView();
     await runner.useSimulator();
     await page.route('**/points', async (route) => {
       if (route.request().method() !== 'POST') await route.continue();
@@ -290,6 +292,8 @@ test.describe('OpenID Connect sign-in in a real browser', () => {
     await page.getByRole('link', { name: 'Sign in' }).click();
     await expectSignedIn(page, provisioned.userId);
     const second = (await pageFetch(page, '/api/session')).body as { expiresAt: string };
+    // The provider's redirect back is a fresh page load, which opens on Today; the run resumes in the background.
+    await runner.showView();
     await runner.waitForEmptyBuffer();
     await expect(runner.card('Recording').value).toHaveText('recording');
     await runner.finish();
