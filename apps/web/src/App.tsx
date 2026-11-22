@@ -2,14 +2,12 @@ import type { RunCommandType } from '@running-tracker/contracts';
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 
 import { loadHealth, type HealthSnapshot } from './health.js';
-import { ActivityScreen } from './ActivityScreen.js';
-import { DailyCheckInScreen } from './DailyCheckInScreen.js';
-import { ArchiveScreen } from './ArchiveScreen.js';
-import { RunDetailScreen } from './RunDetailScreen.js';
+// The secondary views (Coach, Archive, Activity, Check-in, Meal log and Runner's result) load on demand through
+// DeferredView (ADR-0098); never import them statically here. Today, the Weekly review, Trends and Runner stay in the
+// first page, and so does everything below that owns the session, the run, capture, uploads and the writer lease.
+import { DeferredView, secondaryViews } from './DeferredView.js';
 import { defaultTimeZone } from './run-search.js';
-import { CoachScreen } from './CoachScreen.js';
 import type { TodayAction } from './daily-overview.js';
-import { MealLogScreen } from './MealLogScreen.js';
 import {
   afterHistoryIntentApplied,
   checkInIntentOf,
@@ -880,6 +878,15 @@ export function App() {
     setTrendsEnd(next.trendsEnd);
     openView(next.view);
   };
+  // Runner's result view: the run it shows, and the way back to Runner (also offered while its code loads or fails).
+  const resultRun = selectedRunnerResult !== null ? runner.run : null;
+  const backToRunner = () => {
+    const result = selectedRunnerResult;
+    setRunnerResult(null);
+    requestAnimationFrame(() => {
+      if (result !== null && !result.signal.aborted) document.getElementById('runner-result-trigger')?.focus();
+    });
+  };
   // Shown above every other view while a run or its synchronization is in progress or needs attention (release step 3).
   const attention = activeView === 'runner' ? null : runAttention({ capture, runner, storage, writer });
   const navigationButton = ({ label, view }: NavigationEntry) => (
@@ -1029,30 +1036,30 @@ export function App() {
             />
           )}
         </div>
-        {activeView === 'runner' && selectedRunnerResult !== null && runner.run !== null && (
-          <RunDetailScreen
-            accessToken={mapboxAccessToken}
-            backLabel="Back to Runner"
-            key={`${selectedRunnerResult.userId}|${selectedRunnerResult.orgId}|${selectedRunnerResult.runId}`}
-            onBack={() => {
-              setRunnerResult(null);
-              requestAnimationFrame(() => {
-                if (!selectedRunnerResult.signal.aborted) document.getElementById('runner-result-trigger')?.focus();
-              });
-            }}
-            orgId={selectedRunnerResult.orgId}
-            runId={selectedRunnerResult.runId}
-            signal={selectedRunnerResult.signal}
-            synchronization={{
-              connectivity: runner.connectivity,
-              dataRevision: runner.run.dataRevision,
-              upload: runner.upload,
-              writerOwned: writer.status === 'owned' && !writerSyncing,
-            }}
-            timeZone={resultTimeZone}
-            unit="km"
-            userId={selectedRunnerResult.userId}
-          />
+        {activeView === 'runner' && selectedRunnerResult !== null && resultRun !== null && (
+          // Runner's result loads with the other secondary views; while it loads or cannot, Back to Runner still works.
+          <DeferredView back={{ label: 'Back to Runner', onBack: backToRunner }} module={secondaryViews} what="the run details">
+            {({ RunDetailScreen }) => (
+              <RunDetailScreen
+                accessToken={mapboxAccessToken}
+                backLabel="Back to Runner"
+                key={`${selectedRunnerResult.userId}|${selectedRunnerResult.orgId}|${selectedRunnerResult.runId}`}
+                onBack={backToRunner}
+                orgId={selectedRunnerResult.orgId}
+                runId={selectedRunnerResult.runId}
+                signal={selectedRunnerResult.signal}
+                synchronization={{
+                  connectivity: runner.connectivity,
+                  dataRevision: resultRun.dataRevision,
+                  upload: runner.upload,
+                  writerOwned: writer.status === 'owned' && !writerSyncing,
+                }}
+                timeZone={resultTimeZone}
+                unit="km"
+                userId={selectedRunnerResult.userId}
+              />
+            )}
+          </DeferredView>
         )}
       </div>
 
@@ -1123,15 +1130,20 @@ export function App() {
       {activeView === 'coach' && (
         session.status === 'ready' && selectedOrgId !== null ? (
           // A new session, person or organization is a new screen: nothing shown under the previous scope, not even for
-          // one render, reaches the new one's board, tracks or map.
-          <CoachScreen
-            key={`${sessionGeneration(session.signal)}|${session.session.identity.userId}|${selectedOrgId}`}
-            mapboxAccessToken={mapboxAccessToken}
-            orgId={selectedOrgId}
-            sessionExpiresAt={session.session.expiresAt}
-            signal={session.signal}
-            userId={session.session.identity.userId}
-          />
+          // one render, reaches the new one's board, tracks or map. The screen is rendered from the props of the render
+          // in which its code arrives, so a scope change while it loads opens it for the new scope only.
+          <DeferredView module={secondaryViews} what="the coach stream">
+            {({ CoachScreen }) => (
+              <CoachScreen
+                key={`${sessionGeneration(session.signal)}|${session.session.identity.userId}|${selectedOrgId}`}
+                mapboxAccessToken={mapboxAccessToken}
+                orgId={selectedOrgId}
+                sessionExpiresAt={session.session.expiresAt}
+                signal={session.signal}
+                userId={session.session.identity.userId}
+              />
+            )}
+          </DeferredView>
         ) : (
           <section className="coach-prerequisite" role="status">{viewPrerequisite('coach stream')}</section>
         )
@@ -1139,14 +1151,18 @@ export function App() {
 
       {activeView === 'archive' && (
         session.status === 'ready' && selectedOrgId !== null ? (
-          <ArchiveScreen
-            key={`${sessionGeneration(session.signal)}|${session.session.identity.userId}|${selectedOrgId}`}
-            accessToken={mapboxAccessToken}
-            csrf={session.session.csrf}
-            orgId={selectedOrgId}
-            signal={session.signal}
-            userId={session.session.identity.userId}
-          />
+          <DeferredView module={secondaryViews} what="the archive">
+            {({ ArchiveScreen }) => (
+              <ArchiveScreen
+                key={`${sessionGeneration(session.signal)}|${session.session.identity.userId}|${selectedOrgId}`}
+                accessToken={mapboxAccessToken}
+                csrf={session.session.csrf}
+                orgId={selectedOrgId}
+                signal={session.signal}
+                userId={session.session.identity.userId}
+              />
+            )}
+          </DeferredView>
         ) : (
           <section className="coach-prerequisite" role="status">{viewPrerequisite('archive source')}</section>
         )
@@ -1158,25 +1174,30 @@ export function App() {
           // finished runs (ADR-0087), outside the run lifecycle, writer lease and upload queue. A new session, person or
           // organization is a new screen with no request carried over. A Today card opens it on that card's day, zone and
           // source (ADR-0088); "Back to Today" returns to that date.
-          <ActivityScreen
-            key={`${sessionGeneration(session.signal)}|${session.session.identity.userId}|${selectedOrgId}`}
-            accessToken={mapboxAccessToken}
-            csrf={session.session.csrf}
-            historyIntent={
-              scopedHistory === null
-                ? null
-                : { localDate: scopedHistory.localDate, source: scopedHistory.source, timeZone: scopedHistory.timeZone }
-            }
-            onBackToToday={backToToday}
-            onHistoryIntentApplied={
-              scopedHistory === null
-                ? undefined
-                : () => setHistoryIntent((current) => afterHistoryIntentApplied(current, scopedHistory))
-            }
-            orgId={selectedOrgId}
-            signal={session.signal}
-            userId={session.session.identity.userId}
-          />
+          // The history intent stays in App while the screen's code loads, and is applied when the screen mounts.
+          <DeferredView module={secondaryViews} what="the activity log">
+            {({ ActivityScreen }) => (
+              <ActivityScreen
+                key={`${sessionGeneration(session.signal)}|${session.session.identity.userId}|${selectedOrgId}`}
+                accessToken={mapboxAccessToken}
+                csrf={session.session.csrf}
+                historyIntent={
+                  scopedHistory === null
+                    ? null
+                    : { localDate: scopedHistory.localDate, source: scopedHistory.source, timeZone: scopedHistory.timeZone }
+                }
+                onBackToToday={backToToday}
+                onHistoryIntentApplied={
+                  scopedHistory === null
+                    ? undefined
+                    : () => setHistoryIntent((current) => afterHistoryIntentApplied(current, scopedHistory))
+                }
+                orgId={selectedOrgId}
+                signal={session.signal}
+                userId={session.session.identity.userId}
+              />
+            )}
+          </DeferredView>
         ) : (
           <section className="coach-prerequisite" role="status">{viewPrerequisite('activity log')}</section>
         )
@@ -1186,13 +1207,17 @@ export function App() {
         session.status === 'ready' && selectedOrgId !== null ? (
           // Owner-only daily check-ins (ADR-0074), keyed like the Activity tab: a new session, person or organization is
           // a new screen with no request carried over.
-          <DailyCheckInScreen
-            key={`${sessionGeneration(session.signal)}|${session.session.identity.userId}|${selectedOrgId}`}
-            csrf={session.session.csrf}
-            intent={checkInIntent}
-            orgId={selectedOrgId}
-            signal={session.signal}
-          />
+          <DeferredView module={secondaryViews} what="the daily check-in">
+            {({ DailyCheckInScreen }) => (
+              <DailyCheckInScreen
+                key={`${sessionGeneration(session.signal)}|${session.session.identity.userId}|${selectedOrgId}`}
+                csrf={session.session.csrf}
+                intent={checkInIntent}
+                orgId={selectedOrgId}
+                signal={session.signal}
+              />
+            )}
+          </DeferredView>
         ) : (
           <section className="coach-prerequisite" role="status">{viewPrerequisite('daily check-in')}</section>
         )
@@ -1202,16 +1227,20 @@ export function App() {
         session.status === 'ready' && selectedOrgId !== null && viewScope !== null ? (
           // Owner-only meal log (ADR-0083), keyed like the other owner-only views: a new session, person or organization
           // is a new screen with no request carried over. A Today action opens it on Today's selected date.
-          <MealLogScreen
-            key={viewScope}
-            csrf={session.session.csrf}
-            initialDate={mealIntentDateOf(scopedIntent)}
-            onBackToToday={backToToday}
-            onBackToTrends={scopedTrendsReturn === null ? undefined : () => backToTrends(scopedTrendsReturn)}
-            orgId={selectedOrgId}
-            signal={session.signal}
-            timeZone={resultTimeZone}
-          />
+          <DeferredView module={secondaryViews} what="the meal log">
+            {({ MealLogScreen }) => (
+              <MealLogScreen
+                key={viewScope}
+                csrf={session.session.csrf}
+                initialDate={mealIntentDateOf(scopedIntent)}
+                onBackToToday={backToToday}
+                onBackToTrends={scopedTrendsReturn === null ? undefined : () => backToTrends(scopedTrendsReturn)}
+                orgId={selectedOrgId}
+                signal={session.signal}
+                timeZone={resultTimeZone}
+              />
+            )}
+          </DeferredView>
         ) : (
           <section className="coach-prerequisite" role="status">{viewPrerequisite('meal log')}</section>
         )

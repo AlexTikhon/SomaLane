@@ -27,3 +27,11 @@ export interface MapboxRuntime {
 export const MAPBOX_BASE_STYLE: string;
 
 export function loadMapbox(): Promise<MapboxRuntime>;
+
+/** The page's one Mapbox stylesheet link; the parameters are test seams. */
+export function loadMapboxStylesheet(
+  document?: Pick<Document, 'createElement' | 'head'>,
+  href?: string,
+): Promise<void>;
+
+export function resetMapboxStylesheet(): void;

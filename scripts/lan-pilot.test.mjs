@@ -339,8 +339,9 @@ test('LAN pilot verification: certificate validation stays on, and the pilot bro
   assert.doesNotMatch(browserConfig, /--ignore-certificate-errors['"`\s,]|ignoreHTTPSErrors: true/u);
   assert.match(browserConfig, /--ignore-certificate-errors-spki-list=\$\{pilot\.serverSpkiSha256\}/u);
   assert.doesNotMatch(browserConfig, /webServer/u, 'the pilot suite starts nothing; it tests the running pilot');
-  // The portfolio dataset walkthrough (its own config, docs/runbooks/portfolio-dataset.md) is kept out the same way.
-  assert.match(read('tests/e2e/playwright.config.ts'), /name: 'chromium', testIgnore: \/\[\\\\\/\]\(\?:oidc\|lan-pilot\|portfolio-dataset\)\[\\\\\/\]\//u);
+  // The portfolio dataset walkthrough (its own config, docs/runbooks/portfolio-dataset.md) and the production-build check
+  // (its own config, ADR-0098) are kept out the same way.
+  assert.match(read('tests/e2e/playwright.config.ts'), /name: 'chromium', testIgnore: \/\[\\\\\/\]\(\?:oidc\|lan-pilot\|portfolio-dataset\|production-build\)\[\\\\\/\]\//u);
   assert.match(read('tests/e2e/lan-pilot/pilot-browser.spec.ts'), /expect\(security\?\.issuer\)\.toBe\(pilot\.caCommonName\)/u);
 });
 

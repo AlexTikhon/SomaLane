@@ -2,7 +2,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 
 import { App } from './App.js';
-import 'mapbox-gl/dist/mapbox-gl.css';
+// The Mapbox stylesheet is not imported here: mapbox-runtime.js loads it with the map runtime (ADR-0098).
 import './styles.css';
 
 const root = document.querySelector<HTMLDivElement>('#root');

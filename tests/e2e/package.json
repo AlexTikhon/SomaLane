@@ -8,6 +8,7 @@
     "e2e:firefox": "playwright test --project=firefox-core",
     "e2e:lan-pilot": "playwright test --config=playwright.lan-pilot.config.ts",
     "e2e:portfolio-dataset": "playwright test --config=playwright.portfolio-dataset.config.ts",
+    "e2e:production-build": "node ../../scripts/measure-web-bundle.mjs --out ../../.local/web-bundle/e2e-production/dist && playwright test --config=playwright.production-build.config.ts",
     "e2e:smoke":"node --import tsx support/smoke-preflight.ts chromium && playwright test --config=playwright.smoke.config.ts --project=smoke-chromium",
     "e2e:smoke:firefox": "node --import tsx support/smoke-preflight.ts firefox && playwright test --config=playwright.smoke.config.ts --project=smoke-firefox",
     "typecheck": "tsc --noEmit -p tsconfig.json",
