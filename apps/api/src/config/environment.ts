@@ -101,7 +101,7 @@ const originList = z
     return [...new Set(entries)];
   });
 
-interface ParsedDatabaseConnection {
+export interface ParsedDatabaseConnection {
   connectionString: string;
   database: string;
   host: string;
@@ -109,7 +109,8 @@ interface ParsedDatabaseConnection {
   user: string;
 }
 
-function parseDatabaseConnection(
+// Exported for the portfolio dataset tooling (apps/api/src/portfolio-dataset), which applies the same URL rules.
+export function parseDatabaseConnection(
   connectionString: string,
   variableName: string,
   expectedUser: string,
