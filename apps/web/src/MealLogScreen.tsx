@@ -25,13 +25,12 @@ import {
   emptyMealDraft,
   mealDraftFromView,
   mealSourceLabel,
-  mealTypeLabels,
   mealTypeOptions,
   nutritionInputLabel,
-  summarizeMeal,
   validateMealDraft,
   type MealDraft,
 } from './meal-log.js';
+import { mealEntryLabel, MealEntryValues } from './MealEntryValues.js';
 import { defaultTimeZone } from './run-search.js';
 import { createMeal, deleteMeal, listMeals, proposeMealDraft, updateMeal, type CsrfCredentials } from './runner-api.js';
 
@@ -90,25 +89,12 @@ function EntryCard({
   handlers,
   view,
 }: Pick<MealLogViewProps, 'busy' | 'deletion' | 'editing' | 'handlers'> & { view: MealView }) {
-  const label = `${mealTypeLabels[view.mealType].toLowerCase()} "${view.title}"`;
+  const label = mealEntryLabel(view);
   const confirming = deletion?.mealId === view.mealId ? deletion.snapshot : null;
   const isEditing = editing?.mealId === view.mealId;
   return (
     <li className={confirming !== null ? 'run-card run-card--deleting' : 'run-card'}>
-      <p className="eyebrow">{mealTypeLabels[view.mealType]}</p>
-      <h3>{view.title}</h3>
-      <dl aria-label={`Values of ${label}`}>
-        {summarizeMeal(view).map((row) => (
-          <div className={row.value === 'Not recorded' ? 'today-rows__missing' : undefined} key={row.label}>
-            <dt>{row.label}</dt>
-            <dd>{row.value}</dd>
-          </div>
-        ))}
-      </dl>
-      <p className="meal-card__source">
-        <span className="review-badge">{mealSourceLabel(view.source)}</span>
-        {isEditing && ' Editing now.'}
-      </p>
+      <MealEntryValues editingNow={isEditing} view={view} />
       {confirming === null && (
         <div className="run-card__actions">
           <button aria-label={`Edit ${label}`} disabled={busy || isEditing} onClick={() => handlers.edit(view)} type="button">

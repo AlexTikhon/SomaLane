@@ -583,7 +583,8 @@ async function identityOf(pool: Pick<Pool, 'connect'>, expected: Expected, label
   }
 }
 
-async function readOnly<Result>(pool: Pick<Pool, 'connect'>, read: (client: PoolClient) => Promise<Result>): Promise<Result> {
+/** One REPEATABLE READ READ ONLY transaction on a connection of pool (also used by the showcase export). */
+export async function readOnly<Result>(pool: Pick<Pool, 'connect'>, read: (client: PoolClient) => Promise<Result>): Promise<Result> {
   const client = await pool.connect();
   try {
     await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');

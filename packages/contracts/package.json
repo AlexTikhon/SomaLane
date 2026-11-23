@@ -8,6 +8,10 @@
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     },
+    "./showcase": {
+      "types": "./dist/showcase-snapshot.d.ts",
+      "default": "./dist/showcase-snapshot.js"
+    },
     "./openapi.json": "./openapi/openapi.json"
   },
   "scripts": {

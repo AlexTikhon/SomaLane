@@ -28,8 +28,9 @@ export default defineConfig({
     // The development-session stack (a local session endpoint, no identity provider). lan-pilot/ runs only against a
     // running iPhone LAN pilot, through its own config (`npm run pilot:e2e`); portfolio-dataset/ only against the
     // isolated dataset stack, through its own config (`npm run test:e2e:portfolio-dataset`); production-build/ only
-    // against the production build, through its own config (`npm run test:e2e:production-build`).
-    { name: 'chromium', testIgnore: /[\\/](?:oidc|lan-pilot|portfolio-dataset|production-build)[\\/]/, use: { browserName: 'chromium' } },
+    // against the production build, through its own config (`npm run test:e2e:production-build`); showcase/ only against the
+    // showcase's static build, through its own config (`npm run test:e2e:showcase`).
+    { name: 'chromium', testIgnore: /[\\/](?:oidc|lan-pilot|portfolio-dataset|production-build|showcase)[\\/]/, use: { browserName: 'chromium' } },
     // The OpenID Connect stack: the same sign-in route production has, against a real provider process.
     {
       name: 'chromium-oidc',

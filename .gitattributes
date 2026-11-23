@@ -6,3 +6,5 @@ apps/api/test/fixtures/gps-traces/*.trace.json text eol=lf
 docs/reports/d10-real-traces.md text eol=lf
 # Weekly insight prompt snapshots are compared byte for byte by toMatchFileSnapshot on every platform.
 apps/api/src/insights/__snapshots__/* text eol=lf
+# The showcase snapshot is canonical JSON compared byte for byte with a fresh export (docs/runbooks/showcase.md).
+apps/web/showcase/public/showcase-snapshot.json text eol=lf

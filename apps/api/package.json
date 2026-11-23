@@ -29,6 +29,7 @@
     "load:seed": "node --import tsx src/loadtest/seed-dataset-main.ts",
     "portfolio:dataset": "node --import tsx src/portfolio-dataset/prepare-main.ts",
     "portfolio:dataset:serve": "node --import tsx src/portfolio-dataset/serve-main.ts",
+    "portfolio:showcase:export": "node --import tsx src/portfolio-dataset/showcase-export-main.ts",
     "pretest:portfolio-dataset": "npm run build --workspace=@running-tracker/contracts",
     "test:portfolio-dataset": "vitest run --config vitest.portfolio-dataset.config.ts",
     "pretest": "npm run build --workspace=@running-tracker/contracts",

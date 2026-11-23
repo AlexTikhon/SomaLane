@@ -1,0 +1,64 @@
+/* The public read-only showcase's frame (ADR-0099). The content blocks use the application's styles.css unchanged. */
+
+.showcase-label,
+.showcase-banner,
+.showcase-navigation,
+.showcase-provenance {
+  width: min(1120px, calc(100% - 2rem));
+  margin: 0 auto;
+}
+
+/* The label stays in view while the page scrolls, on every view and in every state: one compact line. */
+.showcase-label {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  margin-top: 0.75rem;
+  padding: 0.45rem 0.9rem;
+  border: 1px solid #b8f264;
+  border-radius: 0.9rem 0.9rem 0 0;
+  color: #b8f264;
+  background: #1b2a17;
+  box-shadow: 0 0.4rem 1.2rem rgb(0 0 0 / 35%);
+  font-size: 1rem;
+  letter-spacing: 0.01em;
+}
+
+.showcase-banner {
+  display: grid;
+  gap: 0.25rem;
+  padding: 0.5rem 0.9rem 0.7rem;
+  border: 1px solid #b8f264;
+  border-top: 0;
+  border-radius: 0 0 0.9rem 0.9rem;
+  background: #1b2a17;
+}
+
+.showcase-banner p { margin: 0; }
+.showcase-banner__data { color: #dfe6e0; font-size: 0.86rem; }
+.showcase-banner__app { color: #aab4ac; font-size: 0.86rem; }
+.showcase-banner__app a { color: #b8f264; font-weight: 750; }
+.showcase-banner__app a:focus-visible { outline: 3px solid rgb(184 242 100 / 35%); outline-offset: 2px; }
+
+.showcase-navigation { margin-top: 0.75rem; }
+
+.showcase-not-included { color: #aab4ac; }
+.showcase-failure { display: grid; gap: 0.6rem; justify-items: start; }
+
+.showcase-provenance {
+  padding: 0 0 2.5rem;
+  color: #aab4ac;
+  font-size: 0.82rem;
+}
+
+.showcase-provenance h2 { margin: 0 0 0.4rem; color: #dfe6e0; font-size: 1rem; }
+.showcase-provenance dl { display: grid; gap: 0.3rem; margin: 0.6rem 0 0; }
+.showcase-provenance dl div { display: grid; grid-template-columns: minmax(7rem, auto) 1fr; gap: 0.6rem; }
+.showcase-provenance dt { color: #dfe6e0; font-weight: 750; }
+.showcase-provenance dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+
+@media (max-width: 520px) {
+  .showcase-navigation { width: calc(100% - 2rem); flex-direction: row; }
+  .showcase-navigation .view-switcher__primary button { flex: 1 1 0; }
+  .showcase-provenance dl div { grid-template-columns: 1fr; gap: 0; }
+}

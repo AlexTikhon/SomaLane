@@ -135,7 +135,8 @@ export function ActivityTrendsComparison({ trends }: { trends: ActivityTrends })
   );
 }
 
-function ActivityTrendsContent({ measure, trends }: { measure: ActivityTrendMeasure; trends: ActivityTrends }) {
+/** One loaded source and type: summary, comparison, chart and every date. Pure; the showcase renders it too (ADR-0099). */
+export function ActivityTrendsContent({ measure, trends }: { measure: ActivityTrendMeasure; trends: ActivityTrends }) {
   const source = trends.source;
   const labels = activityTrendMeasureLabels(source);
   const geometry = activityChartGeometry(trends, measure);
