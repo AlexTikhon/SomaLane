@@ -11,16 +11,16 @@ It started as **Running Tracker**, a learning project in GPS run capture, live c
 and grows one vertical slice at a time. Package names, database identifiers, cookies and environment variables keep the
 `running-tracker` names; only the product and the visible app are called SomaLane.
 
-> **Status (2026-11-22): preparing portfolio v1.** Feature work is paused for a finite, ten-step release plan:
+> **Status (2026-11-23): preparing portfolio v1.** Feature work is paused for a finite, ten-step release plan:
 > [docs/portfolio-v1-release-plan.md](docs/portfolio-v1-release-plan.md). It defines the release (a public, read-only
 > showcase of synthetic data plus the full app behind invite-only OpenID Connect), its mandatory gates and what is
-> deferred. Steps 1 to 3 are done (step 2: an isolated, reproducible synthetic dataset over 56 calendar dates,
-> `npm run portfolio:dataset`; step 3: Today-first navigation, ADR-0097). Step 4 (the secondary views load on demand,
-> measured with `npm run measure:web-bundle`, ADR-0098) is **implemented; verification pending**: its full
-> Chromium/OIDC gate has no successful full run yet. **Next task: close step 4's full-suite gate (a successful full
-> Chromium/OIDC run or a CI run for the candidate) before advancing to step 5.**
+> deferred. Steps 1 to 5 are done: step 2, an isolated, reproducible synthetic dataset over 56 calendar dates
+> (`npm run portfolio:dataset`); step 3, Today-first navigation (ADR-0097); step 4, the secondary views load on demand
+> (ADR-0098, closed by a successful hosted CI run for `1dac6ed`); step 5, the public read-only showcase, a static build
+> of synthetic snapshots with no sign-in and no API request (ADR-0099, `npm run build:showcase`; tested locally, not
+> hosted). **Next task: step 6, the bounded WebKit/mobile gate.**
 >
-> Today the app runs locally and in GitHub Actions (latest checked run: success for `6f3dc46`). The single-host
+> Today the app runs locally and in GitHub Actions (latest checked run: success for `1dac6ed`). The single-host
 > production profile is verified on a workstation but not deployed anywhere, sign-in has been tested against a test
 > OpenID Connect provider only, and nothing has been checked on a physical phone. Local use signs in with fixed demo
 > people; use synthetic data only. HealthKit is deferred until a Mac with Xcode is available.
@@ -177,6 +177,18 @@ It never touches the development or test database and never reads `.env`. It pri
 (port 3300) and web app (port 5373) against it, and which dates to open in Today, the weekly review and Trends:
 [docs/runbooks/portfolio-dataset.md](docs/runbooks/portfolio-dataset.md).
 
+### The public read-only showcase
+
+```sh
+npm run portfolio:showcase:export    # snapshots of that dataset through the app's read services (read-only)
+npm run build:showcase               # static files in apps/web/dist-showcase/ (SHOWCASE_APP_URL = the app's link)
+npm run preview:showcase             # http://127.0.0.1:4380, no API
+```
+
+A static page of the primary journey (Today → Weekly review → Trends → the day or its meals) from one committed file of
+synthetic snapshots: no sign-in, no API request, no write, labelled "Read-only showcase · synthetic data" on every view:
+[docs/runbooks/showcase.md](docs/runbooks/showcase.md).
+
 ## Tests and CI
 
 | Command | What it runs |
@@ -187,6 +199,7 @@ It never touches the development or test database and never reads `.env`. It pri
 | `npm run test:e2e:smoke` | a 24-test pre-demo smoke on its own ports |
 | `npm run test:portfolio-dataset`, `npm run test:e2e:portfolio-dataset` | the synthetic dataset on throwaway databases inside its isolated server, and a Chromium walkthrough of the populated screens (after `npm run portfolio:dataset`; not in CI) |
 | `npm run measure:web-bundle`, `npm run test:e2e:production-build` | the initial JavaScript and CSS of the production build, raw and gzip (`-- --ref <commit>` for a commit), and a Chromium/Firefox check of that build's chunk requests and of loading, failure and retry of the on-demand views (ADR-0098; not in CI) |
+| `npm run test:e2e:showcase`, `npm run portfolio:showcase:export -- --check` | the showcase's static build in Chromium/Firefox with no API server (journey, labels, no `/api` request, no storage write, keyboard, 375 px, a broken data file), and whether the committed snapshot equals a fresh export (ADR-0099; not in CI; the check needs the dataset) |
 | `npm run deploy:verify`, `npm run transport:verify`, `npm run pilot:verify` | Docker profile checks: deployment, loopback TLS/HTTP2, iPhone pilot |
 
 The integration and browser suites need the test database first (`npm run db:up`, `npm run db:bootstrap:test`,
@@ -213,7 +226,7 @@ Firefox gate, on pushes to `main`, on pull requests and on demand. It reads no s
 | [docs/portfolio-v1-release-plan.md](docs/portfolio-v1-release-plan.md) | **current**: release scope, the ten steps, gates, evidence required per claim, deferrals |
 | [docs/reference.md](docs/reference.md) | the detailed reference: API behaviour, data rules, configuration and verification for every feature |
 | [docs/SDD.md](docs/SDD.md) | the system design |
-| [docs/adr/](docs/adr/) | one decision record per slice (ADR-0001 to ADR-0098) |
+| [docs/adr/](docs/adr/) | one decision record per slice (ADR-0001 to ADR-0099) |
 | [docs/product-direction.md](docs/product-direction.md) | roadmap, principles and each slice's summary |
 | [docs/progress.md](docs/progress.md) | what was built and how it was verified, entry by entry |
 | [docs/runbooks/](docs/runbooks/) | how to run, demo, deploy, back up and pilot it |
@@ -231,7 +244,9 @@ Firefox gate, on pushes to `main`, on pull requests and on demand. It reads no s
 - No real Mapbox basemap was rendered in a test. The AI features (search in words, weekly insights, meal drafts, Ask my
   data interpretation) are off by default: none has valid passing model evidence for the current code (Ask my data's
   one passing run is stale after a later constraints correction), and OpenAI has never been called.
-- Only steps 1 and 2 of the portfolio v1 release plan are done, so its release gates are not met; which claims need which
+- The read-only showcase has been built and tested only on this workstation; it is not hosted, and its link to the
+  invite-only application is configured at build time (no live address exists yet).
+- Only steps 1 to 5 of the portfolio v1 release plan are done, so its release gates are not met; which claims need which
   evidence is listed in
   [the release plan](docs/portfolio-v1-release-plan.md#5-capability-claims-and-the-evidence-each-needs).
 - No phone or watch import, no FIT import and no HealthKit. GPX and TCX import cover one documented subset each (one

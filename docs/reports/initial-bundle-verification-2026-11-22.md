@@ -2,13 +2,16 @@
 
 - Date: 2026-11-22. Workstation: Windows 11, Node 24.11.1, Vite 8.3.0, Docker Desktop, PostgreSQL 17.5 (PostGIS image),
   Chromium and Firefox (Playwright 1.63.0).
-- Baseline: commit `a3bf4e2` (clean HEAD when the step began). Candidate: the uncommitted working tree on top of it,
-  identified below by git tree ids; **its commit reference is pending**.
-- Scope: [ADR-0098](../adr/0098-initial-bundle-reduction.md). Fresh checks, run in this change. Local only: no hosted CI.
-  Development-server coverage and production-build evidence are reported separately.
-- Step status: **implemented; verification pending.** No full Chromium/OIDC run has been free of failures (two runs
-  below, one more in the [independent review](#independent-review-recorded-2026-11-22)); see the
-  [completion gate](#completion-gate).
+- Baseline: commit `a3bf4e2` (clean HEAD when the step began). Candidate: commit **`dff831a`**
+  (`dff831a50d93982f17094b1a51659275ebc717be`). When the local checks below ran it was the uncommitted working tree,
+  identified by git tree ids; the ids match that commit (checked 2026-11-23, [candidate identity](#candidate-identity)).
+- Scope: [ADR-0098](../adr/0098-initial-bundle-reduction.md). Fresh checks, run in this change, on the Windows
+  workstation; development-server coverage and production-build evidence are reported separately. Hosted CI evidence was
+  added afterwards, in its own section.
+- Step status: **done (2026-11-23).** No local full Chromium/OIDC run was free of failures (two runs below, one more in
+  the [independent review](#independent-review-recorded-2026-11-22)); the gate was closed by a successful hosted CI run
+  for a commit containing the candidate unchanged ([hosted CI evidence](#hosted-ci-evidence-recorded-2026-11-23)). See
+  the [completion gate](#completion-gate).
 
 ## Measurement
 
@@ -62,6 +65,16 @@ with `git rev-parse <commit>:<path>`):
 
 **Candidate commit: pending** (the changes are uncommitted). The whole-tree id is not quoted because this report is part
 of the tree.
+
+### Candidate identity
+
+Added 2026-11-23: the candidate was committed as **`dff831a`**. `git rev-parse dff831a:apps/web` is
+`c35605e4d1be84c2e5312f22deb62495ff50e280`, and `dff831a:scripts/measure-web-bundle.mjs` and
+`dff831a:scripts/web-bundle.mjs` are `a8479778…` and `a6f12765…`: the ids in the table above. The next commit,
+`1dac6ed`, changes only documentation (`git diff --stat dff831a 1dac6ed`: README, ADR-0098, the release plan, progress,
+reference and this report), so its `apps/web` tree is the same. A fresh `npm run measure:web-bundle` of the clean tree at
+`1dac6ed` on 2026-11-23 reproduced the candidate's measurement exactly (`index-D0ESd0tD.js` 625,755 B raw, 175,156 B gzip;
+`index-BgEf5SdT.css` 43,020 B raw, 8,276 B gzip).
 
 ## Why one deferred chunk: the retry probe
 
@@ -193,3 +206,27 @@ Step 4's acceptance requires the full Chromium suite and the Firefox core gate t
 passed. The full Chromium/OIDC suite has run three times (two runs above, one in the independent review), and each run had
 two failures, which passed when rerun alone. **Step 4 is complete only after a successful full Chromium/OIDC run, or a CI
 run, for the candidate.** Rerunning individual cases does not close this gate. The acceptance criteria are unchanged.
+
+**Closed on 2026-11-23** by the hosted CI run below for `1dac6ed`, which contains the candidate `dff831a` unchanged. The
+local results above stay as recorded: none of the three local full runs was free of failures, and the individual reruns
+did not close the gate.
+
+## Hosted CI evidence (recorded 2026-11-23)
+
+Recorded separately from the local evidence above. Checked at its source with
+`gh run view 45055752618 --json headSha,conclusion,status,event,headBranch,workflowName,jobs` on 2026-11-23.
+
+| Field | Value |
+|---|---|
+| Run | [45055752618](https://github.com/AlexTikhon/SomaLane/actions/runs/45055752618), workflow `CI`, event `push`, branch `main` |
+| Commit | `1dac6edae7b2377e565f1460655b89063f34e107` (contains the candidate `dff831a`; the difference is documentation only) |
+| Conclusion | `success` (status `completed`; 2026-11-22 18:33:23Z to 18:47:48Z) |
+| `verify` | success |
+| `integration` | success |
+| `e2e (chromium 1/3)`, `e2e (chromium 2/3)`, `e2e (chromium 3/3)` | success, success, success (the full Chromium/OIDC suite, sharded) |
+| `e2e (firefox-core)` | success |
+| `e2e-report` | skipped (it runs only when a browser job failed) |
+
+This is hosted CI evidence for that commit on GitHub's Linux runners. It does not change or explain the local Windows
+failures above (`ERR_ADDRESS_IN_USE`, `ERR_NETWORK_CHANGED` and two whose traces were cleared), which remain local
+observations. `npm run test:e2e:production-build` is not part of CI.

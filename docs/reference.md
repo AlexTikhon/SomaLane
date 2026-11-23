@@ -267,6 +267,16 @@ Runner's result load on demand, as one chunk, the first time one of them opens. 
 navigation, the Run status and any run in progress carry on. Nothing reloads the page. The Mapbox stylesheet loads with
 the map runtime. `npm run measure:web-bundle` reports the production build's initial JavaScript and CSS.
 
+The **public read-only showcase** ([ADR-0099](adr/0099-public-read-only-showcase.md), release step 5,
+[runbook](runbooks/showcase.md)) is a separate static build (`npm run build:showcase`, entry `apps/web/showcase/`) that
+renders the same pure content blocks (`TodayOverviewContent`, `WeeklyReviewContent`, `TrendsContent`,
+`ActivityTrendsContent`, `MealEntryValues`) without any action, from one file of snapshots
+(`apps/web/showcase/public/showcase-snapshot.json`, envelope `@running-tracker/contracts/showcase`). The file is exported
+read-only from the isolated synthetic dataset through the read services by `npm run portfolio:showcase:export`. The
+page offers only the snapshot's catalog, follows the date policy below with "today" = the snapshot's last date, labels
+every view "Read-only showcase · synthetic data", links to the invite-only application (`SHOWCASE_APP_URL`, validated at
+build time), and sends no request but for its own files.
+
 Date policy (`apps/web/src/journey-navigation.ts`): Today's **Weekly review** opens the week containing Today's date; a
 direct opening uses the week kept for the current scope, else the current week; the review's **28-day trends ending …**
 ends on the week's Sunday when the week is complete and on today otherwise, never later; ordinary navigation keeps

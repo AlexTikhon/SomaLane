@@ -2,7 +2,9 @@
 
 Audience: whoever prepares, reviews or demonstrates portfolio v1 on one Windows, macOS or Linux workstation with
 Docker. Related: [release plan, step 2](../portfolio-v1-release-plan.md#step-2-reproducible-isolated-synthetic-dataset-over-56-calendar-dates),
-[verification report](../reports/portfolio-dataset-verification-2026-11-22.md), [demo runbook](demo.md).
+[verification report](../reports/portfolio-dataset-verification-2026-11-22.md), [demo runbook](demo.md). The public
+read-only showcase (release step 5) is exported from this dataset, read-only, by `npm run portfolio:showcase:export`:
+[showcase runbook](showcase.md).
 
 One command creates an isolated PostgreSQL server and fills it with a reproducible, **synthetic** dataset over 56 local
 calendar dates, so that Today, the weekly review, nutrition Trends and the 28-date activity comparison of the existing

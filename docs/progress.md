@@ -5844,3 +5844,84 @@ Checks for this correction (fresh): `git diff --check` and Markdown-link checks 
 application suite was rerun (documentation only).
 
 **Next task: close step 4's full-suite gate before advancing to release step 5.** Changes are uncommitted.
+
+## Portfolio v1 release step 4: gate closed by hosted CI (2026-11-23)
+
+**Status: done.** Step 4's remaining gate ("a successful full Chromium/OIDC run, or a CI run, for the candidate") is
+closed by hosted CI. Documentation-only update of the step's status and candidate references; the local results of
+2026-11-22, their Windows failures and the correction entry above are kept as recorded.
+
+| Evidence (checked at its source with `gh run view 45055752618` on 2026-11-23) | Result |
+|---|---|
+| Run [45055752618](https://github.com/AlexTikhon/SomaLane/actions/runs/45055752618), workflow `CI`, `push` to `main` | conclusion `success`, status `completed` (2026-11-22 18:33–18:47 UTC) |
+| Commit | `1dac6edae7b2377e565f1460655b89063f34e107` |
+| Jobs | `verify`, `integration`, `e2e (chromium 1/3)`, `e2e (chromium 2/3)`, `e2e (chromium 3/3)`, `e2e (firefox-core)` success; `e2e-report` skipped (it runs only after a browser-job failure) |
+| Candidate commit | **`dff831a`**: `git rev-parse dff831a:apps/web` = `c35605e4…` and the measuring tool's blobs `a8479778…`, `a6f12765…`, the ids the report recorded for the uncommitted candidate; `1dac6ed` changes only documentation after it |
+| Fresh measurement of the clean tree at `1dac6ed` (`npm run measure:web-bundle`) | initial JS 625,755 B raw / 175,156 B gzip, CSS 43,020 / 8,276 B: identical to the candidate's recorded measurement |
+
+Updated: [release plan](portfolio-v1-release-plan.md#step-4-measured-initial-bundle-reduction) (step 4 done, candidate
+`dff831a`, the Chromium/Firefox claim row now names run 45055752618), [ADR-0098](adr/0098-initial-bundle-reduction.md)
+status, the [verification report](reports/initial-bundle-verification-2026-11-22.md) (candidate identity, completion
+gate, a separate "Hosted CI evidence" section) and README. The hosted run is Linux CI evidence for that commit; it does
+not change the local Windows failures, which stay local observations.
+
+## Portfolio v1 release step 5: public read-only synthetic showcase (ADR-0099) (2026-11-23)
+
+**Outcome.** A public, read-only showcase of the primary journey, built from synthetic snapshots of the step-2 dataset
+and served as static files without sign-in or an API. Decided in [ADR-0099](adr/0099-public-read-only-showcase.md);
+operated by the [showcase runbook](runbooks/showcase.md):
+
+- **Separate build target.** `npm run build:showcase` (`apps/web/showcase/index.html` → `src/showcase/main.tsx`,
+  `vite.showcase.config.ts`, output `apps/web/dist-showcase/`); `npm run preview:showcase` on 127.0.0.1:4380 with no
+  proxy. Not reachable from `src/main.tsx`; `npm run build` builds both.
+- **Export.** `npm run portfolio:showcase:export [-- --check] [-- --out <file>]`
+  (`apps/api/src/portfolio-dataset/showcase-export*.ts`): the dataset's guards before connecting (production refused,
+  manifest and recorded completion agree, isolation rules, container ownership), identity-checked connections opened
+  with `default_transaction_read_only=on`, the recorded digest checked before and after, then the read services
+  (overview, weekly review, daily trends, activity trends with the comparison, meal list) as the synthetic runner at one
+  fixed instant, each answer parsed by its contract schema. Canonical output with a content digest; meal ids and
+  wall-clock times normalised; no cursor exported; an allowlist check of the whole document.
+- **Envelope.** `@running-tracker/contracts/showcase` (`packages/contracts/src/showcase-snapshot.ts`, a subpath so the
+  application never bundles it): versioned provenance, the bounded catalog and cross-checks; the existing response
+  schemas validate every payload.
+- **Page.** "Read-only showcase · synthetic data" sticky on every state and view, the dataset's dates and sample date,
+  the `SHOWCASE_APP_URL` link (validated; none by default), Today / Weekly review / Trends / a read-only meal list, the
+  application's date policy with "today" = the snapshot's last date, only catalog selections, no control that changes
+  anything, no sign-in, no AI section, no `/api` request, no storage write; a missing or invalid data file reported
+  locally.
+- **Small extractions.** `TodayOverviewContent.tsx` (actions optional), `WeeklyReviewContent.tsx`, `TrendsContent.tsx`
+  (meal action words as a prop), `MealEntryValues.tsx`; `ActivityTrendsContent` exported; the original modules
+  re-export them. `readOnly` of the dataset writer exported for reuse.
+
+No API route, schema, migration, authentication, configuration guard or dependency changed;
+`apps/api/src/config/environment.ts` is unchanged.
+
+| Check (fresh, this change) | Result |
+|---|---|
+| Export against the dataset | 119 reads; digest `sha256:b6222c85…857d` matched before and after; two exports and `--check` byte-identical (file SHA-256 `8ccbbcd0…7628`, content digest `sha256:a717…0a9c`); server write counters unchanged across three exports; manifest, seed-state, settings and compose.env unchanged |
+| New unit tests | web: snapshot (contract schemas, envelope, canonical form, allowlist, 11 refusals), navigation and loader, link validation, module boundary, views, read-only blocks; API: catalog, instant, manifest refusals, normalisation, byte-for-byte rebuild, allowlist, refusals before Docker and before connecting, CLI |
+| `npm run verify` | exit 0: scripts 122, API 2,832, web 1,529, contracts 325, fixtures 14, simulator 3, build (application and showcase) |
+| E2E typecheck | exit 0 (now including `showcase/`) |
+| Application initial bundle (`npm run measure:web-bundle`, `1dac6ed` → candidate) | JS 625,755 → 625,949 B raw (+194), 175,156 → 175,239 B gzip (+83); CSS unchanged; no showcase code, text or data in its output |
+| Test database identity before write-based suites (read-only) | `running_tracker_test` on 127.0.0.1:5433 as runtime, maintenance and owner roles (system id `…4838`); dataset server another cluster (`…6329`) |
+| `npm run test:e2e:showcase` (static production build, no API server) | **10 passed** (8 Chromium, 2 Firefox) on the final code. A development run first failed 4 of 10 on test locators; traces kept in `.local/showcase/failures/dev-run-1/`, tests corrected |
+| `npm run test:e2e:production-build` | **5 passed** |
+| `npm run test:e2e` (full Chromium + OIDC) | **192 passed**, 0 failed, 17.4 min, one full run |
+| `npm run test:e2e:firefox` | **18 passed** |
+| `npm run test:e2e:portfolio-dataset` | **2 passed**; dataset digest, record tables and files unchanged (only sign-in session rows); screenshots restored byte-identical |
+| Links of changed docs, `git diff --check`, new files with `--no-index --check` | 165 links resolve; clean |
+
+Evidence and limits: [verification report](reports/showcase-verification-2026-11-23.md). `openapi.json`, rewritten
+with line endings only by the contracts builds, was restored. Not done: hosting (step 8), hosted CI of this change,
+WebKit/Safari/phone (step 6); the link is a local test address in tests and not configured by default. AI-quality
+limitations unchanged. Step 5's acceptance criteria hold, so **step 5 is done; next task: release step 6, the bounded
+WebKit/mobile gate.** Changes are uncommitted.
+
+**Follow-up: lint regression from the showcase output.** With `apps/web/dist-showcase/` present after a build,
+`eslint .` linted the generated minified bundle and `npm run verify` failed (1,446 errors as reported). Fixed by adding
+`'**/dist-showcase/**'` to the existing global ignores in `eslint.config.js`; rules and source linting unchanged. Fresh
+checks with the directory kept: `npm run build:showcase` exit 0; `npm run verify` (no CLI ignore override) exit 0 with
+lint clean, scripts 122, API 2,832, web 1,529, contracts 325, fixtures 14, simulator 3 and build; `npm run lint` after
+that build exit 0; `git diff --check` clean. `openapi.json` line endings restored again. Browser suites not rerun
+(ignore-only change). Details: [verification report](reports/showcase-verification-2026-11-23.md#follow-up-showcase-build-output-excluded-from-lint-2026-11-23).
+Still uncommitted.

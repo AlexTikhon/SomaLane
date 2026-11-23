@@ -1,9 +1,11 @@
 # ADR-0098: Measured initial-bundle reduction — the secondary views on demand
 
-- Status: accepted; **implemented; verification pending** (see the
-  [verification report](../reports/initial-bundle-verification-2026-11-22.md), including its independent review). The
-  release step's full Chromium/OIDC gate has no successful full run; it closes with a successful full run or a CI run
-  for the candidate, not with reruns of individual cases. No hosted CI run.
+- Status: accepted; **implemented and verified** (2026-11-23). Candidate commit `dff831a`. The release step's full
+  Chromium/OIDC gate, which no local full run passed without failures (see the
+  [verification report](../reports/initial-bundle-verification-2026-11-22.md), including its independent review), was
+  closed by hosted CI run [45055752618](https://github.com/AlexTikhon/SomaLane/actions/runs/45055752618): `success` for
+  `1dac6ed` (the candidate plus documentation), with `verify`, `integration`, the three Chromium/OIDC shards and the
+  Firefox core gate successful.
 - Date: 2026-11-22
 - Release step: 4 of the [portfolio v1 release plan](../portfolio-v1-release-plan.md#step-4-measured-initial-bundle-reduction).
 - Relates to: [ADR-0097](0097-navigation-and-first-use-flow.md) (which views are primary; App owns run recovery, capture,
