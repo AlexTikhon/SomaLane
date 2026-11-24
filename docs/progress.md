@@ -6158,3 +6158,56 @@ the live run it was dry-run against `vite preview` (8 passed); that run is not h
   `3bbe2b2` until the workflow runs again.
 - **Not done.** No code, test or workflow changed. Step 9 was not started: no licence, no release tag, no feature. This
   entry, the report, the release plan, the README and the runbook are uncommitted, for review. **Step 8 is done.**
+
+## Portfolio v1 release step 9: portfolio materials, screenshots, changelog and licence (2026-11-24)
+
+**Owner decision:** licence **MIT**, "Copyright (c) 2026 Alex Tikhon". Evidence:
+[verification report](reports/portfolio-materials-verification-2026-11-24.md). Kinds of evidence: fresh checks of
+documentation and assets on the Windows workstation, and agent-run captures from the live showcase. Baseline `8ab6c5c`
+(the step-8 documentation, committed, not pushed); its historical evidence is carried forward unchanged.
+
+- **README** rewritten as the entry point. It now has the primary journey with four screenshots, a prominent link to
+  the showcase, the showcase (static, synthetic, published) versus the full application (local), the architecture and
+  six engineering decisions, local setup with runbook links, verification, limitations, status and the licence.
+  Release-process detail is behind links to the release plan, and no test counts are quoted.
+- **Screenshots** in `docs/assets/screenshots/`: `showcase-today.png`, `showcase-weekly-review.png`,
+  `showcase-trends-food-energy.png` and `showcase-logged-meals.png`.
+  - Captured from <https://alextikhon.github.io/SomaLane/> on 2026-11-24, 12:20:50–12:21:00 UTC.
+  - The deployment was 8026957134 of `3bbe2b2`. The live snapshot's SHA-256 `8ccbbcd0…4fd7628` equals the file at
+    `3bbe2b2`.
+  - Playwright Chromium 153.0.8010.12, headless, 1280 × 900 at scale 1, `en-GB`, `Europe/Warsaw`. 4 same-origin
+    `GET`s.
+  - Each image was inspected: the label is visible, and the content is synthetic only.
+  - The capture script is in the git-ignored `tests/e2e/.local/screenshots/`.
+- **Interview package** (`docs/interview.md`) rewritten for SomaLane, replacing the Running Tracker framing and its
+  status corrections. It covers:
+  - a pitch and the architecture with the showcase boundary;
+  - delivery semantics (at least once, idempotent persistence);
+  - three stories: deterministic analytics with missing versus zero; RLS isolation; offline recovery, idempotency and
+    writer fencing;
+  - notes on SSE, archive revisions and restore (local evidence only);
+  - a public walkthrough and the local engineering demo;
+  - scaling (durable sessions versus the remaining per-process state), AI status and what is not established.
+
+  The current-tense claims were checked against the code; the old "three unbuilt SDD reads" is now two.
+- **`CHANGELOG.md`** from the Git history: 287 commits, no tags, no versions. Portfolio v1 steps 1–9 are under
+  "Unreleased", earlier work in four dated periods.
+- **`LICENSE`**: GitHub's MIT template (`gh api licenses/mit`) with the owner's copyright line. No `package.json` or
+  lockfile changed, and all seven `"private": true` flags stay. The repository had no third-party notice file.
+- **Status.** Release plan: step 9 done with its status block, the licence input done, and step 10 next.
+  `product-direction.md`'s "next task" line now names step 10.
+
+| Check | Result |
+|---|---|
+| Relative links, anchors and image paths (README, CHANGELOG, interview, report, release plan, this entry, product direction) | 331 relative links and images, all resolve, every anchor matches a heading (scratchpad Node checker, proven to flag a missing file and a missing anchor); the four changed or new documents with tables or images also rendered with `marked` (GFM): the README has 4 tables and 6 images, and was inspected in Chromium |
+| Screenshots | 4 PNGs, 1280 × 900, opened and inspected; label visible; synthetic data only |
+| Licence text | identical to the MIT template apart from the copyright line |
+| `git diff --check` | clean |
+
+- **Recorded defect, not fixed.** On the live showcase at 1280 px, the Trends table's row buttons are 39 px wide and
+  wrap one letter per line. The cause is `.trends-table td:last-child { width: 1% }` with `overflow-wrap: anywhere` in
+  the shared `apps/web/src/styles.css`. The buttons work. A fix is an application change and needs a decision before
+  step 10.
+- **Not run.** `npm run verify`, integration, browser suites, any database or demo; hosted CI; a Pages dispatch. No
+  application, API, authentication, workflow or dependency change. Nothing was staged, committed, pushed, tagged or
+  released, and the live site still serves `3bbe2b2`. **Step 9 is done; step 10 is next.**

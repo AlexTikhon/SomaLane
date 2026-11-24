@@ -6,8 +6,9 @@
   local evidence; physical Safari checklist NOT RUN, so the release is desktop-scoped) and 7 (static publication
   preparation for GitHub Pages, 2026-11-24, local evidence) and 8 (the showcase published on GitHub Pages at
   <https://alextikhon.github.io/SomaLane/> from `3bbe2b2`, 2026-11-24: hosted CI run 45385170103, Pages run 45387434787,
-  hosted checks H1–H11 passed) of 10 are done. The **next task is step 9** (portfolio materials, screenshots, changelog
-  and licence). It needs the owner's licence decision.
+  hosted checks H1–H11 passed) and 9 (portfolio materials, screenshots of the live showcase, a changelog and the MIT
+  licence, 2026-11-24) of 10 are done. The **next task is step 10** (final verification, release tag and project
+  freeze).
 - **Scope change (2026-11-24, the owner's decision).** Only the public read-only synthetic showcase is published (on
   GitHub Pages), and the full application stays available for local demonstrations. Deferred: real external OIDC
   verification, full-application hosting and hosted backup/restore verification
@@ -424,6 +425,26 @@ deployment) and 9 (hosted smoke and isolated restore) are deferred with their re
     real identity provider, hosted application or hosted restore.
   - The licence decision (including "no licence, all rights reserved", if chosen) is written down and applied.
 - **Not in this step.** No new features or late fixes outside a recorded defect.
+- **Status: done (2026-11-24; documentation and assets, fresh checks).**
+  [Verification report](reports/portfolio-materials-verification-2026-11-24.md).
+  - **Licence.** The owner chose **MIT**. The root [LICENSE](../LICENSE) is the standard MIT text with "Copyright (c)
+    2026 Alex Tikhon". No `package.json` changed: every `"private": true` stays, and no `license` field was added.
+  - **Screenshots.** Four images in [docs/assets/screenshots/](assets/screenshots/): Today, Weekly review, Trends (food
+    energy) and Logged meals. They were captured from <https://alextikhon.github.io/SomaLane/> (deployment of `3bbe2b2`,
+    snapshot digest `8ccbbcd0…4fd7628` re-checked) on 2026-11-24 at 12:20–12:21 UTC, in Playwright Chromium 153 at
+    1280 × 900. Each was inspected: the synthetic label is visible and the data is synthetic only.
+  - **README.** Rewritten as the entry point: the journey with the screenshots, the showcase link, the
+    showcase-versus-local distinction, architecture and decisions, local setup, verification, limitations and the
+    licence. Release-process detail now sits behind links to this plan, and test counts were removed.
+  - **Interview package.** [interview.md](interview.md) is rewritten for SomaLane. Its current-tense claims were
+    checked against the code at `8ab6c5c` (report, section 3).
+  - **Changelog.** [CHANGELOG.md](../CHANGELOG.md), from the Git history: no versions or tags, and portfolio v1 under
+    "Unreleased".
+  - **Checks.** Relative links, anchors and image paths in every changed file; `git diff --check`. No application,
+    database or browser suite was run, and nothing was committed, pushed or redeployed.
+  - **Recorded defect, not fixed.** At 1280 px the Trends table's row buttons wrap one letter per line. The cause is a
+    shared CSS rule (`width: 1%` with `overflow-wrap: anywhere`). The buttons still work. Fixing it would change the
+    application, so it needs a decision before step 10 ([report, section 8](reports/portfolio-materials-verification-2026-11-24.md#8-findings)).
 
 ### Step 10. Final verification, release tag and project freeze
 
@@ -562,7 +583,7 @@ block the step named.
 | GitHub Pages enabled for the repository with "GitHub Actions" as its source, and the `github-pages` environment limited to `main` ([runbook, 3.2](runbooks/showcase.md#32-one-time-repository-setup-the-owner-in-githubs-web-interface)) | Step 8 | **Done 2026-11-24** with the owner's authorization: Pages `build_type: workflow`; `github-pages` allows `main` only |
 | A manual run of the Pages workflow on `main` | Step 8 (and step 10 for the tagged commit) | **Done 2026-11-24** for `3bbe2b2` (run 45387434787), after CI run 45385170103 succeeded |
 | Physical iPhone with Safari on the workstation's Wi-Fi | Step 6 (optional for a desktop-scoped release) | Time to run and record the checklist (the device is recorded as available; the checks are NOT RUN) |
-| Licence decision | Step 9 | Licence or "all rights reserved" |
+| Licence decision | Step 9 | **Done 2026-11-24**: MIT, "Copyright (c) 2026 Alex Tikhon" ([LICENSE](../LICENSE)) |
 
 No longer needed for v1, deferred with the work that needs them
 ([section 6.1](#61-deferred-by-the-scope-change-of-2026-11-24)):
@@ -585,6 +606,6 @@ No longer needed for v1, deferred with the work that needs them
 | 6. WebKit gate and physical Safari | **Done** (2026-11-23); physical checklist **NOT RUN**, release desktop-scoped | [ADR-0100](adr/0100-bounded-webkit-gate.md), [report](reports/webkit-gate-verification-2026-11-23.md); progress entry of 2026-11-23 (agent-run workstation automation; not run in hosted CI) |
 | 7. Static publication preparation | **Done** (2026-11-24) | [ADR-0101](adr/0101-github-pages-showcase-publication.md), [report](reports/showcase-pages-preparation-2026-11-24.md); progress entry of 2026-11-24 (fresh local checks; the Pages workflow has not run; nothing published) |
 | 8. GitHub Pages publication and hosted showcase smoke | **Done** (2026-11-24): published at <https://alextikhon.github.io/SomaLane/> from `3bbe2b2` | [Report](reports/showcase-hosted-verification-2026-11-24.md); hosted CI run [45385170103](https://github.com/AlexTikhon/SomaLane/actions/runs/45385170103) and Pages run [45387434787](https://github.com/AlexTikhon/SomaLane/actions/runs/45387434787), both `success`; H1–H11 passed (agent-run hosted checks in desktop Chromium and Firefox automation); progress entry of 2026-11-24 (step 8) |
-| 9. Portfolio materials, screenshots, changelog, licence | Not started (licence decision; next) | — |
-| 10. Final verification, release tag, project freeze | Not started | — |
+| 9. Portfolio materials, screenshots, changelog, licence | **Done** (2026-11-24): README, four screenshots of the live showcase, interview package, `CHANGELOG.md`, MIT `LICENSE` | [Report](reports/portfolio-materials-verification-2026-11-24.md); progress entry of 2026-11-24 (step 9; documentation and assets, fresh checks; nothing committed or redeployed) |
+| 10. Final verification, release tag, project freeze | Not started (**next**) | — |
 | Deferred on 2026-11-24: real OIDC provider, single-host deployment, hosted smoke and isolated restore | **Deferred, not done** | [Section 6.1](#61-deferred-by-the-scope-change-of-2026-11-24) |

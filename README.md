@@ -1,145 +1,111 @@
 # SomaLane
 
 [![CI](https://github.com/AlexTikhon/SomaLane/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/AlexTikhon/SomaLane/actions/workflows/ci.yml)
+[![Licence: MIT](https://img.shields.io/badge/licence-MIT-blue.svg)](LICENSE)
 
-SomaLane is a personal activity, health and nutrition tracker with an optional, evidence-based assistant. You record
-GPS runs in the browser, keep a daily check-in, movement and a meal log, and see your days and weeks in views that never
-invent a value. A coach can watch a run live, but only with explicit permission. A React web app and an Express API run
-on PostgreSQL/PostGIS, with row-level security as the boundary between people and organizations.
+SomaLane is a personal activity, health and nutrition tracker with deterministic analytics. You keep a daily
+check-in, movement, activities and a meal log, and record runs in the browser. One day appears on **Today**, one week
+in a **Weekly review** and 28 days on **Trends**. Code computes every number, and a value nobody recorded is shown as
+unknown, never as zero. AI features exist, but they are optional, experimental and off by default.
 
-It started as **Running Tracker**, a learning project in GPS run capture, live coaching and a revision-safe archive,
-and grows one vertical slice at a time. Package names, database identifiers, cookies and environment variables keep the
-`running-tracker` names; only the product and the visible app are called SomaLane.
+**Try the read-only showcase: <https://alextikhon.github.io/SomaLane/>**
 
-> **Status (2026-11-24): preparing portfolio v1.** Feature work is paused for a finite, ten-step release plan:
-> [docs/portfolio-v1-release-plan.md](docs/portfolio-v1-release-plan.md). It defines the release, its mandatory gates
-> and what is deferred. **What gets published:** only a public, read-only showcase of synthetic data, as static files on
-> GitHub Pages: **<https://alextikhon.github.io/SomaLane/>** (published on 2026-11-24 from `3bbe2b2`). **The full application** stays
-> a local demonstration: it runs from this repository (Quick start below), and its OpenID Connect sign-in and
-> production safeguards are unchanged. Real-provider sign-in, hosting the full application and a hosted backup/restore
-> drill are deferred (the owner's decision of 2026-11-24).
->
-> Steps 1 to 8 are done:
->
-> - step 2: an isolated, reproducible synthetic dataset over 56 calendar dates (`npm run portfolio:dataset`);
-> - step 3: Today-first navigation (ADR-0097);
-> - step 4: the secondary views load on demand (ADR-0098, closed by a successful hosted CI run for `1dac6ed`);
-> - step 5: the read-only showcase (ADR-0099, `npm run build:showcase`);
-> - step 6: a bounded WebKit gate (ADR-0100; WebKit automation, not Safari);
-> - step 7: the showcase prepared for GitHub Pages, with a link to this source and a manual, least-privilege
->   publication workflow (ADR-0101);
-> - step 8: the showcase published on GitHub Pages by that workflow, after a successful hosted CI run for the same
->   commit, and checked on the live site in desktop Chromium and Firefox automation
->   ([report](docs/reports/showcase-hosted-verification-2026-11-24.md)).
->
-> **Next task: step 9**, portfolio materials, screenshots, a changelog and the licence decision.
->
-> Today the showcase is published and the full application runs locally and in GitHub Actions (latest checked run:
-> success for `3bbe2b2`, run 45385170103). The single-host
-> production profile is verified on a workstation but not deployed anywhere. Sign-in has been tested against a test
-> OpenID Connect provider only. Nothing has been checked on a physical phone. Local use signs in with fixed demo people;
-> use synthetic data only. HealthKit is deferred until a Mac with Xcode is available.
+The showcase is a static page of synthetic data with no sign-in, and nothing on it can be changed. The full
+application, with sign-in, recording and editing, is not hosted: it runs locally from this repository
+([below](#run-it-locally)).
+
+## The primary journey
+
+> daily records → **Today** → **Weekly review** → **Trends** → back to the original records
+
+| | |
+|---|---|
+| [![Today on the sample date: check-in, steps and active energy, meals and manual activities, with an unrecorded soreness value shown as "Not recorded".](docs/assets/screenshots/showcase-today.png)](docs/assets/screenshots/showcase-today.png) | [![Weekly review of 9 to 15 November 2026: sentences written by code with explicit denominators, such as sleep duration recorded on 5 of 6 days with check-in values.](docs/assets/screenshots/showcase-weekly-review.png)](docs/assets/screenshots/showcase-weekly-review.png) |
+| **Today.** One day across every record, each value labelled with its source. Soreness was not recorded, so it says so. | **Weekly review.** Coverage and values for one Monday-to-Sunday week, worded by code. No model writes it. |
+| [![Trends for food energy over the 28 days ending 15 November 2026: recorded on 21 of 28 days and 53 of 58 entries, with gaps in the chart where nothing was recorded.](docs/assets/screenshots/showcase-trends-food-energy.png)](docs/assets/screenshots/showcase-trends-food-energy.png) | [![Logged meals of 14 November 2026: two entries, one with carbohydrate and fat shown as "Not recorded".](docs/assets/screenshots/showcase-logged-meals.png)](docs/assets/screenshots/showcase-logged-meals.png) |
+| **Trends.** 28 dates with coverage: "the other 7 days have no value: unknown, not zero". The line breaks where nothing was recorded. | **Logged meals.** A Trends date opens its entries. An empty value is unknown; a recorded 0 stays 0. |
+
+Screenshots of the live showcase (desktop, 1280 × 900), captured on 2026-11-24 from the deployment of `3bbe2b2`.
+All data is synthetic: one fictional person over 56 dates.
 
 ## What it does
 
-### Runs
+- **Daily records** (owner-only; a coach never sees them): a check-in (weight, sleep, mood, soreness, a note), manual
+  steps and active energy, manual activities, one GPX 1.1 track or one TCX v2 activity imported after a preview, and a
+  meal log with optional energy and macronutrients. Nothing is estimated or looked up.
+- **Views**: Today, Weekly review and Trends (weight, sleep, steps, food energy and macronutrients, each with its own
+  coverage, plus an activity comparison with the previous 28 days). Every view links back to its records.
+- **Runs** (the engineering demonstration): record a run from a GPS simulator or desktop Geolocation; it survives going
+  offline and reloads. Share it with a coach who watches it live over Server-Sent Events, then keep it in a
+  revision-safe archive of vector tiles.
+- **Optional AI, off by default**: a meal draft from text, Ask my data interpretation, weekly insights and run search
+  in words. None has valid passing model evidence for the current code
+  ([status](docs/portfolio-v1-release-plan.md#21-ai-evaluation-status)). The deterministic paths, including Ask my
+  data's guided questions, need no model.
 
-- **Runner**: record a run from device GPS or a simulator; pause, resume, finish. Points are stored in the browser
-  first and uploaded in order, so a run survives going offline, a reload or a lost answer. One tab writes at a time.
-- **Coach**: a live board over Server-Sent Events showing the runs shared with you, with confirmed and stale positions
-  and the selected tracks (on a Mapbox map when a public token is configured).
-- **Archive**: finished runs as revision-bound vector tiles, **My runs** search by period, distance and sort, sharing
-  and revoking a finished run, and owner deletion with tombstones and an off-host deletion journal.
-
-### Daily records (owner-only: a coach never sees them)
-
-- **Check-in**: weight, sleep, sleep quality, mood, soreness and a note, one record per local date.
-- **Movement**: steps and active energy entered by hand, stored with `manual` provenance.
-- **Activities**: manual entries (run, walk, ride, hike, swim, strength, other), or one GPX 1.1 track imported after a
-  preview and an explicit type choice: start, elapsed time and distance only, labelled as a GPX import. The file and
-  its route are not kept, and an import is not compared with GPS runs recorded here. A TCX v2 file with one activity can
-  be imported the same way (ADR-0091): start, the duration its laps report (the exact sum of their total times, rounded
-  once; neither elapsed nor moving time) and their distance, labelled as a TCX import; no GPS position is needed, and no
-  lap, track, heart rate, calories, notes or device is kept. The Activity tab lists them with
-  your own finished GPS runs in one history, each labelled with its source and its own measure, never added together.
-- **Meal log**: meals and snacks with optional user-reported energy and macronutrients. Nothing is estimated or looked up.
-  An optional, off-by-default **Draft from text** (ADR-0092) asks a local Ollama model to pick out what one meal
-  description says; only values the server finds in the text next to their unit and nutrient are proposed, with the
-  excerpt as evidence, and the person applies the proposal to the form, edits it and saves it as a manual entry.
-
-### Views
-
-The page opens on **Today**. The navigation leads with Today, Weekly review and Trends; the editors (Check-in, Meal
-log, Activity) and the run views (Runner, Coach, Archive) follow in two groups. While a run records or still has data
-to send, a compact status above every other view says so and leads back to Runner (ADR-0097).
-
-- **Today**: one day across all of the above, with actions that open each editor on that date, the week's review and
-  Trends, and the day's activities and runs in the activity history.
-- **Trends**: the 28 dates ending on a chosen date (weight, sleep, steps, and recorded food energy, protein,
-  carbohydrate and fat), each with its coverage; every nutrient has its own day and entry coverage (ADR-0096). Gaps
-  stay gaps; a missing value never counts as zero. A nutrition date opens its Meal log, with a way back to the same range. Its Activity section shows one source and one activity type over the
-  same dates (count, the source's own duration, distance, with coverage); sources are never added together.
-- **Weekly review**: one week's coverage, values and limitations, worded by code on every read, including the week's
-  recorded nutrition from the meal log with its entry and day coverage (ADR-0093); totals cover only what was logged.
-  Its own view (also shown in the Check-in tab), with a way on to Trends ending on the week's Sunday, or today while the
-  week is in progress.
-
-### Optional AI, off by default
-
-- Weekly insights from a **local** Ollama model that writes only about numbers the API computed, and must cite them
-  exactly.
-- "Describe the search in words" for My runs (OpenAI or local Ollama) proposes filters that you then apply.
-- **Draft from text** in the Meal log (above). Its latest model measurement (2026-11-18) failed the quality bar (recall
-  81.0 % below 85 %, no incorrect value accepted).
-- **Ask my data** on Today (ADR-0094, ADR-0095): one read-only question answered by exactly one existing deterministic
-  read. Predefined questions and the guided question builder **need no model**. Interpreting typed questions with a
-  local model is optional: its last passing measurement predates a same-day correction of the question constraints, so
-  there is no valid model evidence for the current code.
-- None of these has met its quality target for the current code, and all stay off unless configured.
-
-## Principles
-
-- **Code computes every number.** SQL produces totals, coverage and trends; a model only words them, and a number in
-  model output that is not in the facts is a defect.
-- **A model only proposes; the person confirms.** Proposals go through a strict contract and change nothing until
-  accepted.
-- **Health data is owner-only.** Run sharing never grants access to check-ins, movement, activities or meals.
-- **Deleted stays deleted.** Erasures go to a ledger that leaves the database host and is replayed after a restore.
-  Limit: an erasure not yet exported when the host is lost can come back. The window is one export interval plus the
-  time to drain any backlog ([recovery limits](docs/runbooks/deletion-journal-and-recovery.md#failure-modes-and-honest-limits)).
-- **No derived health numbers without a definition.** No calories from steps, no "complete diary", no advice.
-
-Details and the roadmap: [docs/product-direction.md](docs/product-direction.md).
+Product principles and the roadmap: [docs/product-direction.md](docs/product-direction.md).
 
 ## Architecture
 
 ```text
- Browser (React 19, Vite)  ── IndexedDB: offline point buffer, pending commands, writer lease
-        │  HTTPS (nginx proxy in the deployment and pilot profiles; Vite proxy in development)
+ GitHub Pages ── static showcase: content blocks + one synthetic snapshot JSON (no API, no sign-in, no storage)
+
+ Browser (React 19, Vite) ── IndexedDB: offline point buffer, pending commands, writer lease
+        │  local default: HTTP on 127.0.0.1:5173, Vite proxies /api to the API
+        │  HTTPS only through nginx in the configured production, loopback-TLS and iPhone pilot profiles
         ▼
- API (Node 24, Express 5)  ── sessions in PostgreSQL, CSRF + exact Origin checks, SSE live board,
-        │                     maintenance jobs (summaries, auto-finish, retention, journal export)
+ API (Node 24, Express 5) ── sessions in PostgreSQL, CSRF + exact Origin checks, read models, SSE live board,
+        │                    maintenance jobs (summaries, auto-finish, retention, journal export)
         ▼
- PostgreSQL 17 + PostGIS 3.5  ── row-level security per person and organization, migration-owned schema,
-                                 separate runtime / migration / maintenance roles
+ PostgreSQL 17 + PostGIS 3.5 ── row-level security per person and organization, migration-owned schema,
+                                separate runtime / migration / maintenance roles
 ```
+
+The engineering decisions most worth reviewing (explained with failure scenarios, code and tests in
+[docs/interview.md](docs/interview.md)):
+
+- **Missing is not zero.** Totals and coverage come from SQL in one `REPEATABLE READ READ ONLY` snapshot. Each
+  nutrient keeps its own count of recorded entries and days, a sum is `NULL` when nothing was recorded, and the
+  response contract checks that the range equals the sum of its dates (ADR-0084, ADR-0096). The weekly review is
+  sentences written by code with explicit denominators (ADR-0077).
+- **Row-level security is the isolation boundary.** The API connects as a non-owner role without `BYPASSRLS`. Tenant
+  context is transaction-local, and health records are owner-only. A load measurement found the per-row policy was the
+  bottleneck, and set-based policies removed it (ADR-0003, ADR-0042).
+- **At-least-once delivery, idempotent persistence.** Points go to IndexedDB first and are retried. The server stores
+  each `(run, seq)` once and refuses a changed payload with `409`. One tab writes at a time, fenced by a durable epoch
+  checked inside every write (ADR-0009, ADR-0010, ADR-0053).
+- **Revision-bound everything.** Summaries, live-track pages and archive tiles are bound to a revision, so stale work
+  is rejected instead of published (ADR-0015, ADR-0030).
+- **Restores replay what was exported after the backup.** Deletions, revoked access and erasures of health records
+  are journaled in the same transaction as the change. A job exports them as files to `DELETION_JOURNAL_DIR`, and a
+  restore replays the exported journals (ADR-0037, ADR-0045, ADR-0073). A change that was not exported before the host
+  was lost can reappear after a restore: the window is one export interval plus any backlog
+  ([recovery limits](docs/runbooks/deletion-journal-and-recovery.md#failure-modes-and-honest-limits)). The
+  application cannot check where that directory lives, so off-host storage must be configured by the operator. This
+  is verified by a local drill and in CI on throwaway databases, not on a host.
+- **A tested showcase boundary.** The public site is a separate static build, published by a manual, least-privilege
+  workflow (ADR-0099, ADR-0101).
+  - A module-graph test keeps its code away from the API client, sign-in, browser storage and capture.
+  - Its snapshot is an allowlist of synthetic data validated by the shared contracts.
+  - Before every publication, its browser check fails on any request to `/api`, outside `/SomaLane/` or to another
+    origin, and on any attempt to write cookies, Web Storage, IndexedDB, Cache Storage or a service worker.
+  - The same request and storage checks passed against the live site.
 
 | Path | What it is |
 |---|---|
 | `apps/api` | Express 5 API, maintenance jobs, backup/restore and evaluation CLIs |
-| `apps/web` | React 19 web app (Vite) |
+| `apps/web` | React web app (Vite) and the static showcase build (`apps/web/src/showcase`) |
 | `packages/contracts` | Zod schemas shared by API and web; generates `openapi/openapi.json` |
 | `packages/fixtures`, `tools/simulator` | deterministic test data and a GPS simulator |
-| `db/migrations` | 43 SQL migrations (`0000`–`0042`), checksummed and applied in order |
-| `infra/` | Compose files (development, loopback TLS, production, iPhone pilot), nginx proxy, API images |
-| `scripts/` | setup, demo, profile verification, pilot tooling, and their tests |
-| `tests/e2e` | Playwright browser suite (Chromium, an OpenID Connect project, a Firefox core gate, a WebKit gate) |
-| `docs/` | release plan, design, 96 decision records, runbooks, reports and the progress log |
+| `db/migrations` | SQL migrations, checksummed and applied in order |
+| `infra/`, `scripts/` | Compose files, nginx proxy, setup, demo and profile verification |
+| `tests/e2e` | Playwright suites (Chromium with OpenID Connect, Firefox and WebKit gates, showcase) |
+| `docs/` | release plan, design, decision records, runbooks, reports and the progress log |
 
-## Quick start
+## Run it locally
 
-Requirements: Node.js 24 (`>=24.11.0 <25`), npm 11, and Docker with Compose v2. The ports used are API 3000, web 5173
-and PostgreSQL 5433 (bound to `127.0.0.1`).
+Requirements: Node.js 24 (`>=24.11.0 <25`), npm 11, and Docker with Compose v2. Use synthetic data only: local
+sign-in uses fixed demo people.
 
 ```powershell
 npm ci
@@ -147,138 +113,78 @@ npm run demo:doctor   # read-only: is this machine ready?
 npm run demo:up       # database, migrations, demo people, API and web app; Ctrl+C stops them
 ```
 
-Open <http://127.0.0.1:5173> and press **Demo runner** or **Demo coach**. The walk-through, a 5–7 minute rehearsal and
-troubleshooting are in [docs/runbooks/demo.md](docs/runbooks/demo.md).
+Open <http://127.0.0.1:5173> and press **Demo runner** or **Demo coach**.
 
-### Development setup without the demo command
+| To… | Run | Runbook |
+|---|---|---|
+| Rehearse the run, offline, sharing and archive demo | `npm run demo:up` | [demo.md](docs/runbooks/demo.md) |
+| See Today, the Weekly review and Trends on populated data | `npm run portfolio:dataset` (its own database, never the dev one) | [portfolio-dataset.md](docs/runbooks/portfolio-dataset.md) |
+| Build and preview the showcase | `npm run build:showcase`, `npm run preview:showcase` | [showcase.md](docs/runbooks/showcase.md) |
+| Set up for development without the demo command | copy `.env.example` to `.env`, then `db:up`, `db:bootstrap`, `db:migrate` and `npm run dev` | [reference.md](docs/reference.md#start-from-a-clean-checkout) |
+| Try the iPhone LAN pilot (synthetic data; physical checks not run) | `npm run pilot:configure` … `pilot:verify` | [iphone-lan-pilot.md](docs/runbooks/iphone-lan-pilot.md) |
 
-```powershell
-Copy-Item .env.example .env      # POSIX: cp .env.example .env
-npm ci
-npm run db:up
-npm run db:bootstrap
-npm run db:bootstrap:test
-npm run db:migrate
-npm run db:migrate:test
-npm run dev                      # API on :3000, web on :5173 (Vite proxies /api)
-```
+Operating runbooks (not exercised on any host): [sign-in](docs/runbooks/identity-provider.md),
+[deployment](docs/runbooks/deployment.md), [backup and restore](docs/runbooks/backup-and-restore.md) and the
+[deletion journal](docs/runbooks/deletion-journal-and-recovery.md).
 
-`.env.example` holds fixed, local-only credentials and keys. Local sign-in stays off until you enable it
-(`LOCAL_AUTH_ENABLED`). Maps need a public `VITE_MAPBOX_ACCESS_TOKEN`; without one the app shows notices instead.
+## Verification
 
-### Try it on an iPhone (synthetic data only)
+- **CI** ([ci.yml](.github/workflows/ci.yml)) runs on every push to `main` and on pull requests: lint, typecheck, unit
+  tests and build (`npm run verify`); the API against real PostgreSQL/PostGIS as the real database roles, restore drill
+  included (`npm run test:integration`); Playwright in Chromium with an OpenID Connect provider process; a Firefox core
+  gate; and a bounded WebKit gate. It reads no secrets and deploys nothing. The latest checked run,
+  [45385170103](https://github.com/AlexTikhon/SomaLane/actions/runs/45385170103) for `3bbe2b2`, succeeded on
+  2026-11-24.
+- **The showcase** is published only by the manual [Pages workflow](.github/workflows/showcase-pages.yml). It reruns
+  the showcase's unit and browser checks first, under `/SomaLane/`, with a guard that fails any API request or storage
+  write. The live site was then checked in desktop Chromium and Firefox automation: status codes, the snapshot digest,
+  the journey, four same-origin requests and no storage
+  ([step-8 report](docs/reports/showcase-hosted-verification-2026-11-24.md)).
+- Every public claim and the evidence it needs:
+  [release plan, section 5](docs/portfolio-v1-release-plan.md#5-capability-claims-and-the-evidence-each-needs). Each
+  verification, entry by entry: [docs/progress.md](docs/progress.md).
 
-The iPhone LAN pilot runs an isolated copy of the stack (its own database, the demo people only, AI off) and serves it
-over HTTPS on your computer's private Wi-Fi address. The certificate comes from a local authority that is limited to
-that address and that you trust on the phone. Its sign-in is the demo panel, so it is not for real data.
+## Limitations
 
-```powershell
-npm run pilot:configure -- --address <your Wi-Fi IPv4>
-npm run pilot:tls
-npm run pilot:up
-npm run pilot:verify
-```
+- **Only the static showcase is published.** The full application is a local demonstration. It is not deployed
+  anywhere, its production profile is verified on a workstation only, and no production recovery point or time is
+  claimed.
+- **Sign-in** was tested only against a test OpenID Connect provider, never a real one.
+- **Backup and restore** were verified by a local drill and in CI on throwaway databases. No host's backup has been
+  restored.
+- **Desktop-scoped.** Nothing has run in Safari or on a phone: Playwright WebKit is automation, not Safari, and the
+  iPhone pilot's physical checks are not run. Capture is foreground only, and real-device GPS accuracy is not analysed.
+- **No real Mapbox basemap** was rendered in any test, and no AI feature has valid passing model evidence.
+- **One API process.** Sessions are shared through PostgreSQL, but the live hub, tile cache, admission limits and
+  maintenance runners are per process. Load figures come from one workstation.
+- GPX and TCX import cover one documented subset each. There is no FIT import, HealthKit or phone/watch import.
 
-Phone setup, firewall, clean-up and the physical checklist:
-[docs/runbooks/iphone-lan-pilot.md](docs/runbooks/iphone-lan-pilot.md).
+Hosting the full application, a real identity provider and a hosted restore are deferred beyond portfolio v1
+([release plan, 6.1](docs/portfolio-v1-release-plan.md#61-deferred-by-the-scope-change-of-2026-11-24)).
 
-### A populated, synthetic 56-day dataset
+## Project status
 
-```sh
-npm run portfolio:dataset    # own Compose project and PostgreSQL on 127.0.0.1:5442; seed, anchor and digest printed
-```
+Portfolio v1 is in preparation. Feature work is paused for a ten-step release plan,
+[docs/portfolio-v1-release-plan.md](docs/portfolio-v1-release-plan.md), which holds the scope, gates and status.
+Steps 1–9 are done; step 10 (final verification, tag and freeze) is next. No release has been tagged yet. Milestones
+so far are summarised in [CHANGELOG.md](CHANGELOG.md).
 
-It never touches the development or test database and never reads `.env`. It prints how to start the existing API
-(port 3300) and web app (port 5373) against it, and which dates to open in Today, the weekly review and Trends:
-[docs/runbooks/portfolio-dataset.md](docs/runbooks/portfolio-dataset.md).
-
-### The public read-only showcase
-
-```sh
-npm run portfolio:showcase:export    # snapshots of that dataset through the app's read services (read-only)
-npm run build:showcase               # static files in apps/web/dist-showcase/ (what GitHub Pages publishes)
-npm run preview:showcase             # http://127.0.0.1:4380, no API
-```
-
-The showcase is a static page of the primary journey: Today → Weekly review → Trends → the day or its meals. It is built
-from one committed file of synthetic snapshots. It has no sign-in, sends no API request and writes nothing. Every view
-is labelled "Read-only showcase · synthetic data" and links to this repository, because the full application runs only
-locally.
-
-The showcase is published only by the manual workflow
-[`.github/workflows/showcase-pages.yml`](.github/workflows/showcase-pages.yml), from `main`. It is live at
-<https://alextikhon.github.io/SomaLane/>, published from `3bbe2b2` on 2026-11-24 (run 45387434787; hosted checks in the
-[step-8 report](docs/reports/showcase-hosted-verification-2026-11-24.md)). A later push to `main` changes the site only
-when the workflow is run again. Setup, publication and the hosted checks: [docs/runbooks/showcase.md](docs/runbooks/showcase.md).
-
-## Tests and CI
-
-| Command | What it runs |
-|---|---|
-| `npm run verify` | lint, typecheck, unit tests of every workspace and the scripts, build (3,168 tests on 2026-11-09) |
-| `npm run test:integration` | API against a real PostgreSQL `_test` database: RLS, roles, HTTP, maintenance, backup and the restore drill (about 980 tests) |
-| `npm run test:e2e` | Playwright, Chromium plus a real OpenID Connect provider process (146 tests); `npm run test:e2e:firefox` runs an 18-test Firefox core gate |
-| `npm run test:e2e:webkit` | the bounded WebKit gate (47 tests at step 6; 49 since step 7 added the showcase's reload test at both settings): Playwright WebKit at a desktop and a phone-sized setting on the development servers, the production build and the showcase's static build (ADR-0100; WebKit automation, not Safari or a phone) |
-| `npm run test:e2e:smoke` | a 24-test pre-demo smoke on its own ports |
-| `npm run test:portfolio-dataset`, `npm run test:e2e:portfolio-dataset` | the synthetic dataset on throwaway databases inside its isolated server, and a Chromium walkthrough of the populated screens (after `npm run portfolio:dataset`; not in CI) |
-| `npm run measure:web-bundle`, `npm run test:e2e:production-build` | the initial JavaScript and CSS of the production build, raw and gzip (`-- --ref <commit>` for a commit), and a Chromium/Firefox check of that build's chunk requests and of loading, failure and retry of the on-demand views (ADR-0098; not in CI) |
-| `npm run test:e2e:showcase`, `npm run portfolio:showcase:export -- --check` | the showcase's static build served under `/SomaLane/` in Chromium/Firefox with no API server (journey, label and source link, direct reload, no `/api` request, no storage write, keyboard, 375 px, a broken data file, the exact file set), and whether the committed snapshot equals a fresh export (ADR-0099, ADR-0101; the browser check also runs in the Pages workflow; the export check needs the dataset) |
-| `npm run deploy:verify`, `npm run transport:verify`, `npm run pilot:verify` | Docker profile checks: deployment, loopback TLS/HTTP2, iPhone pilot |
-
-The integration and browser suites need the test database first (`npm run db:up`, `npm run db:bootstrap:test`,
-`npm run db:migrate:test`); run them one at a time, since they share it. CI
-([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs `verify`, then integration, three Chromium shards, the
-Firefox gate and the WebKit gate, on pushes to `main`, on pull requests and on demand. It reads no secrets and deploys
-nothing. The separate [Pages workflow](.github/workflows/showcase-pages.yml) runs only when started by hand on `main`:
-it validates the showcase in Chromium, Firefox and WebKit, then publishes only `apps/web/dist-showcase`.
-
-## Operating it
-
-The full application is not hosted for portfolio v1. These runbooks describe how it would be operated, and are verified
-on a workstation only.
-
-- **Sign-in**: OpenID Connect, invite-only. [docs/runbooks/identity-provider.md](docs/runbooks/identity-provider.md)
-- **Deployment**: one host, Docker Compose, nginx with your certificate, secrets as files.
-  [docs/runbooks/deployment.md](docs/runbooks/deployment.md)
-- **The public showcase on GitHub Pages**: [docs/runbooks/showcase.md](docs/runbooks/showcase.md)
-- **Backups**: encrypted `pg_dump` and a restore drill that also replays deletions, access restrictions and erasures.
-  [docs/runbooks/backup-and-restore.md](docs/runbooks/backup-and-restore.md),
-  [docs/runbooks/deletion-journal-and-recovery.md](docs/runbooks/deletion-journal-and-recovery.md)
-- **AI features**: [docs/runbooks/weekly-insights.md](docs/runbooks/weekly-insights.md),
-  [docs/runbooks/run-search-ai.md](docs/runbooks/run-search-ai.md)
-- **Real GPS traces** (privacy-preserving replay): [docs/runbooks/gps-traces.md](docs/runbooks/gps-traces.md)
+The project started as **Running Tracker**. Package names, database identifiers, cookies and environment variables
+keep the `running-tracker` names; only the product and the visible app are called SomaLane.
 
 ## Documentation
 
 | Document | Use it for |
 |---|---|
-| [docs/portfolio-v1-release-plan.md](docs/portfolio-v1-release-plan.md) | **current**: release scope, the ten steps, gates, evidence required per claim, deferrals |
-| [docs/reference.md](docs/reference.md) | the detailed reference: API behaviour, data rules, configuration and verification for every feature |
-| [docs/SDD.md](docs/SDD.md) | the system design |
-| [docs/adr/](docs/adr/) | one decision record per slice (ADR-0001 to ADR-0101) |
-| [docs/product-direction.md](docs/product-direction.md) | roadmap, principles and each slice's summary |
-| [docs/progress.md](docs/progress.md) | what was built and how it was verified, entry by entry |
-| [docs/runbooks/](docs/runbooks/) | how to run, demo, deploy, back up and pilot it |
+| [docs/interview.md](docs/interview.md) | the pitch, architecture, engineering stories and a walkthrough |
+| [docs/portfolio-v1-release-plan.md](docs/portfolio-v1-release-plan.md) | release scope, steps, gates, evidence per claim, deferrals |
+| [docs/reference.md](docs/reference.md) | API behaviour, data rules, configuration and verification for every feature |
+| [docs/SDD.md](docs/SDD.md) | the original system design |
+| [docs/adr/](docs/adr/) | one decision record per slice |
+| [docs/runbooks/](docs/runbooks/) | how to run, demo, publish, deploy, back up and pilot it |
 | [docs/reports/](docs/reports/) | measurements, reviews and verification reports |
 | [packages/contracts/openapi/openapi.json](packages/contracts/openapi/openapi.json) | the HTTP API (OpenAPI 3.1); SSE in [packages/contracts/sse.md](packages/contracts/sse.md) |
 
-## What is not established
+## Licence
 
-- Everything was verified on one Windows workstation and in GitHub Actions. The only thing published is the static
-  read-only showcase of synthetic data on GitHub Pages; the full application is not deployed anywhere, and no production
-  recovery point or time is claimed. Hosting the full application and a hosted restore drill are deferred.
-- Sign-in was tested only against a test OpenID Connect provider, never a real one (deferred).
-- The browser suite runs in Chromium, with bounded Firefox and WebKit gates (Playwright's WebKit build at a desktop and
-  a phone-sized viewport). Nothing has run in Safari, on a phone or with real GPS yet; the iPhone pilot's physical checks
-  are pending
-  ([docs/reports/iphone-lan-pilot.md](docs/reports/iphone-lan-pilot.md)).
-- No real Mapbox basemap was rendered in a test. The AI features (search in words, weekly insights, meal drafts, Ask my
-  data interpretation) are off by default: none has valid passing model evidence for the current code (Ask my data's
-  one passing run is stale after a later constraints correction), and OpenAI has never been called.
-- The published showcase was checked in desktop Chromium and Firefox automation (Playwright) against the live site,
-  not in Safari or on a phone. It is a fixed snapshot of synthetic data, not a hosted application.
-- Only steps 1 to 8 of the portfolio v1 release plan are done, so its release gates are not met; which claims need which
-  evidence is listed in
-  [the release plan](docs/portfolio-v1-release-plan.md#5-capability-claims-and-the-evidence-each-needs).
-- No phone or watch import, no FIT import and no HealthKit. GPX and TCX import cover one documented subset each (one
-  track or one activity, summary only); multi-activity files and overlap detection between sources do not exist.
+[MIT](LICENSE). Copyright (c) 2026 Alex Tikhon.

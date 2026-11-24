@@ -10,7 +10,7 @@ verification reports of [step 5](../reports/showcase-verification-2026-11-23.md)
 The showcase is a static page that shows the primary journey (Today → Weekly review → Trends → the original day or its
 meals) from one file of synthetic snapshots. It needs no API, no database and no sign-in at run time, and it sends no
 request but for its own files. It is the only part of SomaLane meant to be published: the full application is not
-hosted and runs locally ([README, Quick start](../../README.md#quick-start)). The public address is
+hosted and runs locally ([README, Run it locally](../../README.md#run-it-locally)). The public address is
 **`https://alextikhon.github.io/SomaLane/`**, confirmed by the deployment of 2026-11-24 (commit `3bbe2b2`, Pages run
 45387434787; [section 3.5](#35-current-publication)).
 

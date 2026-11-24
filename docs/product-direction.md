@@ -29,8 +29,8 @@ deferrals. In short:
 - **Deferred beyond v1:** FIT, HealthKit, RAG (roadmap item 4), a general chat coach, additional health metrics,
   microservices, multi-replica support, maintenance fairness and durable retries, further AI-quality experiments; D10
   and D11 stay open.
-- **Next task:** see the release plan's status (on 2026-11-24: step 8, publishing the showcase on GitHub Pages and the
-  hosted showcase smoke).
+- **Next task:** see the release plan's status (on 2026-11-24, after step 9: step 10, final verification, the release
+  tag and the project freeze).
 
 The roadmap and the per-slice sections below are kept as written. Where a dated section names a "next milestone", it is
 historical; the release plan decides what comes next.
