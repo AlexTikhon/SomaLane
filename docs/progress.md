@@ -6285,3 +6285,64 @@ The first `npm run verify` in the table above failed at lint, only on agent scra
 
 Details in the [repair report, section 7.1](reports/trends-row-actions-repair-2026-11-24.md#71-lint-scope-the-git-ignored-scratch-folder-follow-up-2026-11-24).
 Nothing was staged, committed, pushed, deployed or tagged.
+
+## Portfolio v1 release step 10: final documentation, release procedure and freeze (2026-11-24)
+
+Kinds of evidence: fresh checks on the Windows workstation, made before this documentation was committed. The step-10
+hosted results (CI, Pages publication, hosted checks) come **after** this entry is committed, so they are not here.
+They are recorded in the annotated tag `portfolio-v1` and the GitHub release "SomaLane — Portfolio v1"
+([closeout, section 2](portfolio-v1-closeout.md#2-where-the-final-results-are)). This entry claims none of them.
+
+- **Audit before staging.**
+  - The branch `docs/release-step-9` was 3 commits ahead of `origin/main` (`3bbe2b2`), each read with `git show`:
+    - `8ab6c5c`: step-8 documentation;
+    - `8f66554`: step-9 materials and the MIT licence;
+    - `bf5580d`: the reviewed Trends row-action repair (`apps/web/src/styles.css`, the line-box assertion in
+      `tests/e2e/support/trends-layout.ts` and three specs, the scoped `tests/e2e/.local/**` ESLint ignore, the report
+      and evidence images).
+  - `origin/main` is an ancestor of the branch, so a fast-forward is possible. Local `main` (`8ab6c5c`) is contained
+    in the branch.
+  - GitHub: `main` has no branch protection or ruleset. No `portfolio-v1` tag exists, locally or remotely, and the
+    repository has no release.
+- **The dirty `packages/contracts/openapi/openapi.json` was generated-only noise.**
+  - `git diff` was empty. The working file hashed to the index blob `ed01134…`, and its LF-normalised SHA-256 equalled
+    `HEAD`'s.
+  - Cause: the contracts build writes the file with LF while `core.autocrlf=true`.
+  - Cleaned with `git restore`. No content was discarded, and no other uncommitted work existed.
+- **Documentation.**
+  - New [portfolio-v1-closeout.md](portfolio-v1-closeout.md): when the release is complete, where the results are,
+    the step-10 gates, the freeze policy, the contents and limits, and how to restart, verify, reopen scope or fix a
+    recorded defect.
+  - Release plan: the status is final; step 10 has its fixed procedure; section 4.1 reconciles gates G1–G10; the status
+    table is final; a new section 9 states the freeze. Step 9's repair is recorded as committed in `bf5580d`.
+  - Showcase runbook: the publication state is version-neutral (3.5); the per-browser test counts are 10, 4, 10 and 5
+    since the repair test; new hosted check R1–R4 for the Trends row actions.
+  - README: portfolio v1 status, the freeze, and the evidence linked from the release; capabilities and limitations
+    unchanged.
+  - CHANGELOG: the portfolio work moves from "Unreleased" to a `portfolio-v1` section, with the repair and step 10;
+    earlier dated sections unchanged.
+  - Current-status sections replaced in [pause-handoff.md](pause-handoff.md) and
+    [implementation-plan.md](implementation-plan.md), with the 2026-11-22 blocks kept and labelled historical. The
+    "next task" lines in [product-direction.md](product-direction.md) and [interview.md](interview.md) are updated.
+- **Freeze policy.** Portfolio v1 ends feature development. Future work requires an explicitly reopened scope; recorded
+  defect fixes are separate maintenance changes and never move the tag. It takes effect when the verified tag and
+  release are published.
+- **AI defaults re-read** (G9): `MEAL_DRAFTS_PROVIDER`, `DATA_QUESTIONS_PROVIDER`, `WEEKLY_INSIGHTS_PROVIDER` default to
+  `off` and `RUN_SEARCH_AI_ENABLED` to `false` in `apps/api/src/config/`.
+- **Hosted-check script prepared** (git-ignored `tests/e2e/.local/hosted/`, not committed): the step-8 script plus a
+  test for R1–R4, which uses `expectTrendsRowActionsOnOneLine`.
+  - Negative control against the live site, which still served `3bbe2b2`: R1 **failed** in Chromium and Firefox,
+    reporting 4 line boxes per "Open" label. That is the recorded defect, so the check detects it.
+  - Dry run against a local build of this tree, served by `vite preview` under `/SomaLane/`: 10 passed.
+
+  Neither run is hosted evidence for the candidate.
+
+| Check (before the commit) | Result |
+|---|---|
+| `npm run verify`, standard | **passed** (exit 0): lint and typecheck clean; tests 130 + 2832 + 1523 + 325 + 14 + 3, 0 failed; build OK (Vite's existing Mapbox chunk-size warning only). It regenerated `openapi.json` with the same blob, restored again |
+| Relative links and anchors (the ten changed documents, this entry included) | 406 checked, 0 problems (scratchpad Node checker; shown to flag a missing file and a missing anchor) |
+| `git diff --check` | clean |
+| Showcase browser tests per project (`playwright test --list`) | Chromium 10, Firefox 4, WebKit desktop 10, WebKit phone-sized 5 |
+
+- **Not done in this entry.** Landing on `main`, hosted CI, the Pages run, the hosted checks, the tag and the release
+  all happen after this commit. Their outcome is recorded only in the tag annotation and the GitHub release.

@@ -1,17 +1,26 @@
 # Changelog
 
-The meaningful product and engineering milestones of SomaLane, summarised from the Git history. The project has made
-**no release yet**: there are no version numbers and no tags. Portfolio v1 is being prepared under
-[docs/portfolio-v1-release-plan.md](docs/portfolio-v1-release-plan.md), and its final step (verification, tag and
-freeze) has not happened.
+The meaningful product and engineering milestones of SomaLane, summarised from the Git history. The project has one
+release, **portfolio v1**, marked by the annotated tag `portfolio-v1`. The release, and the freeze that follows it,
+take effect when that tag and its GitHub release are published. Both record the released commit, its CI and Pages runs
+and the hosted checks ([closeout](docs/portfolio-v1-closeout.md)). If the tag does not exist, the section below
+describes the release candidate. There are no version numbers.
 
 Dates are the commits' author dates in the workstation's local time. Decision records (ADR-NNNN) are in [docs/adr/](docs/adr/), and
 how each change was verified is in [docs/progress.md](docs/progress.md). The project started as **Running Tracker**.
 Package names, database identifiers, cookies and environment variables keep the `running-tracker` names.
 
-## Unreleased: portfolio v1 preparation (since 2026-11-22)
+## portfolio-v1: Portfolio v1 (2026-11-22 to 2026-11-24)
 
-A finite release phase with ten steps and no new product features. Steps 1–9 are done; step 10 is next.
+A finite release phase of ten steps, with no new product features, under
+[docs/portfolio-v1-release-plan.md](docs/portfolio-v1-release-plan.md). It ends feature development: after the tag,
+future work needs an explicitly reopened scope, and recorded defect fixes are separate maintenance changes.
+
+- **Published:** the read-only synthetic showcase, at <https://alextikhon.github.io/SomaLane/>.
+- **Local only:** the full application.
+- **Licence:** MIT.
+- **Scope:** desktop. There is no Safari, phone or real-GPS evidence.
+- **Deferred:** a real identity provider, hosting the full application and a hosted restore.
 
 - **Release scope** (step 1): the release plan defines the product, the primary journey, the publication model,
   gates, the evidence each claim needs, and what is deferred.
@@ -35,6 +44,13 @@ A finite release phase with ten steps and no new product features. Steps 1–9 a
   hosted CI run for the same commit. Checked on the live site in desktop Chromium and Firefox automation.
 - **Portfolio materials** (step 9): a rewritten README with screenshots of the live showcase, a rewritten interview
   package ([docs/interview.md](docs/interview.md)), this changelog, and the [MIT licence](LICENSE).
+- **Fixed: Trends row actions** (2026-11-24, the defect recorded in step 9): each row's Open and Meals (or Meal log)
+  button no longer wraps one letter per line. The buttons sit side by side on desktop and stack at narrow widths, in
+  the application and the showcase. A browser assertion now counts each label's line boxes
+  ([report](docs/reports/trends-row-actions-repair-2026-11-24.md)).
+- **Final verification, tag and freeze** (step 10): final documentation, including the
+  [closeout and restart instructions](docs/portfolio-v1-closeout.md). Hosted CI, a Pages publication and the hosted
+  checks for one commit, which is then tagged `portfolio-v1`. Their results are in the tag and the GitHub release.
 
 ## History before portfolio v1
 

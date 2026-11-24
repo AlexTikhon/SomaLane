@@ -29,8 +29,9 @@ deferrals. In short:
 - **Deferred beyond v1:** FIT, HealthKit, RAG (roadmap item 4), a general chat coach, additional health metrics,
   microservices, multi-replica support, maintenance fairness and durable retries, further AI-quality experiments; D10
   and D11 stay open.
-- **Next task:** see the release plan's status (on 2026-11-24, after step 9: step 10, final verification, the release
-  tag and the project freeze).
+- **No next task.** Portfolio v1 closes with step 10: final verification, the `portfolio-v1` tag and the project
+  freeze ([closeout](portfolio-v1-closeout.md)). After that release, the roadmap below is not pursued unless the owner
+  explicitly reopens scope. Recorded defect fixes are separate maintenance changes.
 
 The roadmap and the per-slice sections below are kept as written. Where a dated section names a "next milestone", it is
 historical; the release plan decides what comes next.

@@ -10,6 +10,10 @@ unknown, never as zero. AI features exist, but they are optional, experimental a
 
 **Try the read-only showcase: <https://alextikhon.github.io/SomaLane/>**
 
+**Status: portfolio v1, the final release.** It is released, and the project frozen, with the annotated tag
+`portfolio-v1` and its [GitHub release](https://github.com/AlexTikhon/SomaLane/releases/tag/portfolio-v1)
+([project status](#project-status)). MIT licence.
+
 The showcase is a static page of synthetic data with no sign-in, and nothing on it can be changed. The full
 application, with sign-in, recording and editing, is not hosted: it runs locally from this repository
 ([below](#run-it-locally)).
@@ -132,14 +136,16 @@ Operating runbooks (not exercised on any host): [sign-in](docs/runbooks/identity
 - **CI** ([ci.yml](.github/workflows/ci.yml)) runs on every push to `main` and on pull requests: lint, typecheck, unit
   tests and build (`npm run verify`); the API against real PostgreSQL/PostGIS as the real database roles, restore drill
   included (`npm run test:integration`); Playwright in Chromium with an OpenID Connect provider process; a Firefox core
-  gate; and a bounded WebKit gate. It reads no secrets and deploys nothing. The latest checked run,
-  [45385170103](https://github.com/AlexTikhon/SomaLane/actions/runs/45385170103) for `3bbe2b2`, succeeded on
-  2026-11-24.
+  gate; and a bounded WebKit gate. It reads no secrets and deploys nothing.
 - **The showcase** is published only by the manual [Pages workflow](.github/workflows/showcase-pages.yml). It reruns
   the showcase's unit and browser checks first, under `/SomaLane/`, with a guard that fails any API request or storage
-  write. The live site was then checked in desktop Chromium and Firefox automation: status codes, the snapshot digest,
-  the journey, four same-origin requests and no storage
-  ([step-8 report](docs/reports/showcase-hosted-verification-2026-11-24.md)).
+  write. Each publication is then checked on the live site in desktop Chromium and Firefox automation: status codes,
+  the snapshot digest, the journey, only same-origin requests and no storage
+  ([runbook, hosted checks](docs/runbooks/showcase.md#34-hosted-checks); first publication:
+  [step-8 report](docs/reports/showcase-hosted-verification-2026-11-24.md)).
+- **The released commit's evidence** is in the
+  [`portfolio-v1` release](https://github.com/AlexTikhon/SomaLane/releases/tag/portfolio-v1): its full SHA, its CI and
+  Pages runs, and the hosted checks of its deployment.
 - Every public claim and the evidence it needs:
   [release plan, section 5](docs/portfolio-v1-release-plan.md#5-capability-claims-and-the-evidence-each-needs). Each
   verification, entry by entry: [docs/progress.md](docs/progress.md).
@@ -164,10 +170,17 @@ Hosting the full application, a real identity provider and a hosted restore are 
 
 ## Project status
 
-Portfolio v1 is in preparation. Feature work is paused for a ten-step release plan,
-[docs/portfolio-v1-release-plan.md](docs/portfolio-v1-release-plan.md), which holds the scope, gates and status.
-Steps 1–9 are done; step 10 (final verification, tag and freeze) is next. No release has been tagged yet. Milestones
-so far are summarised in [CHANGELOG.md](CHANGELOG.md).
+**Portfolio v1 is the final release of this project.** It was prepared in ten steps under
+[docs/portfolio-v1-release-plan.md](docs/portfolio-v1-release-plan.md), which holds the scope, gates and evidence per
+claim.
+
+- **When it is complete.** The release, and with it the freeze, takes effect when the annotated tag `portfolio-v1` and
+  the GitHub release "SomaLane — Portfolio v1" are published. They are created only for a commit whose hosted CI, Pages
+  publication and hosted checks all passed, and they record those results. Without that tag, v1 is not released.
+- **The freeze.** After v1, feature development has ended. Future work requires an explicitly reopened scope. Recorded
+  defect fixes are separate maintenance changes.
+- **More.** Restart instructions are in [docs/portfolio-v1-closeout.md](docs/portfolio-v1-closeout.md), and milestones
+  in [CHANGELOG.md](CHANGELOG.md).
 
 The project started as **Running Tracker**. Package names, database identifiers, cookies and environment variables
 keep the `running-tracker` names; only the product and the visible app are called SomaLane.
@@ -178,6 +191,7 @@ keep the `running-tracker` names; only the product and the visible app are calle
 |---|---|
 | [docs/interview.md](docs/interview.md) | the pitch, architecture, engineering stories and a walkthrough |
 | [docs/portfolio-v1-release-plan.md](docs/portfolio-v1-release-plan.md) | release scope, steps, gates, evidence per claim, deferrals |
+| [docs/portfolio-v1-closeout.md](docs/portfolio-v1-closeout.md) | when the release is complete, the freeze, and how to restart |
 | [docs/reference.md](docs/reference.md) | API behaviour, data rules, configuration and verification for every feature |
 | [docs/SDD.md](docs/SDD.md) | the original system design |
 | [docs/adr/](docs/adr/) | one decision record per slice |

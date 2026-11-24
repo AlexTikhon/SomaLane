@@ -11,8 +11,8 @@ The showcase is a static page that shows the primary journey (Today → Weekly r
 meals) from one file of synthetic snapshots. It needs no API, no database and no sign-in at run time, and it sends no
 request but for its own files. It is the only part of SomaLane meant to be published: the full application is not
 hosted and runs locally ([README, Run it locally](../../README.md#run-it-locally)). The public address is
-**`https://alextikhon.github.io/SomaLane/`**, confirmed by the deployment of 2026-11-24 (commit `3bbe2b2`, Pages run
-45387434787; [section 3.5](#35-current-publication)).
+**`https://alextikhon.github.io/SomaLane/`**, first confirmed by the deployment of 2026-11-24
+([section 3.5](#35-publications)).
 
 ## 1. Commands
 
@@ -44,9 +44,9 @@ ignored. No `.env` file and no `VITE_*` variable is read by this build. The outp
 
 ## 3. Publishing on GitHub Pages
 
-Prepared in release step 7; carried out in release step 8 on 2026-11-24. **Published**: the setup of 3.2 is in place
-and the site serves `3bbe2b2` ([section 3.5](#35-current-publication)). Every later publication is one run of 3.3,
-followed by the checks of 3.4.
+Prepared in release step 7; carried out in release step 8 on 2026-11-24 and again in step 10 for the release.
+**Published**: the setup of 3.2 is in place, and the site serves the commit of the latest successful run
+([section 3.5](#35-publications)). Every publication is one run of 3.3, followed by the checks of 3.4.
 
 ### 3.1 What is published, and by what
 
@@ -57,7 +57,7 @@ output. It runs only when dispatched by hand, and only from `main`:
 
 | Job | Permissions | What it does |
 |---|---|---|
-| `build` ("validate and build the showcase") | `contents: read` | refuses any ref but `main`; `npm ci`; the showcase unit tests (the committed snapshot against the contract schemas, views, source link, module boundary); installs Chromium, Firefox and WebKit; builds the showcase for the browser check and runs it under `/SomaLane/` with no API server (Chromium 9 tests, Firefox 3, WebKit desktop 9, WebKit phone-sized 4); `npm run build:showcase`; `diff -r` of that output against the tested build; uploads `apps/web/dist-showcase` |
+| `build` ("validate and build the showcase") | `contents: read` | refuses any ref but `main`; `npm ci`; the showcase unit tests (the committed snapshot against the contract schemas, views, source link, module boundary); installs Chromium, Firefox and WebKit; builds the showcase for the browser check and runs it under `/SomaLane/` with no API server (Chromium 10 tests, Firefox 4, WebKit desktop 10, WebKit phone-sized 5, since the Trends row-action test of 2026-11-24; 9, 3, 9 and 4 before); `npm run build:showcase`; `diff -r` of that output against the tested build; uploads `apps/web/dist-showcase` |
 | `deploy` ("deploy to GitHub Pages") | `pages: write`, `id-token: write` | starts only after `build` succeeded and only for `main`; environment `github-pages`; `actions/configure-pages` (fails early if Pages is not set up), `actions/deploy-pages`; writes the reported page URL to the run summary and the environment |
 
 No secret, Docker, database, dataset export or API server is involved. The workflow does not run `npm run verify`, the
@@ -119,11 +119,12 @@ Record the run id, the commit, the conclusion of each job and the URL `deploy-pa
 To take the site down: **Settings → Pages → Unpublish site** (the button appears once a site is published). To replace
 it, fix `main` and run the workflow again; every run publishes `main` as it is then.
 
-### 3.4 Hosted checks (release step 8)
+### 3.4 Hosted checks
 
 Run against the URL the deployment reported (below written as the expected address) and record the results with the
-run id, the commit, the date and the browser versions in a step-8 report. No personal data, no screenshots of anything
-but the showcase.
+run id, the commit, the date and the browser versions: in a report for step 8, and in the tag annotation, the release
+notes and the attached report for the portfolio-v1 release (step 10). No personal data, no screenshots of anything but
+the showcase.
 
 | # | Check | Expected |
 |---|---|---|
@@ -139,6 +140,17 @@ but the showcase.
 | H10 | Developer tools → Application/Storage | no cookie, local or session storage entry, IndexedDB database, Cache Storage or service worker created by the page |
 | H11 | Block `showcase-snapshot.json` (developer tools request blocking) and reload | the alert "The showcase data file could not be downloaded. Check the connection and try again.", the label and the source link stay, **Try again** asks for the same file only |
 
+**Trends row actions (R1–R4), added in step 10** for the step-9 repair
+([report](../reports/trends-row-actions-repair-2026-11-24.md)). On Trends, at 1280 × 900 and at 375 × 812, with Weight
+(Open alone) and with Food energy (Open and Meals):
+
+| # | Check | Expected |
+|---|---|---|
+| R1 | Labels | every row's **Open** and **Meals** label is readable, on one line, and not clipped inside its button |
+| R2 | Layout | at 1280 px a row's Open and Meals sit side by side; at 375 px they stack |
+| R3 | Page width | no horizontal page overflow (`document.documentElement.scrollWidth` ≤ the viewport width) |
+| R4 | Keyboard and return | a row's **Meals** and **Open**, reached with Tab and activated with Enter, open Logged meals and Today for that date; **Back to Trends** returns to the same end date and series |
+
 A phone browser may be added as an observation, but Playwright WebKit is not Safari: no Safari or iPhone claim follows
 from these checks unless a physical device is recorded ([release plan, section 5](../portfolio-v1-release-plan.md#5-capability-claims-and-the-evidence-each-needs)).
 
@@ -151,7 +163,21 @@ How step 8 ran them ([report, sections 4 and 6](../reports/showcase-hosted-verif
 - H11 by aborting the snapshot request in the test browser only; the hosted file is never removed.
 - In addition, the live files were compared with the run's `github-pages` artifact (`gh run download <run id> -n github-pages`).
 
-### 3.5 Current publication
+### 3.5 Publications
+
+The site serves whatever the latest successful run deployed. This runbook does not track it, so that recording a
+publication never needs a commit of its own. Find the current state at its source:
+
+```sh
+gh api "repos/AlexTikhon/SomaLane/deployments?environment=github-pages&per_page=1" --jq '.[0] | {sha, created_at}'
+gh run list --workflow showcase-pages.yml --limit 3
+```
+
+- **The portfolio-v1 release (step 10).** The commit, CI and Pages runs, reported URL and hosted results (H1–H11 and
+  R1–R4) are in the annotated tag `portfolio-v1` and the GitHub release "SomaLane — Portfolio v1"
+  ([closeout](../portfolio-v1-closeout.md#2-where-the-final-results-are)). If that release does not exist, step 10 has
+  not completed.
+- **The first publication (step 8, historical)**, as recorded on 2026-11-24:
 
 | Item | Value (2026-11-24) |
 |---|---|
@@ -162,8 +188,8 @@ How step 8 ran them ([report, sections 4 and 6](../reports/showcase-hosted-verif
 | Hosted checks | H1–H11 all passed ([report](../reports/showcase-hosted-verification-2026-11-24.md)) |
 | Snapshot SHA-256 | `8ccbbcd0406a11a0467bb2d915bb565c42b5147b9ace23692e154388b4fd7628` |
 
-The site changes only when the workflow runs again. After that, update this table from the new run and record its
-hosted checks.
+The site changes only when the workflow runs again. Record each new run and its hosted checks where that publication is
+made (a report, or a release's notes), not by editing the table above.
 
 ## 4. What the export reads, and its guards
 

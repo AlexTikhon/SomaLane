@@ -1,8 +1,38 @@
-# Pause handoff (current status 2026-11-22; historical sections from 2026-11-06)
+# Pause handoff (closeout of portfolio v1, 2026-11-24; historical sections from 2026-11-06 to 2026-11-22)
 
-## Current status (2026-11-22): portfolio v1 release preparation
+## Current status: portfolio v1 closeout and freeze
 
-- **Where things stand.** `main` at `6f3dc46` (Nutrition Trends v2, ADR-0096). Hosted CI for that commit succeeded
+- **What ends the project.** Portfolio v1 is the final release. It is complete, and the project is **frozen**, when the
+  annotated tag `portfolio-v1` and the GitHub release "SomaLane — Portfolio v1" are published for a commit that passed
+  the step-10 gates. The tag annotation and the release notes hold the released commit, its CI and Pages runs and the
+  hosted checks. If that tag does not exist, step 10 is still open: resume it from the
+  [closeout, section 3](portfolio-v1-closeout.md#3-the-step-10-gates-the-release-procedure).
+- **What governs now.** [portfolio-v1-closeout.md](portfolio-v1-closeout.md): when the release is complete, where the
+  results are, the freeze policy and the restart instructions. Scope, gates and evidence per claim stay in the
+  [release plan](portfolio-v1-release-plan.md).
+- **Freeze.** No feature development. Future work requires an explicitly reopened scope, recorded by the owner before it
+  starts. Recorded defect fixes are separate maintenance changes with their own verification. They never move the tag.
+- **Restarting.** Follow the [closeout, section 6](portfolio-v1-closeout.md#6-restarting):
+  - fetch tags and compare `origin/main` with `portfolio-v1`;
+  - run locally with `npm run demo:up` or the portfolio dataset;
+  - verify by the kind of change.
+
+  The verification table and the test-database rules further below still apply where the closeout does not restate them.
+- **Not established, and not to be claimed:**
+  - Safari, iPhone or phone behaviour (the physical checklist is NOT RUN);
+  - real-device GPS accuracy (D10 PARTIAL) or background recording;
+  - a real identity provider;
+  - a hosted full application or a hosted restore;
+  - a real Mapbox basemap;
+  - AI quality.
+
+  The release is desktop-scoped.
+
+## Status of 2026-11-22: portfolio v1 release preparation (historical)
+
+Superseded by the section above; kept as written.
+
+- **Where things stood.** `main` at `6f3dc46` (Nutrition Trends v2, ADR-0096). Hosted CI for that commit succeeded
   ([run 44885261535](https://github.com/AlexTikhon/SomaLane/actions/runs/44885261535): verify, integration, three
   Chromium shards, Firefox core). Nothing is deployed; no real identity provider and no physical device has been used.
 - **What governs the work now.** [portfolio-v1-release-plan.md](portfolio-v1-release-plan.md): ten ordered steps,

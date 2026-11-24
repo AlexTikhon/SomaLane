@@ -375,11 +375,13 @@ with sign-in, recording and editing, runs locally from the source.
 the real roles (`npm run test:integration`, restore drill included), and Playwright against the real API and database
 in Chromium plus an OpenID Connect project. Bounded gates cover Firefox and Playwright WebKit (at a desktop and a
 phone-sized viewport, which is WebKit automation, not Safari). Hosted CI runs all of them on every push to `main`. The
-latest checked run, 45385170103 for `3bbe2b2`, succeeded on 2026-11-24. The showcase has its own browser check under
-`/SomaLane/`, with a guard that fails any API request or storage write.
+run for the released commit is linked from the
+[`portfolio-v1` release](https://github.com/AlexTikhon/SomaLane/releases/tag/portfolio-v1). The showcase has its own
+browser check under `/SomaLane/`, with a guard that fails any API request or storage write.
 
-**"What would you do next?"** Finish portfolio v1 (step 10: a final hosted CI run, the tag and a freeze). Beyond v1,
-the deferred items are, in order: a real identity provider, single-host hosting with a hosted smoke, and an isolated
+**"What would you do next?"** Portfolio v1 is the final release, and the project is frozen after it. If the scope were
+reopened, the deferred items would come in this order: a real identity provider, single-host hosting with a hosted
+smoke, and an isolated
 restore of a host's backup ([release plan, 6.1](portfolio-v1-release-plan.md#61-deferred-by-the-scope-change-of-2026-11-24)).
 Real-device GPS traces (D10) and phone checks gate only the claims that depend on them.
 

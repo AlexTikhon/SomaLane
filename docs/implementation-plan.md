@@ -5,7 +5,26 @@ Date: September 29, 2026
 Status: P00–P09 complete and verified locally: archive HTTP/RLS boundary, PostGIS MVT pipeline, bounded process cache, atomic invalidation, React/Mapbox source lifecycle, and bounded tile resource usage. P10 complete: bounded raw purge, retention eligibility/scheduling, owner deletion, annual retention with atomic tombstone/archive revision, the tombstone lifetime/late-retry contract with bounded reclamation, and the durable deletion journal with reapplication tool and runbook. P11.1 complete: in-process metrics with a separate scrape listener and allow-list structured logging. P11.2 complete: deterministic ordinary and stress datasets. P11.3 complete: a deterministic concurrent load runner over the real HTTP/SSE/PostgreSQL/tile/summary boundaries (ADR-0040). P11.4 complete: production-SQL EXPLAIN collection under the real roles, sizes, response bytes, a lock-wait sampler, a no-tile baseline, and a generated report with goals met / not met / not confirmed (ADR-0041, `docs/reports/p11-measurements.md`). D01, D02, D04, D05, D06, and D08 are resolved; the stream portion of D07 is fixed in ADR-0023. P11.5 complete: set-based run visibility policies with a narrowing live scope (migration 0019, ADR-0042), the one optimization the P11.4 measurements confirmed, with a before/after report from the same commands (`docs/reports/p11-5-measurements-after.md`); P11 is DONE. P12.2 complete: a standalone single-host deployment profile with file-based secrets, bounded unprivileged containers, a TLS/HTTP2 edge, credential rotation, and a runbook (ADR-0043, `npm run deploy:verify`). P12.3 complete: encrypted `pg_dump` backups with 7-day retention and a restore drill that passed locally with deletion reapplication (ADR-0044, `docs/reports/p12-3-restore-drill.md`); it does not establish a production RPO/RTO. P12.4 complete: an access-restriction journal (migration 0020, ADR-0045) so that an old backup cannot silently restore revoked shares or deactivated memberships, an owner-only `restore:reapply-access` that can only remove access, and a drill that proves the recovered permissions equal the lost source's (`docs/reports/p12-4-restore-drill.md`); D09 is RESOLVED for the mechanism and the local drill, with no production RPO/RTO claimed. P12.1 complete: OpenID Connect sign-in with invite-only identities and the existing session (migration 0021, ADR-0046), verified against a test provider only. P12.5 complete (documentation matched to the implementation, API specification, local demo); P12 is DONE as a workstation-verified stage. D03b is resolved for the mechanism, not for any real provider. After P12 a Chromium browser suite and the reload fixes of ADR-0047 were added, then the session-expiry, rejected-buffer and login-throttling fixes of ADR-0048 and the organization discovery and explicit sign-out of ADR-0049 (see the post-plan notes in section 5). The only open decision is D10, now PARTIAL (measured on synthetic tracks only); the original P00-P12 plan has no further stage. Resumed improvement work is recorded below.
 Basis: running-tracker-sdd-v1.0.md, sections 1–17.
 
-## Current status (2026-11-22): portfolio v1 release preparation
+## Current status: portfolio v1 closeout and freeze
+
+This stage map is complete and historical. Portfolio v1 is the project's final release:
+
+- It is complete, and the project is **frozen**, when the annotated tag `portfolio-v1` and the GitHub release
+  "SomaLane — Portfolio v1" are published for a commit that passed the step-10 gates.
+- The tag and the release record that commit, its runs and the hosted checks.
+- Without the tag, step 10 is still open.
+
+Read [portfolio-v1-closeout.md](portfolio-v1-closeout.md) for the completion criteria, the freeze policy and the restart
+instructions, and [portfolio-v1-release-plan.md](portfolio-v1-release-plan.md) for scope, gates and evidence.
+
+Future work requires an explicitly reopened scope, recorded by the owner before it starts. Recorded defect fixes are
+separate maintenance changes. If scope is reopened, sections 1, 7, 8 and 9 below (execution mode, verification
+strategy, definition of done, report format) remain a usable working method. The Status line above, the dated sections
+and section 10 are historical.
+
+## Status of 2026-11-22: portfolio v1 release preparation (historical)
+
+Superseded by the section above; kept as written.
 
 The original P00–P12 plan is complete, and the slices that followed it (ADR-0066 to ADR-0096) are recorded in
 [product-direction.md](product-direction.md) and [progress.md](progress.md). Current work follows

@@ -1,16 +1,23 @@
 # SomaLane portfolio v1: release plan
 
-- Status: **active**. Steps 1 (this document), 2 (the isolated 56-date synthetic dataset), 3 (navigation and first-use
-  flow), 4 (measured initial-bundle reduction; its full-suite gate closed by hosted CI run 45055752618 on 2026-11-23) and
-  5 (the public read-only synthetic showcase, 2026-11-23, local evidence) and 6 (the bounded WebKit gate, 2026-11-23,
-  local evidence; physical Safari checklist NOT RUN, so the release is desktop-scoped) and 7 (static publication
-  preparation for GitHub Pages, 2026-11-24, local evidence) and 8 (the showcase published on GitHub Pages at
-  <https://alextikhon.github.io/SomaLane/> from `3bbe2b2`, 2026-11-24: hosted CI run 45385170103, Pages run 45387434787,
-  hosted checks H1–H11 passed) and 9 (portfolio materials, screenshots of the live showcase, a changelog and the MIT
-  licence, 2026-11-24) of 10 are done. The **next task is step 10** (final verification, release tag and project
-  freeze). Step 9's recorded Trends row-action defect was repaired before step 10 (2026-11-24, one CSS rule, local
-  evidence; [report](reports/trends-row-actions-repair-2026-11-24.md)). The live showcase shows it until the next
-  publication.
+- Status: **final**. Steps 1–9 are done:
+  1. this document;
+  2. the isolated 56-date synthetic dataset;
+  3. navigation and first-use flow;
+  4. measured initial-bundle reduction (its full-suite gate closed by hosted CI run 45055752618 on 2026-11-23);
+  5. the public read-only synthetic showcase (2026-11-23, local evidence);
+  6. the bounded WebKit gate (2026-11-23; physical Safari checklist NOT RUN, so the release is desktop-scoped);
+  7. static publication preparation for GitHub Pages (2026-11-24, local evidence);
+  8. the showcase published at <https://alextikhon.github.io/SomaLane/> from `3bbe2b2` (2026-11-24: hosted CI run
+     45385170103, Pages run 45387434787, hosted checks H1–H11 passed);
+  9. portfolio materials, screenshots of the live showcase, a changelog and the MIT licence (2026-11-24). Its recorded
+     Trends row-action defect was repaired in `bf5580d` ([report](reports/trends-row-actions-repair-2026-11-24.md)).
+
+  **Step 10** (final verification, release tag and project freeze) is carried out on the commit that contains this
+  final documentation. **Portfolio v1 is complete, and the freeze takes effect, when the annotated tag `portfolio-v1`
+  and the GitHub release "SomaLane — Portfolio v1" are published** for a commit that passed every step-10 gate. The tag
+  annotation and the release notes record that commit, its runs and the hosted results; this document does not, so that
+  no commit has to name itself ([closeout](portfolio-v1-closeout.md)). Without that tag, portfolio v1 is not released.
 - **Scope change (2026-11-24, the owner's decision).** Only the public read-only synthetic showcase is published (on
   GitHub Pages), and the full application stays available for local demonstrations. Deferred: real external OIDC
   verification, full-application hosting and hosted backup/restore verification
@@ -378,7 +385,7 @@ deployment) and 9 (hosted smoke and isolated restore) are deferred with their re
     ids: hosted CI (`ci.yml`), then `showcase-pages.yml` on `main`.
   - The published address is the one `actions/deploy-pages` reported, and it is recorded. The expected
     `https://alextikhon.github.io/SomaLane/` counts as confirmed only if the two match.
-  - The hosted checks H1–H11 of the [runbook](runbooks/showcase.md#34-hosted-checks-release-step-8) are recorded:
+  - The hosted checks H1–H11 of the [runbook](runbooks/showcase.md#34-hosted-checks) are recorded:
     - status codes and the snapshot digest;
     - the journey in desktop Chromium and Firefox, with the label and the source link;
     - a reload;
@@ -447,7 +454,7 @@ deployment) and 9 (hosted smoke and isolated restore) are deferred with their re
   - **Recorded defect, not fixed.** At 1280 px the Trends table's row buttons wrap one letter per line. The cause is a
     shared CSS rule (`width: 1%` with `overflow-wrap: anywhere`). The buttons still work. Fixing it would change the
     application, so it needs a decision before step 10 ([report, section 8](reports/portfolio-materials-verification-2026-11-24.md#8-findings)).
-  - **Recorded defect repaired (2026-11-24, local evidence; not committed, not published).**
+  - **Recorded defect repaired (2026-11-24, local evidence; committed as `bf5580d`, published only by step 10).**
     [Repair report](reports/trends-row-actions-repair-2026-11-24.md).
     - **Change.** In `apps/web/src/styles.css`, `.trends-table__actions` drops `flex-wrap: wrap`, and its buttons get
       `white-space: nowrap`. The shrink-to-fit actions column now has the buttons' real width. The rules shared with
@@ -480,6 +487,25 @@ deployment) and 9 (hosted smoke and isolated restore) are deferred with their re
   - The release tag points at that commit.
   - The freeze is written down: after the tag, only recorded defects may change.
 - **Not in this step.** No new features.
+- **Procedure (fixed on 2026-11-24, before the candidate existed).** The gates, in order, are in the
+  [closeout, section 3](portfolio-v1-closeout.md#3-the-step-10-gates-the-release-procedure):
+  1. the reviewed work and this documentation reach `main` by a normal fast-forward or merge, and the resulting remote
+     `main` SHA is the candidate;
+  2. `ci.yml` concludes `success` for exactly that SHA, with `verify`, `integration`, the three Chromium shards,
+     `e2e (firefox-core)` and `e2e (webkit gate)` successful;
+  3. `showcase-pages.yml` is dispatched on `main` only after that, and its `build` and `deploy` succeed for the same
+     SHA; the URL `deploy-pages` reports is recorded;
+  4. against that URL, in desktop Chromium and Firefox, the runbook's hosted checks
+     [H1–H11 and R1–R4](runbooks/showcase.md#34-hosted-checks) pass, R1–R4 being the step-9 repair at 1280 and 375 px,
+     and the live files equal the run's artifact;
+  5. only then, the annotated tag `portfolio-v1` is created at that SHA (never replacing an existing tag) and the GitHub
+     release is published.
+
+  Any later commit is a new candidate and repeats gates 1–4. The tag is never moved.
+- **Status: carried out on the commit that contains this text.** Its results are recorded in the tag annotation and the
+  GitHub release, not here ([closeout, section 2](portfolio-v1-closeout.md#2-where-the-final-results-are)). This
+  document makes no claim that a step-10 check succeeded. If the tag `portfolio-v1` does not exist, step 10 has not
+  completed.
 
 ## 4. Mandatory release gates
 
@@ -509,6 +535,25 @@ The gate table was renumbered on 2026-11-24. The former gates below are now defe
 
 The former G10 (AI off in the hosted configuration) is now G9, which covers the code defaults and the showcase.
 
+### 4.1 Gate reconciliation for the release candidate (2026-11-24)
+
+What each gate rests on when step 10 starts. "Step 10" means the gates of the
+[closeout, section 3](portfolio-v1-closeout.md#3-the-step-10-gates-the-release-procedure): they hold only when the tag
+and the release exist, and the results are recorded there.
+
+| Gate | Evidence already recorded | Still required in step 10 |
+|---|---|---|
+| G1 Scope | This plan is final and its status table (section 8) is final with this change | — |
+| G2 Synthetic dataset | Step 2 report (fresh checks, 2026-11-22) | — (the dataset and the committed snapshot are unchanged) |
+| G3 Primary journey | Step 3 report; hosted CI for `3bbe2b2` (run 45385170103: Chromium 192, Firefox core 18) | hosted CI for the candidate |
+| G4 Bundle | Step 4 measurements (`a3bf4e2` → `dff831a`) | — (recorded measurements, not a target) |
+| G5 Showcase safety | Steps 5 and 7 locally; step 8 hosted (H9, H10) for `3bbe2b2`; the full application's guards in CI | H9 and H10 on the candidate's deployment; hosted CI (guards) for the candidate |
+| G6 WebKit gate | Step 6 (47/47 locally); hosted CI for `3bbe2b2` (`e2e (webkit gate)` passed) | `e2e (webkit gate)` in the candidate's CI run |
+| G7 Publication workflow | Step 7; the workflow and its pin test are unchanged since | — |
+| G8 Hosted showcase | Step 8: Pages run 45387434787 and H1–H11 for `3bbe2b2` | a Pages run for the candidate, its reported URL, H1–H11 and R1–R4 |
+| G9 Defaults | `MEAL_DRAFTS_PROVIDER`, `DATA_QUESTIONS_PROVIDER` and `WEEKLY_INSIGHTS_PROVIDER` default to `off`, and `RUN_SEARCH_AI_ENABLED` to `false` (re-read in `apps/api/src/config/` on 2026-11-24); no AI output in the snapshot | — |
+| G10 CI and materials | Step 9: screenshots, changelog, MIT licence | hosted CI for the tagged commit; the tag |
+
 ## 5. Capability claims and the evidence each needs
 
 A capability may be advertised only when its evidence exists. Otherwise the release materials either omit it or state
@@ -516,14 +561,14 @@ the limit.
 
 | Claim | Evidence required | Current status (updated 2026-11-24) |
 |---|---|---|
-| Works in desktop Chromium; Firefox core flows | Hosted CI for the commit | Met for `3bbe2b2` (run 45385170103, checked 2026-11-24); earlier `1dac6ed` (run 45055752618) and `6f3dc46` (run 44885261535). Later commits need their own run |
+| Works in desktop Chromium; Firefox core flows | Hosted CI for the commit | Met for `3bbe2b2` (run 45385170103, checked 2026-11-24); earlier `1dac6ed` (run 45055752618) and `6f3dc46` (run 44885261535). Later commits need their own run; the released commit's run is recorded in the `portfolio-v1` release |
 | WebKit automation | Step-6 gate result | Met locally on 2026-11-23: 47/47 in Playwright WebKit 26.6 on Windows ([report](reports/webkit-gate-verification-2026-11-23.md)). Hosted CI (Linux) failed the showcase keyboard test in runs 45342998163 and 45354574755; corrected on 2026-11-24 ([section 10](reports/webkit-gate-verification-2026-11-23.md#10-hosted-ci-correction-linux-webkit-tab-order-2026-11-24)) and **met in hosted CI** for `3bbe2b2` (run 45385170103: `e2e (webkit gate)` 32 + 4 + 13 passed). Not Safari, not a phone |
 | **iPhone / Safari compatibility** | Physical Safari checklist recorded on an iPhone | **NOT RUN**: must not be claimed |
 | **Mobile GPS accuracy** | Analysed real-device traces (D10) | **0 traces**, D10 PARTIAL: must not be claimed |
 | **Continuous or background recording** | Physical observation of a designed background mode | Not designed (capture is foreground only): must not be claimed |
 | **Real sign-in** | Real-provider evidence (deferred, [section 6.1](#61-deferred-by-the-scope-change-of-2026-11-24)) | Test provider only: must not be claimed |
 | **Hosted full application** | A hosted deployment and its smoke (deferred) | Not hosted; the full application is a local demonstration: must not be claimed |
-| Public read-only showcase of synthetic data | Steps 5 and 7 locally; the step-8 publication run and hosted checks | **Met**: published at <https://alextikhon.github.io/SomaLane/> from `3bbe2b2` by Pages run 45387434787; hosted checks H1–H11 passed in desktop Chromium and Firefox automation on 2026-11-24 ([step 8](reports/showcase-hosted-verification-2026-11-24.md)); earlier local evidence in [step 5](reports/showcase-verification-2026-11-23.md) and [step 7](reports/showcase-pages-preparation-2026-11-24.md). A snapshot of synthetic data, not a hosted application |
+| Public read-only showcase of synthetic data | Steps 5 and 7 locally; the step-8 publication run and hosted checks | **Met**: published at <https://alextikhon.github.io/SomaLane/> from `3bbe2b2` by Pages run 45387434787; hosted checks H1–H11 passed in desktop Chromium and Firefox automation on 2026-11-24 ([step 8](reports/showcase-hosted-verification-2026-11-24.md)); earlier local evidence in [step 5](reports/showcase-verification-2026-11-23.md) and [step 7](reports/showcase-pages-preparation-2026-11-24.md). The release's publication and its hosted checks are recorded in the `portfolio-v1` release. A snapshot of synthetic data, not a hosted application |
 | **Backup and restore of hosted data** | An isolated restore of a host's backup (deferred) | No hosted data; local drills only ([p12-4-restore-drill.md](reports/p12-4-restore-drill.md)); no production RPO/RTO: must not be claimed for a host |
 | Real map basemap | A real Mapbox token rendering on a hosted application (deferred) | Never rendered; the app works without a token |
 | **AI quality** (any feature) | A passing frozen gate at the current fingerprint **and** a separate decision to enable | Meal drafts FAIL; Ask my data stale (NOT_RUN); weekly insights and run search below target: must not be claimed |
@@ -604,7 +649,7 @@ block the step named.
 | Input | Needed by | Owner's decision or action |
 |---|---|---|
 | GitHub Pages enabled for the repository with "GitHub Actions" as its source, and the `github-pages` environment limited to `main` ([runbook, 3.2](runbooks/showcase.md#32-one-time-repository-setup-the-owner-in-githubs-web-interface)) | Step 8 | **Done 2026-11-24** with the owner's authorization: Pages `build_type: workflow`; `github-pages` allows `main` only |
-| A manual run of the Pages workflow on `main` | Step 8 (and step 10 for the tagged commit) | **Done 2026-11-24** for `3bbe2b2` (run 45387434787), after CI run 45385170103 succeeded |
+| A manual run of the Pages workflow on `main` | Step 8 (and step 10 for the tagged commit) | **Done 2026-11-24** for `3bbe2b2` (run 45387434787), after CI run 45385170103 succeeded. Step 10: authorized by the owner on 2026-11-24 for the release candidate; the run is recorded in the `portfolio-v1` release |
 | Physical iPhone with Safari on the workstation's Wi-Fi | Step 6 (optional for a desktop-scoped release) | Time to run and record the checklist (the device is recorded as available; the checks are NOT RUN) |
 | Licence decision | Step 9 | **Done 2026-11-24**: MIT, "Copyright (c) 2026 Alex Tikhon" ([LICENSE](../LICENSE)) |
 
@@ -629,6 +674,23 @@ No longer needed for v1, deferred with the work that needs them
 | 6. WebKit gate and physical Safari | **Done** (2026-11-23); physical checklist **NOT RUN**, release desktop-scoped | [ADR-0100](adr/0100-bounded-webkit-gate.md), [report](reports/webkit-gate-verification-2026-11-23.md); progress entry of 2026-11-23 (agent-run workstation automation; not run in hosted CI) |
 | 7. Static publication preparation | **Done** (2026-11-24) | [ADR-0101](adr/0101-github-pages-showcase-publication.md), [report](reports/showcase-pages-preparation-2026-11-24.md); progress entry of 2026-11-24 (fresh local checks; the Pages workflow has not run; nothing published) |
 | 8. GitHub Pages publication and hosted showcase smoke | **Done** (2026-11-24): published at <https://alextikhon.github.io/SomaLane/> from `3bbe2b2` | [Report](reports/showcase-hosted-verification-2026-11-24.md); hosted CI run [45385170103](https://github.com/AlexTikhon/SomaLane/actions/runs/45385170103) and Pages run [45387434787](https://github.com/AlexTikhon/SomaLane/actions/runs/45387434787), both `success`; H1–H11 passed (agent-run hosted checks in desktop Chromium and Firefox automation); progress entry of 2026-11-24 (step 8) |
-| 9. Portfolio materials, screenshots, changelog, licence | **Done** (2026-11-24): README, four screenshots of the live showcase, interview package, `CHANGELOG.md`, MIT `LICENSE` | [Report](reports/portfolio-materials-verification-2026-11-24.md); progress entry of 2026-11-24 (step 9; documentation and assets, fresh checks; nothing committed or redeployed). Its recorded Trends row-action defect was repaired on 2026-11-24: [repair report](reports/trends-row-actions-repair-2026-11-24.md) (local checks; not hosted) |
-| 10. Final verification, release tag, project freeze | Not started (**next**) | — |
+| 9. Portfolio materials, screenshots, changelog, licence | **Done** (2026-11-24): README, four screenshots of the live showcase, interview package, `CHANGELOG.md`, MIT `LICENSE` | [Report](reports/portfolio-materials-verification-2026-11-24.md); progress entry of 2026-11-24 (step 9; documentation and assets, fresh checks; committed as `8f66554`). Its recorded Trends row-action defect was repaired on 2026-11-24 in `bf5580d`: [repair report](reports/trends-row-actions-repair-2026-11-24.md) (local checks; hosted only through step 10) |
+| 10. Final verification, release tag, project freeze | **Completes when the verified `portfolio-v1` tag and GitHub release are published**; without them, not released | The tag annotation and the release notes (commit, CI and Pages runs, hosted results, attached final verification report); [closeout](portfolio-v1-closeout.md); progress entry of 2026-11-24 (step 10) |
 | Deferred on 2026-11-24: real OIDC provider, single-host deployment, hosted smoke and isolated restore | **Deferred, not done** | [Section 6.1](#61-deferred-by-the-scope-change-of-2026-11-24) |
+
+## 9. Freeze
+
+Portfolio v1 ends feature development. The freeze takes effect when the verified `portfolio-v1` tag and GitHub release
+are published (step 10).
+
+- **Future work requires an explicitly reopened scope**: the owner's decision, naming the work, recorded before it
+  starts. That covers new features, identity-provider setup, full-application hosting, dependency upgrades, licence
+  changes and every item in [section 6](#6-deferred-work). This plan describes portfolio v1 and is not extended to
+  describe new work.
+- **Recorded defect fixes are separate maintenance changes.** A defect is recorded first, then fixed in one bounded
+  change with its own verification and hosted CI run. If the showcase changes, it is republished, and the new
+  publication gets its own hosted checks. Such a change never moves `portfolio-v1`.
+- **The evidence boundaries stay.** Hosted automation is not physical Safari, phone or GPS evidence; the physical
+  checklist stays NOT RUN, and the release stays desktop-scoped.
+
+Restart and maintenance instructions: [portfolio-v1-closeout.md](portfolio-v1-closeout.md#6-restarting).
