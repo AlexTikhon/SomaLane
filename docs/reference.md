@@ -274,8 +274,10 @@ renders the same pure content blocks (`TodayOverviewContent`, `WeeklyReviewConte
 (`apps/web/showcase/public/showcase-snapshot.json`, envelope `@running-tracker/contracts/showcase`). The file is exported
 read-only from the isolated synthetic dataset through the read services by `npm run portfolio:showcase:export`. The
 page offers only the snapshot's catalog, follows the date policy below with "today" = the snapshot's last date, labels
-every view "Read-only showcase · synthetic data", links to the invite-only application (`SHOWCASE_APP_URL`, validated at
-build time), and sends no request but for its own files.
+every view "Read-only showcase · synthetic data", links to the public source repository with a sentence that the full
+application runs locally (a fixed link, nothing to configure; [ADR-0101](adr/0101-github-pages-showcase-publication.md)),
+and sends no request but for its own files. It is prepared for GitHub Pages under `/SomaLane/` by the manual workflow
+`.github/workflows/showcase-pages.yml` (release step 7; not yet run).
 
 Date policy (`apps/web/src/journey-navigation.ts`): Today's **Weekly review** opens the week containing Today's date; a
 direct opening uses the week kept for the current scope, else the current week; the review's **28-day trends ending …**

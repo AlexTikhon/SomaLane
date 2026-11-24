@@ -5976,3 +5976,71 @@ claim; the release stays desktop-scoped. AI-quality limitations unchanged. Step 
 scenarios are listed, it has run and its result is recorded; the physical checklist is explicitly NOT RUN), so **step 6
 is done; next task: release step 7, real OIDC provider verification (needs the owner's identity-provider
 configuration).** Changes are uncommitted.
+
+## Portfolio v1 release step 7: static publication preparation for GitHub Pages (ADR-0101) (2026-11-24)
+
+**Scope change (the owner's decision, 2026-11-24).** The release now publishes **only** the public read-only synthetic
+showcase, and the full application stays available for local demonstrations. Real external OIDC verification,
+full-application hosting and hosted backup/restore verification are deferred. The full application's authentication
+and production safeguards are unchanged.
+
+The [release plan](portfolio-v1-release-plan.md) was replanned accordingly:
+
+- Steps 1–6 and their evidence are kept as recorded.
+- New steps: 7, static publication preparation (this entry); 8, GitHub Pages publication and the hosted showcase smoke;
+  9, portfolio materials, screenshots, changelog and licence; 10, final verification, release tag and freeze.
+- The former steps 7–9 moved, with their requirements intact, to the plan's
+  [section 6.1](portfolio-v1-release-plan.md#61-deferred-by-the-scope-change-of-2026-11-24).
+- The gates were renumbered (G7 publication workflow, G8 hosted showcase; the former G7–G9 are deferred).
+- Capability claims and external inputs were updated: Pages enablement and a dispatch replace the host, DNS, TLS,
+  provider and off-host storage inputs, which are deferred.
+
+README, `product-direction.md` and the interview package's "What would you do next?" were updated to match.
+
+**Outcome.** Decided in [ADR-0101](adr/0101-github-pages-showcase-publication.md) (amends ADR-0099's decision 7);
+operated by the [runbook](runbooks/showcase.md#3-publishing-on-github-pages).
+
+- **Visitor-ready page.** Every state (loading, data-file error, every view) shows the label, **Source code on GitHub**
+  (`https://github.com/AlexTikhon/SomaLane`) and the sentence "The full application, with sign-in, recording and
+  editing, is not hosted: it runs locally from the source, as the README describes." `SHOWCASE_APP_URL`,
+  `showcase-config.ts` and its spec are removed. The build's only setting is `SHOWCASE_OUT_DIR`.
+- **Browser check under `/SomaLane/`.** `vite preview --base /SomaLane/`, and the request guard also fails any path
+  outside `/SomaLane/`. New test: a direct reload and `./index.html`. The file test asserts the exact published file set
+  (Firefox subset 2 → 3 tests; WebKit gate 47 → 49).
+- **Workflow.** `.github/workflows/showcase-pages.yml`:
+  - `workflow_dispatch` only, with a `main`-only guard step and job condition, `permissions: {}` and concurrency
+    `pages`;
+  - `build` (`contents: read`): unit tests, the four showcase projects, `npm run build:showcase`, `diff -r` against the
+    tested build, `upload-pages-artifact@v5` of `apps/web/dist-showcase` only;
+  - `deploy` (`needs: build`, `pages: write`, `id-token: write`, environment `github-pages` with `page_url`):
+    `configure-pages@v6`, `deploy-pages@v5`, and the reported URL written to the run summary.
+
+  No secret, Docker, database, dataset export or API server. `scripts/showcase-pages-workflow.test.mjs` pins the
+  workflow's structure; `ci.yml` is unchanged.
+
+| Check (fresh, this change) | Result |
+|---|---|
+| Inputs (read-only) | repository `PUBLIC`, default branch `main`; `gh api repos/AlexTikhon/SomaLane/pages` → 404 (no Pages site); action tags configure-pages v6, upload-pages-artifact v5, deploy-pages v5, checkout v5, setup-node v5 resolve |
+| Showcase unit tests (`apps/web`, `src/showcase`) | 55 passed |
+| E2E typecheck; ESLint of changed e2e files | exit 0; exit 0 |
+| Workflow structure tests (`showcase-pages-workflow` + `ci-workflow`) | 15 passed; workflow YAML parses (`yaml@2.8.1`) |
+| The workflow's build sequence, locally (one test build, four showcase projects) | **25 passed** (Chromium 9, Firefox 3, WebKit desktop 9, WebKit phone-sized 4) |
+| `npm run build:showcase` + `diff -r` against the tested build | identical; 4 files (`index.html`, snapshot, one JS, one CSS), no dot-file or link |
+| `npm run verify` | exit 0: scripts 130, API 2,832, web 1,523, contracts 325, fixtures 14, simulator 3, build |
+| `npm run e2e:webkit:showcase` (existing command) | **13 passed** |
+| `npm run test:e2e:showcase`, final code | **12 passed** |
+| `vite preview --base /SomaLane/` probe | `/SomaLane/`, `index.html`, snapshot 200; `/SomaLane` 404 and unknown paths 200 (preview, not Pages; hosted checks H3/H5 cover Pages) |
+| Links of changed docs, `git diff --check`, new files with `--no-index --check` | 379 relative links and anchors in the 10 changed documents resolve; clean; the 4 new files clean |
+
+Evidence and limits: [verification report](reports/showcase-pages-preparation-2026-11-24.md).
+`openapi.json`, rewritten with line endings only by the contracts builds, was restored.
+
+- **Not done:** hosted CI for this change; the Pages workflow on GitHub (never dispatched); Pages enablement or any
+  repository setting.
+- **Not rerun:** the full Chromium/OIDC suite, the Firefox core gate, the production-build check, the WebKit gate's
+  other parts and the integration suite. The application is unchanged.
+- **No Safari or phone claim.** AI-quality limitations are unchanged.
+
+Step 7's acceptance criteria hold, so **step 7 is done; next task: release step 8**. The owner enables Pages with
+"GitHub Actions" as its source, limits the `github-pages` environment to `main`, and dispatches the workflow on `main`
+after CI succeeded for the commit. The hosted checks H1–H11 are then recorded. Changes are uncommitted.

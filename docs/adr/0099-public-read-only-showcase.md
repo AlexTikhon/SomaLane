@@ -2,6 +2,9 @@
 
 - Status: accepted; implemented (see the [verification report](../reports/showcase-verification-2026-11-23.md)). Local
   evidence only: no hosted CI run of this change, and the showcase is not hosted anywhere.
+- Amended by [ADR-0101](0101-github-pages-showcase-publication.md) (2026-11-24): decision 7's link to the invite-only
+  application and its `SHOWCASE_APP_URL` setting are replaced by a fixed link to the public source repository; the
+  showcase is prepared for GitHub Pages. The text below is kept as decided on 2026-11-23.
 - Date: 2026-11-23
 - Release step: 5 of the [portfolio v1 release plan](../portfolio-v1-release-plan.md#step-5-public-read-only-synthetic-showcase).
 - Relates to: [ADR-0097](0097-navigation-and-first-use-flow.md) (the primary journey and its date policy),

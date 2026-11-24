@@ -22,12 +22,15 @@ deferrals. In short:
 - **Product for v1:** the tracker with deterministic analytics; AI stays experimental and off by default.
 - **Primary journey:** daily records → Today → weekly review → Trends → original records. **Secondary demonstration:**
   simulated run → offline/reload recovery → explicit live sharing → finished result and archive.
-- **Publication:** a public, clearly labelled read-only showcase of synthetic snapshots, plus the full hosted app behind
-  the existing invite-only OpenID Connect sign-in.
+- **Publication** (changed on 2026-11-24): only a public, clearly labelled read-only showcase of synthetic snapshots, on
+  GitHub Pages ([ADR-0101](adr/0101-github-pages-showcase-publication.md)). The full application stays a local
+  demonstration with its invite-only OpenID Connect sign-in and production safeguards unchanged; real-provider
+  verification, hosting it and a hosted restore drill are deferred.
 - **Deferred beyond v1:** FIT, HealthKit, RAG (roadmap item 4), a general chat coach, additional health metrics,
   microservices, multi-replica support, maintenance fairness and durable retries, further AI-quality experiments; D10
   and D11 stay open.
-- **Next task:** release step 2, an isolated, reproducible synthetic dataset over 56 calendar dates.
+- **Next task:** see the release plan's status (on 2026-11-24: step 8, publishing the showcase on GitHub Pages and the
+  hosted showcase smoke).
 
 The roadmap and the per-slice sections below are kept as written. Where a dated section names a "next milestone", it is
 historical; the release plan decides what comes next.

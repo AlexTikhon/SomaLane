@@ -3,9 +3,17 @@
 - Status: **active**. Steps 1 (this document), 2 (the isolated 56-date synthetic dataset), 3 (navigation and first-use
   flow), 4 (measured initial-bundle reduction; its full-suite gate closed by hosted CI run 45055752618 on 2026-11-23) and
   5 (the public read-only synthetic showcase, 2026-11-23, local evidence) and 6 (the bounded WebKit gate, 2026-11-23,
-  local evidence; physical Safari checklist NOT RUN, so the release is desktop-scoped) of 10 are done. The **next task
-  is step 7**, real OIDC provider verification, which needs the owner's identity-provider configuration.
-- Date: 2026-11-22. Baseline: `main` at `6f3dc46` (Nutrition Trends v2, ADR-0096).
+  local evidence; physical Safari checklist NOT RUN, so the release is desktop-scoped) and 7 (static publication
+  preparation for GitHub Pages, 2026-11-24, local evidence; nothing published) of 10 are done. The **next task is step
+  8**, the actual GitHub Pages publication and hosted showcase smoke. It needs the owner to enable Pages and run the
+  workflow.
+- **Scope change (2026-11-24, the owner's decision).** Only the public read-only synthetic showcase is published (on
+  GitHub Pages), and the full application stays available for local demonstrations. Deferred: real external OIDC
+  verification, full-application hosting and hosted backup/restore verification
+  ([section 6.1](#61-deferred-by-the-scope-change-of-2026-11-24)). The full application's existing authentication and
+  production safeguards stay as they are. Steps 7–10 were replanned; steps 1–6 and their evidence are unchanged.
+- Date: 2026-11-22. Baseline: `main` at `6f3dc46` (Nutrition Trends v2, ADR-0096). Replanned on 2026-11-24 at
+  `68b5e4b`.
 - Authority: this is the single source of truth for what portfolio v1 contains, which evidence it needs, and what is
   deferred. Where an older document names a different "next milestone" (for example the iPhone pilot of ADR-0085 as
   the next step in a dated section of [product-direction.md](product-direction.md)), this plan takes precedence. Older
@@ -36,17 +44,22 @@ of them leads back to the records it was computed from.
 It uses the existing GPS simulator, IndexedDB buffer, fenced writer lease, SSE live board and revision-bound archive.
 It is a demonstration of failure handling, not a claim about phone GPS.
 
-**Publication model.** Two surfaces, both clearly labelled:
+**Publication model** (changed on 2026-11-24; until then the full application was also to be hosted). One published
+surface, plus the full application for local demonstrations:
 
 1. **Public read-only showcase.** Openly accessible, labelled on every screen as a read-only showcase of synthetic
    data. It is built from synthetic snapshots of the step-2 dataset, validated by the existing contracts
    (`packages/contracts`) and rendered with the existing presentational components wherever that is practical. It
-   writes nothing and sends no request to a private API route.
-2. **Full hosted application.** The real app on one host with the existing production profile
-   ([ADR-0043](adr/0043-single-host-deployment-profile.md)), behind the existing invite-only OpenID Connect sign-in
-   ([ADR-0046](adr/0046-oidc-sign-in.md)). Only invited identities can use it.
+   writes nothing and sends no request to a private API route. It is published as static files on GitHub Pages (expected
+   at `https://alextikhon.github.io/SomaLane/`, [ADR-0101](adr/0101-github-pages-showcase-publication.md)) and links
+   to the public source repository.
+2. **Full application, local only.** The real app runs on a workstation from the source, with synthetic data only:
+   `npm run demo:up`, the step-2 dataset launchers, or the iPhone LAN pilot. Its production profile
+   ([ADR-0043](adr/0043-single-host-deployment-profile.md)) and invite-only OpenID Connect sign-in
+   ([ADR-0046](adr/0046-oidc-sign-in.md)) stay implemented, tested and guarded as they are. No host runs them and no real
+   provider has verified them; hosting is deferred ([section 6.1](#61-deferred-by-the-scope-change-of-2026-11-24)).
 
-**Guardrails for both surfaces.**
+**Guardrails.**
 
 - No anonymous access to any private API route (the organization-scoped `/api/orgs/:orgId/...` routes and every other
   route that requires a session). The showcase must not add an anonymous or "demo" path into the API.
@@ -68,6 +81,7 @@ which.
 | **Recorded local verification** | Commands run on the Windows workstation and written down in [progress.md](progress.md) or a report at the time | The ADR-0096 entry of 2026-11-21: `npm run verify` exit 0, focused integration and Chromium runs |
 | **Fresh check** | A command run in the current change and reported with it | For this step: link, path and diff checks only (see the progress entry) |
 | **Real-provider evidence** | Behaviour observed against a real external service (identity provider, Mapbox, OpenAI) | **None yet.** OIDC was tested only against a test provider and a local `oidc-provider` process |
+| **Hosted publication** | A run of `.github/workflows/showcase-pages.yml` on `main`, and the hosted checks against the page URL that run reported | **None yet.** The workflow was prepared in step 7 and has never run |
 | **Physical-device evidence** | An owner's observation on a real phone, recorded in a report | **None yet.** [iphone-lan-pilot.md](reports/iphone-lan-pilot.md) lists every physical check as NOT RUN; D10 has 0 real traces |
 | **AI evaluation** | A frozen evaluation gate at the current code fingerprint | See [section 2.1](#21-ai-evaluation-status) |
 
@@ -251,7 +265,9 @@ run, and updates the [status table](#8-status) below. A step adds no feature bey
   storage write, keyboard, 375 px, broken snapshot files); `npm run verify`; production-build check 5 passed; full
   Chromium/OIDC 192 passed in one run; Firefox core 18 passed; dataset walkthrough 2 passed with the dataset unchanged.
   The production guard is unchanged. The application's initial JS grew by 194 B raw (83 B gzip); no showcase code or
-  data is in its build.
+  data is in its build. *(Amended in step 7, 2026-11-24: the application link and `SHOWCASE_APP_URL` are replaced by a
+  fixed link to the source repository, [ADR-0101](adr/0101-github-pages-showcase-publication.md); the evidence above is
+  kept as recorded.)*
 
 ### Step 6. Bounded WebKit/mobile coverage and physical Safari observations
 
@@ -284,53 +300,109 @@ run, and updates the [status table](#8-status) below. A step adds no feature bey
   RUN**. The physical Safari checklist in [iphone-lan-pilot.md](reports/iphone-lan-pilot.md) stays **NOT RUN**: no
   iPhone, Safari, background-recording or real-GPS claim. Playwright WebKit is recorded as WebKit automation, not Safari.
 
-### Step 7. Real OIDC provider verification and reproducible provisioning
+### Step 7. Static publication preparation
 
-- **Outcome.** Sign-in works against one real OpenID Connect provider chosen by the owner, and
-  [identity-provider.md](runbooks/identity-provider.md) gives reproducible provisioning steps (client registration,
-  redirect URI, invited identities, secret file) for that provider.
-- **Depends on.** Step 1; needs **identity-provider configuration** (external input). The final confirmation on the
-  hosted origin is part of step 9.
-- **Acceptance.** Recorded real-provider evidence, without secrets or personal identifiers: an invited identity signs in
-  and out; an uninvited identity is refused; a restart keeps the session (ADR-0080); the runbook's "Verification against
-  a real provider: Not performed" row is updated with what was and was not observed.
-- **Not in this step.** No provider-side logout, no second provider, no session-management UI.
+Replanned on 2026-11-24 after the owner's scope decision. The former steps 7 (real OIDC provider), 8 (single-host
+deployment) and 9 (hosted smoke and isolated restore) are deferred with their requirements intact
+([section 6.1](#61-deferred-by-the-scope-change-of-2026-11-24)).
 
-### Step 8. Reproducible single-host deployment
-
-- **Outcome.** The full application and the showcase run on one host with the existing production profile
-  ([deployment.md](runbooks/deployment.md)): nginx with a real certificate, file-based secrets, AI off,
-  `LOCAL_AUTH_ENABLED=false`, the step-7 provider configured.
-- **Depends on.** Steps 5 and 7; needs **hosting, DNS and a TLS certificate** (external inputs).
-- **Acceptance.** The deployment is reproduced from the runbook alone on a clean host (or the runbook is corrected until
-  it is); `npm run deploy:verify`-equivalent checks of the profile pass for the host, recorded without secrets; the
-  deletion-journal directory and backup destination are named, and whether they are really off-host is stated, not
-  assumed.
-- **Not in this step.** No multi-replica, orchestration, managed database or microservices.
-
-### Step 9. Hosted critical-flow smoke and isolated backup/restore verification
-
-- **Outcome.** Evidence that the hosted surfaces work and that the hosted data can be restored.
-- **Depends on.** Step 8.
+- **Outcome.** The public showcase build is ready for visitors and for GitHub Pages. Every state links to the public
+  source repository and says that the full application runs locally, in place of the unconfigured link to the
+  invite-only application. A separate, manual, least-privilege workflow validates, builds and publishes only the
+  showcase. The runbook gives the exact setup, the dispatch and the hosted checks.
+- **Depends on.** Steps 5 and 6, and the owner's scope decision of 2026-11-24.
 - **Acceptance.**
-  - A smoke against the hosted origin covers: real sign-in; the primary journey; the secondary demonstration (simulated
-    run, offline/reload recovery, sharing, finish, archive); the showcase's labels; an anonymous request to a private
-    route answering `401`.
-  - A backup made on the host (`backup:create`) is restored into an **isolated** environment, never over the hosted
-    database, following the documented order including `restore:reapply-deletions`, `restore:reapply-access`,
-    `restore:reapply-erasures` and `restore:clear-sessions`; the result is verified and recorded. Measured times describe
-    that drill only; no production RPO/RTO is claimed.
-- **Not in this step.** No monitoring stack, alerting service or load test against the host.
+  - The public build, with no setting, shows the label and a working source link in its normal, loading and error
+    states. The `SHOWCASE_APP_URL` handling is removed or reconciled, and no configuration document contradicts it.
+  - The showcase boundary holds: static files only; no API or sign-in request, cookie, browser-storage write, analytics,
+    real data or AI output.
+  - A separate workflow:
+    - runs on `workflow_dispatch` only, restricted to `main`;
+    - has a build/validation job and a deployment job; the build job has `contents: read` and the deployment job alone
+      has `pages: write` and `id-token: write`;
+    - deploys to the `github-pages` environment with the URL the deployment reports, and only after validation
+      succeeded;
+    - uploads only `apps/web/dist-showcase`;
+    - builds from the committed snapshot without Docker, PostgreSQL, dataset regeneration, API servers or application
+      secrets.
 
-### Step 10. Portfolio materials and release tag
+    The CI workflow and its permission boundary are unchanged.
+  - The actual public build is verified locally while served under `/SomaLane/`, in Chromium, the Firefox subset and
+    the bounded WebKit projects:
+    - assets and snapshot load, including on a direct reload;
+    - the journey works;
+    - the label and source link appear everywhere;
+    - a broken data file is handled;
+    - the request and storage guards pass.
 
-- **Outcome.** README and screenshots from synthetic data, a current interview package (the full editorial rewrite
-  deferred from step 1), a `CHANGELOG`, a recorded licence decision by the owner, and a release tag.
-- **Depends on.** Steps 1–9.
-- **Acceptance.** Every public claim maps to a row of [section 5](#5-capability-claims-and-the-evidence-each-needs)
-  whose evidence exists; the tag points at a commit with a successful hosted CI run; the licence decision (including
-  "no licence, all rights reserved", if chosen) is written down; the status table below is final.
+    `npm run verify` and `git diff --check` pass.
+  - Nothing is published: no repository setting is changed and no workflow is dispatched.
+- **Not in this step.** Publication (step 8), portfolio materials (step 9) and product features.
+- **Status: done (2026-11-24, fresh local checks).** The workflow has not run on GitHub, Pages is not enabled and nothing
+  is published. Decided in [ADR-0101](adr/0101-github-pages-showcase-publication.md); operated by the
+  [runbook](runbooks/showcase.md#3-publishing-on-github-pages).
+  - **Showcase changes.** Every state shows "Source code on GitHub" (`https://github.com/AlexTikhon/SomaLane`) and says
+    the full application runs locally. `SHOWCASE_APP_URL`, its validation module and its tests are removed.
+  - **Workflow.** `.github/workflows/showcase-pages.yml`, pinned by `scripts/showcase-pages-workflow.test.mjs`. The
+    showcase browser check now serves the build under `/SomaLane/`, fails any request outside that path, and covers a
+    direct reload and the exact file set.
+  - **Evidence.** [Verification report](reports/showcase-pages-preparation-2026-11-24.md):
+    - showcase unit tests 55;
+    - workflow structure tests 15;
+    - the showcase browser check 25 passed: Chromium 9, Firefox 3, WebKit desktop 9 and WebKit phone-sized 4;
+    - the publish build byte-identical to the tested build (`diff -r`);
+    - `npm run verify` and `git diff --check`.
+
+    Hosted CI and the Pages workflow: **NOT RUN**.
+
+### Step 8. GitHub Pages publication and hosted showcase smoke
+
+- **Outcome.** The step-7 workflow publishes the showcase on GitHub Pages, and its hosted behaviour is checked and
+  recorded.
+- **Depends on.** Step 7. Needs the owner to **enable Pages with "GitHub Actions" as its source** (with the
+  `github-pages` environment limited to `main`) and to **dispatch the workflow** on `main`
+  ([section 7](#7-external-inputs-needed-later)).
+- **Acceptance.**
+  - Two successful runs for the published commit, both checked at their source (`gh run view`) and recorded with their
+    ids: hosted CI (`ci.yml`), then `showcase-pages.yml` on `main`.
+  - The published address is the one `actions/deploy-pages` reported, and it is recorded. The expected
+    `https://alextikhon.github.io/SomaLane/` counts as confirmed only if the two match.
+  - The hosted checks H1–H11 of the [runbook](runbooks/showcase.md#34-hosted-checks-release-step-8) are recorded:
+    - status codes and the snapshot digest;
+    - the journey in desktop Chromium and Firefox, with the label and the source link;
+    - a reload;
+    - only the page's own files are requested, and no cookie or storage is written;
+    - the broken-data-file state.
+  - No Safari or phone claim is made unless a physical device is recorded.
+- **Not in this step.** No custom domain, no full-application hosting, no analytics.
+
+### Step 9. Portfolio materials, screenshots, changelog and licence
+
+- **Outcome.** These materials exist, all drawn from synthetic data:
+  - the README and screenshots, from the hosted showcase where it fits;
+  - a current interview package, the full editorial rewrite deferred from step 1;
+  - a `CHANGELOG`;
+  - the owner's licence decision, recorded and applied.
+- **Depends on.** Step 8, and the owner's **licence decision**.
+- **Acceptance.**
+  - Every public claim maps to a row of [section 5](#5-capability-claims-and-the-evidence-each-needs) whose evidence
+    exists.
+  - The deferred scope is stated wherever it matters: the full application is a local demonstration, and there is no
+    real identity provider, hosted application or hosted restore.
+  - The licence decision (including "no licence, all rights reserved", if chosen) is written down and applied.
 - **Not in this step.** No new features or late fixes outside a recorded defect.
+
+### Step 10. Final verification, release tag and project freeze
+
+- **Outcome.** The release is verified once more, tagged and frozen.
+- **Depends on.** Steps 1–9.
+- **Acceptance.**
+  - Hosted CI succeeds for the commit to tag.
+  - The showcase published from that commit passes the hosted checks (all of H1–H11, or a recorded subset).
+  - The status table below is final.
+  - The release tag points at that commit.
+  - The freeze is written down: after the tag, only recorded defects may change.
+- **Not in this step.** No new features.
 
 ## 4. Mandatory release gates
 
@@ -338,37 +410,45 @@ Portfolio v1 is published only when all of these hold.
 
 | Gate | Holds when | Step |
 |---|---|---|
-| G1 Scope | This plan is current and the status table is final | 1, 10 |
+| G1 Scope | This plan is current and the status table is final | 1, 7, 10 |
 | G2 Synthetic dataset | The 56-date dataset is reproducible and isolated | 2 |
 | G3 Primary journey | Records → Today → weekly review → Trends → records works on the dataset in Chromium, with the Firefox core gate passing; active-run recovery and capture lifetime unchanged | 3 |
 | G4 Bundle | Before/after initial-bundle measurements are recorded | 4 |
-| G5 Showcase safety | Showcase is labelled, read-only and synthetic; no anonymous private-route access; development sign-in refused in production | 5, 9 |
+| G5 Showcase safety | The showcase is labelled, read-only, synthetic and static: no API or sign-in request, cookie, storage write or analytics. The full application's guards are unchanged: no anonymous private-route access, and development sign-in refused in production | 5, 7, 8 |
 | G6 WebKit gate | The bounded WebKit gate has run and its result is recorded | 6 |
-| G7 Real identity provider | Invite-only sign-in verified against the real provider on the hosted origin | 7, 9 |
-| G8 Deployment | Reproducible single-host deployment from the runbook | 8 |
-| G9 Hosted verification | Hosted smoke and an isolated restore recorded | 9 |
-| G10 Defaults | Every AI provider off in the hosted configuration | 8, 9 |
-| G11 CI and materials | Successful hosted CI for the tagged commit; changelog, licence decision, tag | 10 |
+| G7 Publication workflow | The separate manual Pages workflow exists with least privilege, uploads only the showcase and deploys only after validation; the public build is validated under `/SomaLane/` | 7 |
+| G8 Hosted showcase | That workflow has published the showcase; the reported URL and the hosted checks are recorded | 8 |
+| G9 Defaults | Every AI provider off by default in code; no AI output in the showcase | 5, 10 |
+| G10 CI and materials | Successful hosted CI for the tagged commit; screenshots, changelog, licence decision, tag | 9, 10 |
 
 Physical-device evidence is **not** a mandatory gate. Without it the release is described as desktop-scoped.
+
+The gate table was renumbered on 2026-11-24. The former gates below are now deferred
+([section 6.1](#61-deferred-by-the-scope-change-of-2026-11-24)) and no longer gate v1; none of them is met:
+
+- G7, real identity provider;
+- G8, single-host deployment;
+- G9, hosted smoke and isolated restore.
+
+The former G10 (AI off in the hosted configuration) is now G9, which covers the code defaults and the showcase.
 
 ## 5. Capability claims and the evidence each needs
 
 A capability may be advertised only when its evidence exists. Otherwise the release materials either omit it or state
 the limit.
 
-| Claim | Evidence required | Current status (2026-11-22) |
+| Claim | Evidence required | Current status (updated 2026-11-24) |
 |---|---|---|
 | Works in desktop Chromium; Firefox core flows | Hosted CI for the commit | Met for `1dac6ed` (run 45055752618, checked 2026-11-23); earlier `6f3dc46` (run 44885261535). Later commits need their own run |
 | WebKit automation | Step-6 gate result | Met locally on 2026-11-23: 47/47 in Playwright WebKit 26.6 on Windows ([report](reports/webkit-gate-verification-2026-11-23.md)); hosted CI job added, NOT RUN. Not Safari, not a phone |
 | **iPhone / Safari compatibility** | Physical Safari checklist recorded on an iPhone | **NOT RUN**: must not be claimed |
 | **Mobile GPS accuracy** | Analysed real-device traces (D10) | **0 traces**, D10 PARTIAL: must not be claimed |
 | **Continuous or background recording** | Physical observation of a designed background mode | Not designed (capture is foreground only): must not be claimed |
-| Real sign-in | Step-7 real-provider evidence | Test provider only |
-| Hosted / deployed | Steps 8 and 9 | Not deployed |
-| Public read-only showcase of synthetic data | Step-5 evidence locally; the hosted check of step 9 | Built and tested locally against its static build with no API server ([report](reports/showcase-verification-2026-11-23.md)); not hosted, not in CI |
-| Backup and restore of hosted data | Step-9 isolated restore | Local drills only ([p12-4-restore-drill.md](reports/p12-4-restore-drill.md)); no production RPO/RTO |
-| Real map basemap | A real Mapbox token rendering on the hosted origin | Never rendered; the app works without a token |
+| **Real sign-in** | Real-provider evidence (deferred, [section 6.1](#61-deferred-by-the-scope-change-of-2026-11-24)) | Test provider only: must not be claimed |
+| **Hosted full application** | A hosted deployment and its smoke (deferred) | Not hosted; the full application is a local demonstration: must not be claimed |
+| Public read-only showcase of synthetic data | Steps 5 and 7 locally; the step-8 publication run and hosted checks | Built and tested locally against its static build with no API server ([step 5](reports/showcase-verification-2026-11-23.md)), also served under `/SomaLane/` ([step 7](reports/showcase-pages-preparation-2026-11-24.md)); **not published**, Pages workflow NOT RUN |
+| **Backup and restore of hosted data** | An isolated restore of a host's backup (deferred) | No hosted data; local drills only ([p12-4-restore-drill.md](reports/p12-4-restore-drill.md)); no production RPO/RTO: must not be claimed for a host |
+| Real map basemap | A real Mapbox token rendering on a hosted application (deferred) | Never rendered; the app works without a token |
 | **AI quality** (any feature) | A passing frozen gate at the current fingerprint **and** a separate decision to enable | Meal drafts FAIL; Ask my data stale (NOT_RUN); weekly insights and run search below target: must not be claimed |
 | Performance and load | The P11 measurements with their stated boundaries | Workstation only ([p11-5-measurements-after.md](reports/p11-5-measurements-after.md)) |
 | **Production-grade**, multi-replica or high availability | Not pursued in v1 | Must not be claimed |
@@ -390,6 +470,43 @@ Not part of portfolio v1. Each stays recorded where it is; nothing here is close
 - **Evidence.** **D10** stays PARTIAL until real traces are analysed; physical-device evidence beyond the step-6
   checklist.
 
+### 6.1 Deferred by the scope change of 2026-11-24
+
+The owner moved the former steps 7, 8 and 9 out of portfolio v1. Their requirements are kept here unchanged, so that
+the work can resume as written. None of it is done, and the release materials must not claim it.
+
+- **Real OIDC provider verification and reproducible provisioning** (former step 7):
+  - Sign-in works against one real OpenID Connect provider chosen by the owner.
+  - [identity-provider.md](runbooks/identity-provider.md) gives reproducible provisioning steps: client registration,
+    redirect URI, invited identities and the secret file.
+  - Real-provider evidence is recorded without secrets or personal identifiers: an invited identity signs in and out;
+    an uninvited identity is refused; a restart keeps the session (ADR-0080).
+  - The runbook's "Verification against a real provider: Not performed" row stays as it is until then.
+- **Reproducible single-host deployment** (former step 8). The full application on one host with the production
+  profile ([deployment.md](runbooks/deployment.md)): nginx with a real certificate, file-based secrets, AI off,
+  `LOCAL_AUTH_ENABLED=false` and the real provider configured.
+  - It is reproduced from the runbook alone on a clean host.
+  - `npm run deploy:verify`-equivalent checks pass for the host.
+  - The deletion-journal directory and the backup destination are named, and whether they are really off-host is
+    stated.
+- **Hosted critical-flow smoke and isolated backup/restore verification** (former step 9):
+  - A smoke against the hosted origin: real sign-in, the primary journey and the secondary demonstration, and an
+    anonymous request to a private route answering `401`.
+  - A backup made on the host is restored into an **isolated** environment, never over the hosted database, following
+    the documented order: `restore:reapply-deletions`, `restore:reapply-access`, `restore:reapply-erasures`,
+    `restore:clear-sessions`.
+  - Measured times describe that drill only.
+
+**Unchanged while deferred.** The full application's safeguards stay implemented and tested by CI as before; nothing is
+removed or weakened:
+
+- invite-only OIDC sign-in with PKCE, state and nonce;
+- durable sessions;
+- the refusal of `LOCAL_AUTH_ENABLED=true` with `APP_ENV=production` (`apps/api/src/config/environment.ts`);
+- no anonymous access to private routes;
+- the production profile and `npm run deploy:verify`;
+- backups and the restore drill.
+
 **Known limitations that remain true** (documented, not fixed in v1): an erasure not yet exported when the host is lost
 can come back after a restore (one export interval plus any backlog,
 [recovery limits](runbooks/deletion-journal-and-recovery.md#failure-modes-and-honest-limits)); two devices editing the
@@ -400,22 +517,28 @@ API; revoked live data already delivered cannot be recalled; the archive tile ca
 
 Each input must be confirmed or configured before the step that needs it starts. Having an input available is not the
 same as having it verified: availability means it can be used, and verification is recorded evidence from the step
-itself. This plan makes no claim about whether hosting, a domain, a certificate or a provider account is available yet.
+itself. This plan makes no claim about whether any deferred input (a host, a domain, a certificate, a provider
+account, off-host storage) is available.
 The existing documentation records that the owner has an iPhone ([ADR-0085](adr/0085-iphone-lan-pilot.md)), but every
-physical Safari check is still NOT RUN ([iphone-lan-pilot.md](reports/iphone-lan-pilot.md)). Optional inputs do not
-block the release: the physical iPhone checklist (a desktop-scoped release does not need it) and the Mapbox token. All
-other inputs block the step named.
+physical Safari check is still NOT RUN ([iphone-lan-pilot.md](reports/iphone-lan-pilot.md)). The physical iPhone
+checklist is optional and does not block the release (a desktop-scoped release does not need it). All other inputs
+block the step named.
 
 | Input | Needed by | Owner's decision or action |
 |---|---|---|
-| Hosting: one Linux host with Docker Compose v2 | Step 8 | Provider, size, cost and access |
-| DNS name for the hosted origin | Steps 7–8 | Domain and records |
-| TLS certificate for that name | Step 8 | Issuer and renewal method |
-| Identity-provider tenant, client registration, invited identities | Step 7 | Provider choice and configuration |
-| Off-host storage for backups and the deletion journal | Steps 8–9 | Location and key custody |
+| GitHub Pages enabled for the repository with "GitHub Actions" as its source, and the `github-pages` environment limited to `main` ([runbook, 3.2](runbooks/showcase.md#32-one-time-repository-setup-the-owner-in-githubs-web-interface)) | Step 8 | Change the repository settings (the repository is public; Pages was not enabled on 2026-11-24) |
+| A manual run of the Pages workflow on `main` | Step 8 | Start the run after CI succeeded for the commit |
 | Physical iPhone with Safari on the workstation's Wi-Fi | Step 6 (optional for a desktop-scoped release) | Time to run and record the checklist (the device is recorded as available; the checks are NOT RUN) |
-| Optional public Mapbox token restricted to the origin | Step 8 (optional) | Whether to show a real basemap |
-| Licence decision | Step 10 | Licence or "all rights reserved" |
+| Licence decision | Step 9 | Licence or "all rights reserved" |
+
+No longer needed for v1, deferred with the work that needs them
+([section 6.1](#61-deferred-by-the-scope-change-of-2026-11-24)):
+
+- a Linux host with Docker Compose v2;
+- a DNS name and a TLS certificate;
+- an identity-provider tenant, client registration and invited identities;
+- off-host storage for backups and the deletion journal;
+- the optional Mapbox token.
 
 ## 8. Status
 
@@ -427,7 +550,8 @@ other inputs block the step named.
 | 4. Initial-bundle reduction | **Done** (2026-11-23) | [Report](reports/initial-bundle-verification-2026-11-22.md), including its independent review and hosted CI evidence; candidate `dff831a`; progress entries of 2026-11-22 (local checks; no local full Chromium/OIDC run free of failures) and 2026-11-23 (hosted CI run 45055752618, `success` for `1dac6ed`) |
 | 5. Public read-only showcase | **Done** (2026-11-23) | [ADR-0099](adr/0099-public-read-only-showcase.md), [report](reports/showcase-verification-2026-11-23.md); progress entry of 2026-11-23 (fresh local checks; not hosted; not run in CI) |
 | 6. WebKit gate and physical Safari | **Done** (2026-11-23); physical checklist **NOT RUN**, release desktop-scoped | [ADR-0100](adr/0100-bounded-webkit-gate.md), [report](reports/webkit-gate-verification-2026-11-23.md); progress entry of 2026-11-23 (agent-run workstation automation; not run in hosted CI) |
-| 7. Real OIDC provider | Not started (external input; next) | — |
-| 8. Single-host deployment | Not started (external input) | — |
-| 9. Hosted smoke and isolated restore | Not started | — |
-| 10. Materials, changelog, licence, tag | Not started | — |
+| 7. Static publication preparation | **Done** (2026-11-24) | [ADR-0101](adr/0101-github-pages-showcase-publication.md), [report](reports/showcase-pages-preparation-2026-11-24.md); progress entry of 2026-11-24 (fresh local checks; the Pages workflow has not run; nothing published) |
+| 8. GitHub Pages publication and hosted showcase smoke | Not started (owner action; next) | — |
+| 9. Portfolio materials, screenshots, changelog, licence | Not started (licence decision) | — |
+| 10. Final verification, release tag, project freeze | Not started | — |
+| Deferred on 2026-11-24: real OIDC provider, single-host deployment, hosted smoke and isolated restore | **Deferred, not done** | [Section 6.1](#61-deferred-by-the-scope-change-of-2026-11-24) |

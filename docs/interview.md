@@ -480,8 +480,9 @@ same rule and are also off by default: meal "Draft from text" failed its latest 
 data" works through predefined and guided questions without a model; its one passing model run is stale after a
 constraints correction. See the [release plan](portfolio-v1-release-plan.md#21-ai-evaluation-status).)*
 
-**"What would you do next?"** The portfolio v1 release plan answers this now: a synthetic 56-day dataset, a public
-read-only showcase, a real identity provider, a single-host deployment with a hosted smoke and an isolated restore.
+**"What would you do next?"** The portfolio v1 release plan answers this now: a synthetic 56-day dataset and a public
+read-only showcase on GitHub Pages, with the full application as a local demonstration. A real identity provider, a
+single-host deployment with a hosted smoke and an isolated restore are deferred beyond v1 (scope change of 2026-11-24).
 Real-device GPS traces (D10) and phone checks gate only the claims that depend on them. The shared session store is
 done (sessions and pending logins in PostgreSQL); a second API instance would still need the remaining per-process
 state reviewed.
