@@ -710,6 +710,15 @@ npm run test:e2e:firefox
 
 The `firefox-core` project runs the existing specs, unchanged, for the core workflows: `record`, `reload-offline`, `second-tab`, `gps-recovery`, `run-sharing`, `archive-sharing` and `coach-map`. That is 18 tests, about four minutes. Its spec allowlist is in `tests/e2e/playwright.config.ts`. It excludes the one test tagged `@real-map-runtime`, the real Mapbox/WebGL smoke, so in Firefox the Coach map is covered only with the fake runtime; Chromium still runs the smoke. Run `npx playwright install` from `tests/e2e` so it installs the browser build that the installed `@playwright/test` pins. A bare `npx playwright test` there includes every project, so pass `--project` on a machine without Firefox.
 
+A bounded WebKit gate (release step 6, [ADR-0100](adr/0100-bounded-webkit-gate.md)) is also opt-in:
+
+```powershell
+cd tests/e2e; npx playwright install webkit; cd ../..
+npm run test:e2e:webkit
+```
+
+It runs 47 tests in three parts, one after the other, each building what it serves before its servers start: `webkit-desktop` (28: the 18 Firefox core tests, `session-revalidation` and `primary-journey`) and `webkit-phone` (the 4 `primary-journey` tests) against the development servers of `playwright.config.ts`; `production-webkit` (the 4 `production-build/deferred-views` tests) against the production build; and `showcase-webkit` (8) and `showcase-webkit-phone` (the 3 tests tagged `@phone`) against the showcase's static build with no API server. Each part can be run alone from `tests/e2e`: `npm run e2e:webkit:dev-server`, `npm run e2e:webkit:production-build`, `npm run e2e:webkit:showcase`. Desktop is 1280 × 720; phone-sized is 390 × 844 with device scale 3, `isMobile` and `hasTouch`, and Playwright WebKit's default user agent (which reads as desktop Safari on macOS on every host; no iPhone user agent is set, and the string is not evidence of Safari). The settings are in `tests/e2e/support/webkit-gate.ts`; failure traces and screenshots go to `tests/e2e/webkit-results/<project>`. It excludes `@real-map-runtime` (the Coach map runs only with the fake runtime, which is not evidence of a real basemap or WebGL) and OpenID Connect sign-in. This is Playwright's WebKit build, not Safari and not a phone; results are in [docs/reports/webkit-gate-verification-2026-11-23.md](reports/webkit-gate-verification-2026-11-23.md). `npm run test:e2e`, `test:e2e:firefox`, `test:e2e:production-build` and `test:e2e:showcase` select their own projects and never launch WebKit.
+
 A pre-demo smoke reuses eight of the suite's specs, unchanged, against a smaller stack (the API on 3100 with the run-search interpreter off and Vite on 5273 and 5276, both without a Mapbox token; no identity provider, OpenID Connect servers or map server):
 
 ```powershell
@@ -741,7 +750,7 @@ npm run test:integration
 
 ### Continuous integration
 
-`.github/workflows/ci.yml` runs on pull requests, on pushes to `main` and on demand ([ADR-0075](adr/0075-session-store-capacity-ci-shape-checkin-delete.md)). `verify` (`npm ci`, `npm run verify`, npm cache) is the gate; after it passes, `integration` (a PostGIS service with the docker-compose image, database and init script, then bootstrap, migrations and `npm run test:integration` including the restore drill), the three `e2e` Chromium shards and `e2e (firefox-core)` run in parallel. The workflow reads no secret: every credential in it is a fixed test-only value for a database that exists only inside the job. `scripts/ci-workflow.test.mjs` (part of `npm test`) pins that shape.
+`.github/workflows/ci.yml` runs on pull requests, on pushes to `main` and on demand ([ADR-0075](adr/0075-session-store-capacity-ci-shape-checkin-delete.md)). `verify` (`npm ci`, `npm run verify`, npm cache) is the gate; after it passes, `integration` (a PostGIS service with the docker-compose image, database and init script, then bootstrap, migrations and `npm run test:integration` including the restore drill), the three `e2e` Chromium shards, `e2e (firefox-core)` and `e2e (webkit gate)` (the three parts of `npm run test:e2e:webkit` as three steps, ADR-0100; added 2026-11-23, no hosted run yet) run in parallel. The workflow reads no secret: every credential in it is a fixed test-only value for a database that exists only inside the job. `scripts/ci-workflow.test.mjs` (part of `npm test`) pins that shape.
 
 ## Database migrations
 

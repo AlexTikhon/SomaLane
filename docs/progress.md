@@ -5925,3 +5925,54 @@ lint clean, scripts 122, API 2,832, web 1,529, contracts 325, fixtures 14, simul
 that build exit 0; `git diff --check` clean. `openapi.json` line endings restored again. Browser suites not rerun
 (ignore-only change). Details: [verification report](reports/showcase-verification-2026-11-23.md#follow-up-showcase-build-output-excluded-from-lint-2026-11-23).
 Still uncommitted.
+
+## Portfolio v1 release step 6: bounded WebKit gate (ADR-0100) (2026-11-23)
+
+**Outcome.** A bounded, opt-in WebKit gate in Playwright at a desktop and a phone-sized setting, decided in
+[ADR-0100](adr/0100-bounded-webkit-gate.md). Kind of evidence: agent-run workstation automation. Playwright WebKit is
+WebKit automation, not Safari and not a phone.
+
+- **Command.** `npm run test:e2e:webkit` (builds contracts and fixtures, then `npm run e2e:webkit` in `tests/e2e`):
+  `e2e:webkit:dev-server` (`webkit-desktop`, `webkit-phone` in `playwright.config.ts`), `e2e:webkit:production-build`
+  (the measured production build first, then `production-webkit`), `e2e:webkit:showcase` (the showcase build first,
+  then `showcase-webkit`, `showcase-webkit-phone`, no API server). Settings in `tests/e2e/support/webkit-gate.ts`;
+  failure output in `tests/e2e/webkit-results/` (git-ignored).
+- **Scenarios (47).** Desktop 28: the 18 Firefox core tests, `session-revalidation` 6, `primary-journey` 4. Phone-sized
+  4: `primary-journey`. Production build 4: `deferred-views`. Showcase 8 + 3 (`@phone` tag). Excluded: the real
+  Mapbox/WebGL smoke (`@real-map-runtime`; fake map runtime only, no real-basemap claim) and OpenID Connect sign-in.
+- **Settings.** Desktop 1280 × 720; phone-sized 390 × 844, scale 3, `isMobile`, `hasTouch`; Playwright WebKit's default
+  user agent (it names macOS Safari 26.6 on every host; no iPhone user agent set).
+- **Existing commands.** `e2e:production-build` and `e2e:showcase` now name their projects; every existing project's
+  `--list` is unchanged (192, 18, 5, 48 byte-identical; showcase 10 with the same titles, only line numbers moved).
+- **Observed WebKit behaviour, handled narrowly.** Tab never focuses a link (also with Alt+Tab): the showcase keyboard
+  test, WebKit only, checks that Tab skips the link and then the same order from the focused link. A failed dynamic
+  import names no URL in WebKit (`Importing a module script failed.`), so `deferred-module.ts`'s `?retry=` fallback is
+  never taken; WebKit fetches the same URL again, so the importer's own retry recovers (now asserted in the production
+  retry test and a unit test). No application source changed.
+- **CI.** New job `e2e (webkit gate)` (pinned PostGIS image, compose init script, bootstrap, migrations, WebKit cached
+  per Playwright version, three steps, failure artifact `playwright-webkit-gate`); `scripts/ci-workflow.test.mjs` pins it
+  and that no existing job or command selects WebKit.
+
+| Check (fresh, this change) | Result |
+|---|---|
+| WebKit install | `npx playwright install webkit` → WebKit 26.6 (build 2359), pinned by `@playwright/test` 1.63.0; no dependency changed |
+| Test database identity before write-based suites (read-only) | `running_tracker_test` on 127.0.0.1:5433 as runtime, maintenance and owner roles (system id `…4838`), 43/43 migrations; dataset container stopped and untouched |
+| Initial WebKit runs | showcase 9 passed, 2 failed (Tab skips links; traces in `.local/webkit-gate/failures/initial-showcase/`), then 11 passed; production build 4 passed; development servers 32 passed (first run) |
+| Module-loader probe (Chromium 153, Firefox 155, WebKit 26.6, real chunk, network failure and HTTP 503) | Chromium: no refetch, new URL needed; Firefox and WebKit: same URL refetched; only WebKit's message names no URL |
+| Focused tests | `deferred-module.spec.ts` 12 passed; `ci-workflow.test.mjs` 9 passed; E2E typecheck exit 0; ESLint of the changed files exit 0 |
+| `npm run verify` | exit 0: scripts 124, API 2,832, web 1,530, contracts 325, fixtures 14, simulator 3, build |
+| **`npm run test:e2e:webkit`, final code** | **47 passed** (32 in 6.2 min, 4 in 26.5 s, 11 in 20.7 s), 0 failed, 0 skipped, retries 0 |
+| `npm run test:e2e:production-build` (existing, Chromium + Firefox) | **5 passed** |
+| `npm run test:e2e:showcase` (existing, Chromium + Firefox) | **10 passed** |
+| `npm run test:e2e:firefox` | **18 passed** (3.5 min) |
+| `npm run test:e2e` (full Chromium + OIDC; run because `playwright.config.ts` gained projects) | **192 passed**, 0 failed, 20.2 min, one run |
+| Links of changed docs, `git diff --check` | 191 relative links and anchors (including this entry) resolve; clean |
+
+Evidence and limits: [verification report](reports/webkit-gate-verification-2026-11-23.md). `openapi.json`, rewritten
+with line endings only by the contracts builds, was restored. **Hosted CI: NOT RUN** for this change (the job exists;
+nothing was pushed). **Physical Safari checklist: NOT RUN**
+([iphone-lan-pilot.md](reports/iphone-lan-pilot.md) unchanged); no iPhone, Safari, background-recording or real-GPS
+claim; the release stays desktop-scoped. AI-quality limitations unchanged. Step 6's acceptance criteria hold (the gate's
+scenarios are listed, it has run and its result is recorded; the physical checklist is explicitly NOT RUN), so **step 6
+is done; next task: release step 7, real OIDC provider verification (needs the owner's identity-provider
+configuration).** Changes are uncommitted.

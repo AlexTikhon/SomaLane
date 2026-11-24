@@ -2,8 +2,9 @@
 
 - Status: **active**. Steps 1 (this document), 2 (the isolated 56-date synthetic dataset), 3 (navigation and first-use
   flow), 4 (measured initial-bundle reduction; its full-suite gate closed by hosted CI run 45055752618 on 2026-11-23) and
-  5 (the public read-only synthetic showcase, 2026-11-23, local evidence) of 10 are done. The **next task is step 6**,
-  the bounded WebKit/mobile gate and the optional physical Safari observations.
+  5 (the public read-only synthetic showcase, 2026-11-23, local evidence) and 6 (the bounded WebKit gate, 2026-11-23,
+  local evidence; physical Safari checklist NOT RUN, so the release is desktop-scoped) of 10 are done. The **next task
+  is step 7**, real OIDC provider verification, which needs the owner's identity-provider configuration.
 - Date: 2026-11-22. Baseline: `main` at `6f3dc46` (Nutrition Trends v2, ADR-0096).
 - Authority: this is the single source of truth for what portfolio v1 contains, which evidence it needs, and what is
   deferred. Where an older document names a different "next milestone" (for example the iPhone pilot of ADR-0085 as
@@ -267,6 +268,21 @@ run, and updates the [status table](#8-status) below. A step adds no feature bey
     run, no iPhone or Safari compatibility is claimed and the release is described as desktop-scoped.
 - **Not in this step.** No background recording, no GPS accuracy work (D10 stays PARTIAL unless real traces are
   analysed), no native app.
+- **Status: done (2026-11-23, agent-run workstation automation; not run in hosted CI). Physical checklist NOT RUN; the
+  release is desktop-scoped.** [ADR-0100](adr/0100-bounded-webkit-gate.md): `npm run test:e2e:webkit`, 47 tests of
+  existing specs in Playwright WebKit 26.6 (build 2359, pinned by `@playwright/test` 1.63.0) on Windows 11, at a desktop
+  setting (1280 × 720) and a phone-sized one (390 × 844, scale 3, `isMobile`, `hasTouch`, no iPhone user agent):
+  development servers (the 18 Firefox core tests, session revalidation 6 and the primary journey 4 at desktop; the
+  primary journey 4 at phone size), the production build (deferred views 4: loading, failure, Try again, recovery after
+  the network returns, leaving while loading, recording without the chunk) and the showcase's static build with no API
+  server (8 at desktop, 3 at phone size, request and storage guards on). Excluded: the real Mapbox/WebGL smoke (the
+  Coach map ran only with a fake runtime; no real-basemap claim) and OpenID Connect sign-in. Evidence:
+  [verification report](reports/webkit-gate-verification-2026-11-23.md): initial runs 32/32, 4/4 and 9 of 11 (WebKit's
+  Tab skips links; test adjusted for WebKit only), final run on the final code 47/47; WebKit's failed dynamic import names
+  no URL, so `deferred-module.ts`'s new-URL fallback is never taken there, and recovery works because WebKit fetches the
+  same URL again (observed, now asserted; no source change). A CI job `e2e (webkit gate)` was added; **hosted CI NOT
+  RUN**. The physical Safari checklist in [iphone-lan-pilot.md](reports/iphone-lan-pilot.md) stays **NOT RUN**: no
+  iPhone, Safari, background-recording or real-GPS claim. Playwright WebKit is recorded as WebKit automation, not Safari.
 
 ### Step 7. Real OIDC provider verification and reproducible provisioning
 
@@ -344,7 +360,7 @@ the limit.
 | Claim | Evidence required | Current status (2026-11-22) |
 |---|---|---|
 | Works in desktop Chromium; Firefox core flows | Hosted CI for the commit | Met for `1dac6ed` (run 45055752618, checked 2026-11-23); earlier `6f3dc46` (run 44885261535). Later commits need their own run |
-| WebKit automation | Step-6 gate result | Not run (no WebKit project exists) |
+| WebKit automation | Step-6 gate result | Met locally on 2026-11-23: 47/47 in Playwright WebKit 26.6 on Windows ([report](reports/webkit-gate-verification-2026-11-23.md)); hosted CI job added, NOT RUN. Not Safari, not a phone |
 | **iPhone / Safari compatibility** | Physical Safari checklist recorded on an iPhone | **NOT RUN**: must not be claimed |
 | **Mobile GPS accuracy** | Analysed real-device traces (D10) | **0 traces**, D10 PARTIAL: must not be claimed |
 | **Continuous or background recording** | Physical observation of a designed background mode | Not designed (capture is foreground only): must not be claimed |
@@ -410,8 +426,8 @@ other inputs block the step named.
 | 3. Navigation and first-use flow | **Done** | [Report](reports/navigation-first-use-verification-2026-11-22.md); progress entry of 2026-11-22 (fresh checks; not run in CI) |
 | 4. Initial-bundle reduction | **Done** (2026-11-23) | [Report](reports/initial-bundle-verification-2026-11-22.md), including its independent review and hosted CI evidence; candidate `dff831a`; progress entries of 2026-11-22 (local checks; no local full Chromium/OIDC run free of failures) and 2026-11-23 (hosted CI run 45055752618, `success` for `1dac6ed`) |
 | 5. Public read-only showcase | **Done** (2026-11-23) | [ADR-0099](adr/0099-public-read-only-showcase.md), [report](reports/showcase-verification-2026-11-23.md); progress entry of 2026-11-23 (fresh local checks; not hosted; not run in CI) |
-| 6. WebKit gate and physical Safari | Not started (next) | — |
-| 7. Real OIDC provider | Not started (external input) | — |
+| 6. WebKit gate and physical Safari | **Done** (2026-11-23); physical checklist **NOT RUN**, release desktop-scoped | [ADR-0100](adr/0100-bounded-webkit-gate.md), [report](reports/webkit-gate-verification-2026-11-23.md); progress entry of 2026-11-23 (agent-run workstation automation; not run in hosted CI) |
+| 7. Real OIDC provider | Not started (external input; next) | — |
 | 8. Single-host deployment | Not started (external input) | — |
 | 9. Hosted smoke and isolated restore | Not started | — |
 | 10. Materials, changelog, licence, tag | Not started | — |

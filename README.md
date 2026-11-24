@@ -118,7 +118,7 @@ Details and the roadmap: [docs/product-direction.md](docs/product-direction.md).
 | `db/migrations` | 43 SQL migrations (`0000`–`0042`), checksummed and applied in order |
 | `infra/` | Compose files (development, loopback TLS, production, iPhone pilot), nginx proxy, API images |
 | `scripts/` | setup, demo, profile verification, pilot tooling, and their tests |
-| `tests/e2e` | Playwright browser suite (Chromium, an OpenID Connect project, a Firefox core gate) |
+| `tests/e2e` | Playwright browser suite (Chromium, an OpenID Connect project, a Firefox core gate, a WebKit gate) |
 | `docs/` | release plan, design, 96 decision records, runbooks, reports and the progress log |
 
 ## Quick start
@@ -196,6 +196,7 @@ synthetic snapshots: no sign-in, no API request, no write, labelled "Read-only s
 | `npm run verify` | lint, typecheck, unit tests of every workspace and the scripts, build (3,168 tests on 2026-11-09) |
 | `npm run test:integration` | API against a real PostgreSQL `_test` database: RLS, roles, HTTP, maintenance, backup and the restore drill (about 980 tests) |
 | `npm run test:e2e` | Playwright, Chromium plus a real OpenID Connect provider process (146 tests); `npm run test:e2e:firefox` runs an 18-test Firefox core gate |
+| `npm run test:e2e:webkit` | the bounded WebKit gate (47 tests): Playwright WebKit at a desktop and a phone-sized setting on the development servers, the production build and the showcase's static build (ADR-0100; WebKit automation, not Safari or a phone) |
 | `npm run test:e2e:smoke` | a 24-test pre-demo smoke on its own ports |
 | `npm run test:portfolio-dataset`, `npm run test:e2e:portfolio-dataset` | the synthetic dataset on throwaway databases inside its isolated server, and a Chromium walkthrough of the populated screens (after `npm run portfolio:dataset`; not in CI) |
 | `npm run measure:web-bundle`, `npm run test:e2e:production-build` | the initial JavaScript and CSS of the production build, raw and gzip (`-- --ref <commit>` for a commit), and a Chromium/Firefox check of that build's chunk requests and of loading, failure and retry of the on-demand views (ADR-0098; not in CI) |
@@ -204,8 +205,8 @@ synthetic snapshots: no sign-in, no API request, no write, labelled "Read-only s
 
 The integration and browser suites need the test database first (`npm run db:up`, `npm run db:bootstrap:test`,
 `npm run db:migrate:test`); run them one at a time, since they share it. CI
-([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs `verify`, then integration, three Chromium shards and the
-Firefox gate, on pushes to `main`, on pull requests and on demand. It reads no secrets.
+([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs `verify`, then integration, three Chromium shards, the
+Firefox gate and the WebKit gate, on pushes to `main`, on pull requests and on demand. It reads no secrets.
 
 ## Operating it
 
@@ -226,7 +227,7 @@ Firefox gate, on pushes to `main`, on pull requests and on demand. It reads no s
 | [docs/portfolio-v1-release-plan.md](docs/portfolio-v1-release-plan.md) | **current**: release scope, the ten steps, gates, evidence required per claim, deferrals |
 | [docs/reference.md](docs/reference.md) | the detailed reference: API behaviour, data rules, configuration and verification for every feature |
 | [docs/SDD.md](docs/SDD.md) | the system design |
-| [docs/adr/](docs/adr/) | one decision record per slice (ADR-0001 to ADR-0099) |
+| [docs/adr/](docs/adr/) | one decision record per slice (ADR-0001 to ADR-0100) |
 | [docs/product-direction.md](docs/product-direction.md) | roadmap, principles and each slice's summary |
 | [docs/progress.md](docs/progress.md) | what was built and how it was verified, entry by entry |
 | [docs/runbooks/](docs/runbooks/) | how to run, demo, deploy, back up and pilot it |
@@ -238,8 +239,9 @@ Firefox gate, on pushes to `main`, on pull requests and on demand. It reads no s
 - Everything was verified on one Windows workstation and in GitHub Actions. Nothing is deployed, and no production
   recovery point or time is claimed.
 - Sign-in was tested only against a test OpenID Connect provider, never a real one.
-- The browser suite runs in Chromium, with a bounded Firefox gate. Nothing has run in Safari, on a phone or with real
-  GPS yet; the iPhone pilot's physical checks are pending
+- The browser suite runs in Chromium, with bounded Firefox and WebKit gates (Playwright's WebKit build at a desktop and
+  a phone-sized viewport). Nothing has run in Safari, on a phone or with real GPS yet; the iPhone pilot's physical checks
+  are pending
   ([docs/reports/iphone-lan-pilot.md](docs/reports/iphone-lan-pilot.md)).
 - No real Mapbox basemap was rendered in a test. The AI features (search in words, weekly insights, meal drafts, Ask my
   data interpretation) are off by default: none has valid passing model evidence for the current code (Ask my data's
