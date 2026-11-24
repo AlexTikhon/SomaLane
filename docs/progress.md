@@ -6100,3 +6100,61 @@ Evidence and limits: [step-6 report, section 10](reports/webkit-gate-verificatio
   were not touched), the full Chromium/OIDC suite and the integration suite.
 - **Not done:** no deploy, no repository or GitHub setting changed, no workflow dispatched. Nothing staged, committed or
   pushed. **Step 8 is not started**: Pages enablement, publication and the hosted checks H1–H11 are still pending.
+
+## Portfolio v1 release step 8: GitHub Pages publication and hosted showcase checks (2026-11-24)
+
+**Published:** <https://alextikhon.github.io/SomaLane/>, from `3bbe2b2f44ba57aba52ecbc8f5087f43b6cf5095` (`main`).
+Evidence: [verification report](reports/showcase-hosted-verification-2026-11-24.md). Kinds of evidence: hosted CI and
+hosted publication, read with `gh run view`, `gh api` and the job logs; agent-run hosted checks from the Windows
+workstation against the live site.
+
+- **Keyboard correction published.** The reviewed correction was already committed as `a3783ae` (test) and `3bbe2b2`
+  (docs). `git show` confirmed the five reviewed files and nothing else, and the historical counts quoted in them
+  match the logs of runs 45342998163 and 45354574755. The two commits were pushed normally: `6ceb34e..3bbe2b2`, no
+  force; `main` has no protection rule or ruleset.
+- **Hosted CI.** Run [45385170103](https://github.com/AlexTikhon/SomaLane/actions/runs/45385170103) for `3bbe2b2`,
+  attempt 1 (no rerun): `success`.
+  - `verify` and `integration` succeeded.
+  - `e2e (chromium 1/3, 2/3, 3/3)`: 70 + 60 + 62 passed.
+  - `e2e (firefox-core)`: 18 passed.
+  - `e2e (webkit gate)`: 32 + 4 + 13 passed. This is its first green hosted run, and it closes the prerequisite of the
+    previous entry.
+  - `e2e-report` skipped.
+- **Setup** (the owner's authorization for this step). Settings were read first: no Pages site, no environment, no
+  branch protection or ruleset, Actions allowed, default workflow permissions `read`.
+  - `gh api -X POST repos/AlexTikhon/SomaLane/pages -f build_type=workflow` set the source to GitHub Actions. Result:
+    `cname: null`, `https_enforced: true`.
+  - GitHub created the `github-pages` environment with `custom_branch_policies: true` and one branch policy, `main`.
+    It already met the requirement and was left unchanged.
+  - Nothing else changed, and no credential, secret, custom domain or paid resource was added.
+- **Pages run.** [45387434787](https://github.com/AlexTikhon/SomaLane/actions/runs/45387434787), dispatched with
+  `gh workflow run showcase-pages.yml --ref main` after checking that `main` was `3bbe2b2`. Head `3bbe2b2`, `success`.
+  - `validate and build the showcase`: unit tests 55; browser checks under `/SomaLane/` 25 (Chromium 9, Firefox 3,
+    WebKit 9 + 4); `diff -r` against the tested build; artifact 14916458047.
+  - `deploy to GitHub Pages`: deployment 8026957134, `Published at https://alextikhon.github.io/SomaLane/`. This equals
+    the expected address, which is now confirmed.
+
+| Hosted check (2026-11-24, 11:52–11:53 UTC) | Result |
+|---|---|
+| H1 address | PASS: reported URL = expected URL |
+| H2 `/SomaLane/` | PASS: 200 `text/html; charset=utf-8` |
+| H3 `/SomaLane` | PASS: 301 → `https://alextikhon.github.io/SomaLane/` |
+| H4 snapshot | PASS: SHA-256 `8ccbbcd0…4fd7628`, equal to the file at `3bbe2b2`; `application/json` |
+| H5 unknown path | PASS: 404 |
+| H6 Today, label, source link, sentence | PASS in Chromium 153 and Firefox 155 (Playwright, headless, 1280 × 900): label in view after scrolling; link opens `https://github.com/AlexTikhon/SomaLane` (200) |
+| H7 journey and return | PASS in both |
+| H8 reload on Trends, `index.html` | PASS in both; no page or console error |
+| H9 network | PASS in both: 4 `GET`s per load, all 200, all `alextikhon.github.io/SomaLane/…`; no `/api`, no other origin |
+| H10 storage | PASS in both: no cookie, Web Storage, IndexedDB, Cache Storage or service worker; no write attempted |
+| H11 blocked snapshot | PASS in both: blocked in the test browser only; alert, label and link stay; Try again requests the snapshot only |
+
+The live files are byte-identical to the downloaded `github-pages` artifact and to a local build of `3bbe2b2`. The
+browser checks ran 8 passed, 0 failed, no retries. They come from an agent-run Playwright script adapted from
+`tests/e2e/showcase/showcase.spec.ts`, kept in the git-ignored `tests/e2e/.local/hosted/` and not committed. Before
+the live run it was dry-run against `vite preview` (8 passed); that run is not hosted evidence.
+
+- **Limits.** Playwright automation in Chromium and Firefox, not branded browsers with developer tools, and not Safari
+  or a phone. The physical Safari checklist stays NOT RUN, and the release stays desktop-scoped. The site serves
+  `3bbe2b2` until the workflow runs again.
+- **Not done.** No code, test or workflow changed. Step 9 was not started: no licence, no release tag, no feature. This
+  entry, the report, the release plan, the README and the runbook are uncommitted, for review. **Step 8 is done.**

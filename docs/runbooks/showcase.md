@@ -3,15 +3,16 @@
 Audience: whoever regenerates, builds, reviews or publishes the showcase. Related:
 [ADR-0099](../adr/0099-public-read-only-showcase.md), [ADR-0101](../adr/0101-github-pages-showcase-publication.md)
 (GitHub Pages, the source link), [release plan, steps 7 and 8](../portfolio-v1-release-plan.md#step-7-static-publication-preparation),
-verification reports of [step 5](../reports/showcase-verification-2026-11-23.md) and
-[step 7](../reports/showcase-pages-preparation-2026-11-24.md), [portfolio dataset runbook](portfolio-dataset.md).
+verification reports of [step 5](../reports/showcase-verification-2026-11-23.md),
+[step 7](../reports/showcase-pages-preparation-2026-11-24.md) and [step 8](../reports/showcase-hosted-verification-2026-11-24.md)
+(publication and hosted checks), [portfolio dataset runbook](portfolio-dataset.md).
 
 The showcase is a static page that shows the primary journey (Today → Weekly review → Trends → the original day or its
 meals) from one file of synthetic snapshots. It needs no API, no database and no sign-in at run time, and it sends no
 request but for its own files. It is the only part of SomaLane meant to be published: the full application is not
-hosted and runs locally ([README, Quick start](../../README.md#quick-start)). The expected public address is
-**`https://alextikhon.github.io/SomaLane/`**. That address is expected, not confirmed: nothing is published until
-[section 3](#3-publishing-on-github-pages) has been carried out.
+hosted and runs locally ([README, Quick start](../../README.md#quick-start)). The public address is
+**`https://alextikhon.github.io/SomaLane/`**, confirmed by the deployment of 2026-11-24 (commit `3bbe2b2`, Pages run
+45387434787; [section 3.5](#35-current-publication)).
 
 ## 1. Commands
 
@@ -43,8 +44,9 @@ ignored. No `.env` file and no `VITE_*` variable is read by this build. The outp
 
 ## 3. Publishing on GitHub Pages
 
-Prepared in release step 7; carried out in release step 8. **Nothing is published yet**: on 2026-11-24 the repository
-had no Pages site (`gh api repos/AlexTikhon/SomaLane/pages` answered 404) and the workflow had never run.
+Prepared in release step 7; carried out in release step 8 on 2026-11-24. **Published**: the setup of 3.2 is in place
+and the site serves `3bbe2b2` ([section 3.5](#35-current-publication)). Every later publication is one run of 3.3,
+followed by the checks of 3.4.
 
 ### 3.1 What is published, and by what
 
@@ -72,6 +74,20 @@ integration suite or the application's browser suites: the CI workflow does that
    and no variables; the workflow uses none.
 3. **Settings → Actions → General**: Actions must be allowed for the repository. The default workflow permissions can
    stay read-only; each job of the workflow names its own.
+
+**Done on 2026-11-24** (step 8), with the owner's authorization. It was done through the REST API, which is equivalent
+to steps 1 and 2:
+
+```sh
+gh api repos/AlexTikhon/SomaLane/pages                                   # 404 before: no site
+gh api -X POST repos/AlexTikhon/SomaLane/pages -f build_type=workflow    # source: GitHub Actions
+gh api repos/AlexTikhon/SomaLane/environments/github-pages/deployment-branch-policies   # check: one policy, "main"
+```
+
+Enabling Pages made GitHub create the `github-pages` environment itself, with `custom_branch_policies: true` and a
+single branch policy `main`. Step 2 therefore needed no change and none was made. Result: `build_type: workflow`, no
+custom domain, HTTPS enforced. The environment has no secrets, variables or reviewers. `main` has no branch protection
+or ruleset, and Actions settings were not changed.
 
 ### 3.3 Run it
 
@@ -125,6 +141,29 @@ but the showcase.
 
 A phone browser may be added as an observation, but Playwright WebKit is not Safari: no Safari or iPhone claim follows
 from these checks unless a physical device is recorded ([release plan, section 5](../portfolio-v1-release-plan.md#5-capability-claims-and-the-evidence-each-needs)).
+
+How step 8 ran them ([report, sections 4 and 6](../reports/showcase-hosted-verification-2026-11-24.md#4-hosted-checks-h1h11)):
+
+- H1–H5 with `curl`.
+- H4's second digest from the commit itself: `git show <sha>:apps/web/showcase/public/showcase-snapshot.json | sha256sum`.
+- H6–H11 in Playwright's desktop Chromium and Firefox against the live URL, with the step-7 browser check's request
+  guard and storage instrumentation.
+- H11 by aborting the snapshot request in the test browser only; the hosted file is never removed.
+- In addition, the live files were compared with the run's `github-pages` artifact (`gh run download <run id> -n github-pages`).
+
+### 3.5 Current publication
+
+| Item | Value (2026-11-24) |
+|---|---|
+| Address (reported by `actions/deploy-pages`) | <https://alextikhon.github.io/SomaLane/> |
+| Published commit | `3bbe2b2f44ba57aba52ecbc8f5087f43b6cf5095` |
+| Hosted CI for it | [45385170103](https://github.com/AlexTikhon/SomaLane/actions/runs/45385170103), `success` (WebKit and Firefox gates included) |
+| Pages run | [45387434787](https://github.com/AlexTikhon/SomaLane/actions/runs/45387434787), `build` and `deploy` `success`; deployment 8026957134 |
+| Hosted checks | H1–H11 all passed ([report](../reports/showcase-hosted-verification-2026-11-24.md)) |
+| Snapshot SHA-256 | `8ccbbcd0406a11a0467bb2d915bb565c42b5147b9ace23692e154388b4fd7628` |
+
+The site changes only when the workflow runs again. After that, update this table from the new run and record its
+hosted checks.
 
 ## 4. What the export reads, and its guards
 

@@ -4,9 +4,10 @@
   flow), 4 (measured initial-bundle reduction; its full-suite gate closed by hosted CI run 45055752618 on 2026-11-23) and
   5 (the public read-only synthetic showcase, 2026-11-23, local evidence) and 6 (the bounded WebKit gate, 2026-11-23,
   local evidence; physical Safari checklist NOT RUN, so the release is desktop-scoped) and 7 (static publication
-  preparation for GitHub Pages, 2026-11-24, local evidence; nothing published) of 10 are done. The **next task is step
-  8**, the actual GitHub Pages publication and hosted showcase smoke. It needs the owner to enable Pages and run the
-  workflow.
+  preparation for GitHub Pages, 2026-11-24, local evidence) and 8 (the showcase published on GitHub Pages at
+  <https://alextikhon.github.io/SomaLane/> from `3bbe2b2`, 2026-11-24: hosted CI run 45385170103, Pages run 45387434787,
+  hosted checks H1–H11 passed) of 10 are done. The **next task is step 9** (portfolio materials, screenshots, changelog
+  and licence). It needs the owner's licence decision.
 - **Scope change (2026-11-24, the owner's decision).** Only the public read-only synthetic showcase is published (on
   GitHub Pages), and the full application stays available for local demonstrations. Deferred: real external OIDC
   verification, full-application hosting and hosted backup/restore verification
@@ -81,7 +82,7 @@ which.
 | **Recorded local verification** | Commands run on the Windows workstation and written down in [progress.md](progress.md) or a report at the time | The ADR-0096 entry of 2026-11-21: `npm run verify` exit 0, focused integration and Chromium runs |
 | **Fresh check** | A command run in the current change and reported with it | For this step: link, path and diff checks only (see the progress entry) |
 | **Real-provider evidence** | Behaviour observed against a real external service (identity provider, Mapbox, OpenAI) | **None yet.** OIDC was tested only against a test provider and a local `oidc-provider` process |
-| **Hosted publication** | A run of `.github/workflows/showcase-pages.yml` on `main`, and the hosted checks against the page URL that run reported | **None yet.** The workflow was prepared in step 7 and has never run |
+| **Hosted publication** | A run of `.github/workflows/showcase-pages.yml` on `main`, and the hosted checks against the page URL that run reported | Run [45387434787](https://github.com/AlexTikhon/SomaLane/actions/runs/45387434787) for `3bbe2b2`: `build` and `deploy` succeeded, reported URL `https://alextikhon.github.io/SomaLane/`; H1–H11 passed on 2026-11-24 ([report](reports/showcase-hosted-verification-2026-11-24.md)) |
 | **Physical-device evidence** | An owner's observation on a real phone, recorded in a report | **None yet.** [iphone-lan-pilot.md](reports/iphone-lan-pilot.md) lists every physical check as NOT RUN; D10 has 0 real traces |
 | **AI evaluation** | A frozen evaluation gate at the current code fingerprint | See [section 2.1](#21-ai-evaluation-status) |
 
@@ -299,8 +300,11 @@ run, and updates the [status table](#8-status) below. A step adds no feature bey
   fetches the same URL again (observed, now asserted; no source change). A CI job `e2e (webkit gate)` was added; **hosted
   CI NOT RUN** at the time. *Hosted CI, 2026-11-24:* runs 45342998163 and 45354574755 failed the showcase keyboard test
   in both WebKit projects, because Linux WebKit focuses the link with Tab. The test now takes the link-skipping path for
-  WebKit on Windows only. It passed in a local Linux container; a passing hosted run is **pending**
-  ([report, section 10](reports/webkit-gate-verification-2026-11-23.md#10-hosted-ci-correction-linux-webkit-tab-order-2026-11-24)).
+  WebKit on Windows only. It passed in a local Linux container
+  ([report, section 10](reports/webkit-gate-verification-2026-11-23.md#10-hosted-ci-correction-linux-webkit-tab-order-2026-11-24)),
+  then in hosted CI: run [45385170103](https://github.com/AlexTikhon/SomaLane/actions/runs/45385170103) for `3bbe2b2`
+  concluded `success` on 2026-11-24, `e2e (webkit gate)` 32 + 4 + 13 passed and `e2e (firefox-core)` 18 passed
+  ([step-8 report](reports/showcase-hosted-verification-2026-11-24.md#1-the-commit-and-its-hosted-ci-run)).
   The physical Safari checklist in [iphone-lan-pilot.md](reports/iphone-lan-pilot.md) stays **NOT RUN**: no
   iPhone, Safari, background-recording or real-GPS claim. Playwright WebKit is recorded as WebKit automation, not Safari.
 
@@ -379,6 +383,31 @@ deployment) and 9 (hosted smoke and isolated restore) are deferred with their re
     - the broken-data-file state.
   - No Safari or phone claim is made unless a physical device is recorded.
 - **Not in this step.** No custom domain, no full-application hosting, no analytics.
+- **Status: done (2026-11-24; hosted CI, hosted publication and agent-run hosted checks).**
+  [Verification report](reports/showcase-hosted-verification-2026-11-24.md).
+  - **Published commit** `3bbe2b2f44ba57aba52ecbc8f5087f43b6cf5095`. It contains the WebKit keyboard correction
+    (`a3783ae`, `3bbe2b2`), pushed to `main` without changes.
+  - **Hosted CI.** Run [45385170103](https://github.com/AlexTikhon/SomaLane/actions/runs/45385170103), attempt 1:
+    `success`. `verify`, `integration`, `e2e (chromium 1/3, 2/3, 3/3)` (192 passed), `e2e (firefox-core)` (18) and
+    `e2e (webkit gate)` (32 + 4 + 13) all succeeded.
+  - **Setup.** Pages was enabled through the REST API with `build_type: workflow`: no custom domain, HTTPS enforced.
+    GitHub created the `github-pages` environment with one deployment branch policy, `main`, and it was kept. Nothing
+    else was changed; `main` has no protection rules.
+  - **Pages run.** Run [45387434787](https://github.com/AlexTikhon/SomaLane/actions/runs/45387434787) on `main` at
+    `3bbe2b2`: `success`.
+    - `validate and build the showcase`: unit tests 55; browser checks 25 (Chromium 9, Firefox 3, WebKit 9 + 4);
+      `diff -r` against the tested build.
+    - `deploy to GitHub Pages`: deployment 8026957134.
+    - The reported URL, `https://alextikhon.github.io/SomaLane/`, equals the expected one and is **confirmed**.
+  - **Hosted checks H1–H11: all passed.**
+    - curl: 200 `text/html`; 301 from `/SomaLane` to `/SomaLane/`; 404 for an unknown path.
+    - The snapshot is served as `application/json`, and its SHA-256 `8ccbbcd0…4fd7628` equals the file at `3bbe2b2`.
+    - The live files are byte-identical to the uploaded artifact.
+    - Playwright's headless Chromium 153 and Firefox 155 against the live site: 8 passed (journey and return, labels,
+      source link, scrolling, reload and `index.html`).
+    - Only four `GET`s per load, all to `alextikhon.github.io/SomaLane/`; no storage or cookie.
+    - With the snapshot blocked in the test browser, the alert appears and **Try again** asks for the snapshot only.
+  - No Safari, iPhone or phone claim; the release stays desktop-scoped.
 
 ### Step 9. Portfolio materials, screenshots, changelog and licence
 
@@ -443,14 +472,14 @@ the limit.
 
 | Claim | Evidence required | Current status (updated 2026-11-24) |
 |---|---|---|
-| Works in desktop Chromium; Firefox core flows | Hosted CI for the commit | Met for `1dac6ed` (run 45055752618, checked 2026-11-23); earlier `6f3dc46` (run 44885261535). Later commits need their own run |
-| WebKit automation | Step-6 gate result | Met locally on 2026-11-23: 47/47 in Playwright WebKit 26.6 on Windows ([report](reports/webkit-gate-verification-2026-11-23.md)). Hosted CI (Linux) failed the showcase keyboard test in runs 45342998163 and 45354574755; corrected on 2026-11-24 and passing in a local Linux container; a passing hosted run is pending ([section 10](reports/webkit-gate-verification-2026-11-23.md#10-hosted-ci-correction-linux-webkit-tab-order-2026-11-24)). Not Safari, not a phone |
+| Works in desktop Chromium; Firefox core flows | Hosted CI for the commit | Met for `3bbe2b2` (run 45385170103, checked 2026-11-24); earlier `1dac6ed` (run 45055752618) and `6f3dc46` (run 44885261535). Later commits need their own run |
+| WebKit automation | Step-6 gate result | Met locally on 2026-11-23: 47/47 in Playwright WebKit 26.6 on Windows ([report](reports/webkit-gate-verification-2026-11-23.md)). Hosted CI (Linux) failed the showcase keyboard test in runs 45342998163 and 45354574755; corrected on 2026-11-24 ([section 10](reports/webkit-gate-verification-2026-11-23.md#10-hosted-ci-correction-linux-webkit-tab-order-2026-11-24)) and **met in hosted CI** for `3bbe2b2` (run 45385170103: `e2e (webkit gate)` 32 + 4 + 13 passed). Not Safari, not a phone |
 | **iPhone / Safari compatibility** | Physical Safari checklist recorded on an iPhone | **NOT RUN**: must not be claimed |
 | **Mobile GPS accuracy** | Analysed real-device traces (D10) | **0 traces**, D10 PARTIAL: must not be claimed |
 | **Continuous or background recording** | Physical observation of a designed background mode | Not designed (capture is foreground only): must not be claimed |
 | **Real sign-in** | Real-provider evidence (deferred, [section 6.1](#61-deferred-by-the-scope-change-of-2026-11-24)) | Test provider only: must not be claimed |
 | **Hosted full application** | A hosted deployment and its smoke (deferred) | Not hosted; the full application is a local demonstration: must not be claimed |
-| Public read-only showcase of synthetic data | Steps 5 and 7 locally; the step-8 publication run and hosted checks | Built and tested locally against its static build with no API server ([step 5](reports/showcase-verification-2026-11-23.md)), also served under `/SomaLane/` ([step 7](reports/showcase-pages-preparation-2026-11-24.md)); **not published**, Pages workflow NOT RUN |
+| Public read-only showcase of synthetic data | Steps 5 and 7 locally; the step-8 publication run and hosted checks | **Met**: published at <https://alextikhon.github.io/SomaLane/> from `3bbe2b2` by Pages run 45387434787; hosted checks H1–H11 passed in desktop Chromium and Firefox automation on 2026-11-24 ([step 8](reports/showcase-hosted-verification-2026-11-24.md)); earlier local evidence in [step 5](reports/showcase-verification-2026-11-23.md) and [step 7](reports/showcase-pages-preparation-2026-11-24.md). A snapshot of synthetic data, not a hosted application |
 | **Backup and restore of hosted data** | An isolated restore of a host's backup (deferred) | No hosted data; local drills only ([p12-4-restore-drill.md](reports/p12-4-restore-drill.md)); no production RPO/RTO: must not be claimed for a host |
 | Real map basemap | A real Mapbox token rendering on a hosted application (deferred) | Never rendered; the app works without a token |
 | **AI quality** (any feature) | A passing frozen gate at the current fingerprint **and** a separate decision to enable | Meal drafts FAIL; Ask my data stale (NOT_RUN); weekly insights and run search below target: must not be claimed |
@@ -530,8 +559,8 @@ block the step named.
 
 | Input | Needed by | Owner's decision or action |
 |---|---|---|
-| GitHub Pages enabled for the repository with "GitHub Actions" as its source, and the `github-pages` environment limited to `main` ([runbook, 3.2](runbooks/showcase.md#32-one-time-repository-setup-the-owner-in-githubs-web-interface)) | Step 8 | Change the repository settings (the repository is public; Pages was not enabled on 2026-11-24) |
-| A manual run of the Pages workflow on `main` | Step 8 | Start the run after CI succeeded for the commit |
+| GitHub Pages enabled for the repository with "GitHub Actions" as its source, and the `github-pages` environment limited to `main` ([runbook, 3.2](runbooks/showcase.md#32-one-time-repository-setup-the-owner-in-githubs-web-interface)) | Step 8 | **Done 2026-11-24** with the owner's authorization: Pages `build_type: workflow`; `github-pages` allows `main` only |
+| A manual run of the Pages workflow on `main` | Step 8 (and step 10 for the tagged commit) | **Done 2026-11-24** for `3bbe2b2` (run 45387434787), after CI run 45385170103 succeeded |
 | Physical iPhone with Safari on the workstation's Wi-Fi | Step 6 (optional for a desktop-scoped release) | Time to run and record the checklist (the device is recorded as available; the checks are NOT RUN) |
 | Licence decision | Step 9 | Licence or "all rights reserved" |
 
@@ -555,7 +584,7 @@ No longer needed for v1, deferred with the work that needs them
 | 5. Public read-only showcase | **Done** (2026-11-23) | [ADR-0099](adr/0099-public-read-only-showcase.md), [report](reports/showcase-verification-2026-11-23.md); progress entry of 2026-11-23 (fresh local checks; not hosted; not run in CI) |
 | 6. WebKit gate and physical Safari | **Done** (2026-11-23); physical checklist **NOT RUN**, release desktop-scoped | [ADR-0100](adr/0100-bounded-webkit-gate.md), [report](reports/webkit-gate-verification-2026-11-23.md); progress entry of 2026-11-23 (agent-run workstation automation; not run in hosted CI) |
 | 7. Static publication preparation | **Done** (2026-11-24) | [ADR-0101](adr/0101-github-pages-showcase-publication.md), [report](reports/showcase-pages-preparation-2026-11-24.md); progress entry of 2026-11-24 (fresh local checks; the Pages workflow has not run; nothing published) |
-| 8. GitHub Pages publication and hosted showcase smoke | Not started (owner action; next). Prerequisite open: a successful hosted CI run for the commit that contains the WebKit keyboard correction of 2026-11-24 | [WebKit report, section 10](reports/webkit-gate-verification-2026-11-23.md#10-hosted-ci-correction-linux-webkit-tab-order-2026-11-24); progress entry of 2026-11-24 (hosted WebKit correction) |
-| 9. Portfolio materials, screenshots, changelog, licence | Not started (licence decision) | — |
+| 8. GitHub Pages publication and hosted showcase smoke | **Done** (2026-11-24): published at <https://alextikhon.github.io/SomaLane/> from `3bbe2b2` | [Report](reports/showcase-hosted-verification-2026-11-24.md); hosted CI run [45385170103](https://github.com/AlexTikhon/SomaLane/actions/runs/45385170103) and Pages run [45387434787](https://github.com/AlexTikhon/SomaLane/actions/runs/45387434787), both `success`; H1–H11 passed (agent-run hosted checks in desktop Chromium and Firefox automation); progress entry of 2026-11-24 (step 8) |
+| 9. Portfolio materials, screenshots, changelog, licence | Not started (licence decision; next) | — |
 | 10. Final verification, release tag, project freeze | Not started | — |
 | Deferred on 2026-11-24: real OIDC provider, single-host deployment, hosted smoke and isolated restore | **Deferred, not done** | [Section 6.1](#61-deferred-by-the-scope-change-of-2026-11-24) |

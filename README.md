@@ -14,12 +14,12 @@ and grows one vertical slice at a time. Package names, database identifiers, coo
 > **Status (2026-11-24): preparing portfolio v1.** Feature work is paused for a finite, ten-step release plan:
 > [docs/portfolio-v1-release-plan.md](docs/portfolio-v1-release-plan.md). It defines the release, its mandatory gates
 > and what is deferred. **What gets published:** only a public, read-only showcase of synthetic data, as static files on
-> GitHub Pages (expected at <https://alextikhon.github.io/SomaLane/>, not published yet). **The full application** stays
+> GitHub Pages: **<https://alextikhon.github.io/SomaLane/>** (published on 2026-11-24 from `3bbe2b2`). **The full application** stays
 > a local demonstration: it runs from this repository (Quick start below), and its OpenID Connect sign-in and
 > production safeguards are unchanged. Real-provider sign-in, hosting the full application and a hosted backup/restore
 > drill are deferred (the owner's decision of 2026-11-24).
 >
-> Steps 1 to 7 are done:
+> Steps 1 to 8 are done:
 >
 > - step 2: an isolated, reproducible synthetic dataset over 56 calendar dates (`npm run portfolio:dataset`);
 > - step 3: Today-first navigation (ADR-0097);
@@ -27,11 +27,15 @@ and grows one vertical slice at a time. Package names, database identifiers, coo
 > - step 5: the read-only showcase (ADR-0099, `npm run build:showcase`);
 > - step 6: a bounded WebKit gate (ADR-0100; WebKit automation, not Safari);
 > - step 7: the showcase prepared for GitHub Pages, with a link to this source and a manual, least-privilege
->   publication workflow (ADR-0101; tested locally, never run on GitHub).
+>   publication workflow (ADR-0101);
+> - step 8: the showcase published on GitHub Pages by that workflow, after a successful hosted CI run for the same
+>   commit, and checked on the live site in desktop Chromium and Firefox automation
+>   ([report](docs/reports/showcase-hosted-verification-2026-11-24.md)).
 >
-> **Next task: step 8**, publishing the showcase on GitHub Pages and checking the hosted page.
+> **Next task: step 9**, portfolio materials, screenshots, a changelog and the licence decision.
 >
-> Today the app runs locally and in GitHub Actions (latest checked run: success for `1dac6ed`). The single-host
+> Today the showcase is published and the full application runs locally and in GitHub Actions (latest checked run:
+> success for `3bbe2b2`, run 45385170103). The single-host
 > production profile is verified on a workstation but not deployed anywhere. Sign-in has been tested against a test
 > OpenID Connect provider only. Nothing has been checked on a physical phone. Local use signs in with fixed demo people;
 > use synthetic data only. HealthKit is deferred until a Mac with Xcode is available.
@@ -202,8 +206,10 @@ is labelled "Read-only showcase · synthetic data" and links to this repository,
 locally.
 
 The showcase is published only by the manual workflow
-[`.github/workflows/showcase-pages.yml`](.github/workflows/showcase-pages.yml), from `main`. That workflow has not run
-yet. Setup, publication and the hosted checks: [docs/runbooks/showcase.md](docs/runbooks/showcase.md).
+[`.github/workflows/showcase-pages.yml`](.github/workflows/showcase-pages.yml), from `main`. It is live at
+<https://alextikhon.github.io/SomaLane/>, published from `3bbe2b2` on 2026-11-24 (run 45387434787; hosted checks in the
+[step-8 report](docs/reports/showcase-hosted-verification-2026-11-24.md)). A later push to `main` changes the site only
+when the workflow is run again. Setup, publication and the hosted checks: [docs/runbooks/showcase.md](docs/runbooks/showcase.md).
 
 ## Tests and CI
 
@@ -258,8 +264,9 @@ on a workstation only.
 
 ## What is not established
 
-- Everything was verified on one Windows workstation and in GitHub Actions. Nothing is deployed or published yet, and
-  no production recovery point or time is claimed. Hosting the full application and a hosted restore drill are deferred.
+- Everything was verified on one Windows workstation and in GitHub Actions. The only thing published is the static
+  read-only showcase of synthetic data on GitHub Pages; the full application is not deployed anywhere, and no production
+  recovery point or time is claimed. Hosting the full application and a hosted restore drill are deferred.
 - Sign-in was tested only against a test OpenID Connect provider, never a real one (deferred).
 - The browser suite runs in Chromium, with bounded Firefox and WebKit gates (Playwright's WebKit build at a desktop and
   a phone-sized viewport). Nothing has run in Safari, on a phone or with real GPS yet; the iPhone pilot's physical checks
@@ -268,9 +275,9 @@ on a workstation only.
 - No real Mapbox basemap was rendered in a test. The AI features (search in words, weekly insights, meal drafts, Ask my
   data interpretation) are off by default: none has valid passing model evidence for the current code (Ask my data's
   one passing run is stale after a later constraints correction), and OpenAI has never been called.
-- The read-only showcase has been built and tested only on this workstation. The GitHub Pages workflow exists but has
-  never run, so <https://alextikhon.github.io/SomaLane/> is an expected address, not a confirmed one.
-- Only steps 1 to 7 of the portfolio v1 release plan are done, so its release gates are not met; which claims need which
+- The published showcase was checked in desktop Chromium and Firefox automation (Playwright) against the live site,
+  not in Safari or on a phone. It is a fixed snapshot of synthetic data, not a hosted application.
+- Only steps 1 to 8 of the portfolio v1 release plan are done, so its release gates are not met; which claims need which
   evidence is listed in
   [the release plan](docs/portfolio-v1-release-plan.md#5-capability-claims-and-the-evidence-each-needs).
 - No phone or watch import, no FIT import and no HealthKit. GPX and TCX import cover one documented subset each (one
