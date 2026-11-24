@@ -228,15 +228,15 @@ test.describe('the public read-only showcase, static production build, no API se
     // Tab reaches the source link first, then the three views in order; Enter opens one and focuses its heading.
     const navigation = page.getByRole('navigation', { name: 'Showcase view' });
     const sourceLink = page.locator('a[data-source-link]');
-    if (browserName === 'webkit') {
-      // WebKit, like Safari with its default settings, moves Tab between controls and skips links (neither Tab nor
-      // Alt+Tab focuses a link in Playwright WebKit; release step 6). So the first Tab lands on the first view, and the
-      // link is focused directly to check the same order from it.
-      await page.keyboard.press('Tab');
+    // Playwright WebKit on Windows moves Tab between controls only: neither Tab nor Alt+Tab focuses a link (release
+    // step 6). There the first Tab lands on the first view, and the link is focused directly to check the same order
+    // from it. Playwright WebKit on Linux (hosted CI, runs 45342998163 and 45354574755) focuses the link with Tab, as
+    // Chromium and Firefox do, and takes their path. Neither build is Safari; macOS WebKit is not run by this gate.
+    const tabSkipsLinks = browserName === 'webkit' && process.platform === 'win32';
+    await page.keyboard.press('Tab');
+    if (tabSkipsLinks) {
       await expect(navigation.getByRole('button', { name: 'Today' })).toBeFocused();
       await sourceLink.focus();
-    } else {
-      await page.keyboard.press('Tab');
     }
     await expect(sourceLink).toBeFocused();
     for (const name of ['Today', 'Weekly review', 'Trends']) {
