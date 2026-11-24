@@ -36,9 +36,9 @@
 
 .showcase-banner p { margin: 0; }
 .showcase-banner__data { color: #dfe6e0; font-size: 0.86rem; }
-.showcase-banner__app { color: #aab4ac; font-size: 0.86rem; }
-.showcase-banner__app a { color: #b8f264; font-weight: 750; }
-.showcase-banner__app a:focus-visible { outline: 3px solid rgb(184 242 100 / 35%); outline-offset: 2px; }
+.showcase-banner__source { color: #aab4ac; font-size: 0.86rem; }
+.showcase-banner__source a { color: #b8f264; font-weight: 750; }
+.showcase-banner__source a:focus-visible { outline: 3px solid rgb(184 242 100 / 35%); outline-offset: 2px; }
 
 .showcase-navigation { margin-top: 0.75rem; }
 

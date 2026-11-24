@@ -1,13 +1,14 @@
 import { readdirSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, relative } from 'node:path';
 
 import { expect, test as base, type Locator, type Page } from '@playwright/test';
 
 import { showcaseBuild } from '../support/showcase.js';
 
-// The public read-only showcase (release step 5, ADR-0099) in its static production build, served with NO API server.
-// Every test runs behind a request guard that aborts and records any request to /api (auth and health included) or to
-// another origin, and fails the test if there was one. The page is also instrumented to record every attempt to write
+// The public read-only showcase (release steps 5 and 7, ADR-0099, ADR-0101) in its static production build, served with
+// NO API server under /SomaLane/, the path of the GitHub Pages project site. Every test runs behind a request guard that
+// aborts and records any request to /api (auth and health included), to a path outside /SomaLane/ or to another origin,
+// and fails the test if there was one. The page is also instrumented to record every attempt to write
 // browser storage (Web Storage, IndexedDB, cookies, Cache Storage, a service worker).
 
 const LABEL = 'Read-only showcase · synthetic data';
@@ -26,7 +27,7 @@ const test = base.extend<{ guard: Guard }>({
       const guard: Guard = { forbidden: [], requests: [] };
       await context.route('**/*', async (route) => {
         const url = new URL(route.request().url());
-        if (url.origin !== showcaseBuild.webOrigin || url.pathname === '/api' || url.pathname.startsWith('/api/')) {
+        if (url.origin !== showcaseBuild.webOrigin || url.pathname === '/api' || url.pathname.startsWith('/api/') || !url.pathname.startsWith(showcaseBuild.basePath)) {
           guard.forbidden.push(`${route.request().method()} ${url.href}`);
           await route.abort('blockedbyclient');
           return;
@@ -71,7 +72,7 @@ const test = base.extend<{ guard: Guard }>({
         }
       });
       await use(guard);
-      expect(guard.forbidden, 'requests to /api or another origin').toEqual([]);
+      expect(guard.forbidden, 'requests to /api, outside /SomaLane/ or to another origin').toEqual([]);
       expect(guard.requests.filter((url) => new URL(url).pathname.startsWith('/api'))).toEqual([]);
     },
     { auto: true },
@@ -96,13 +97,23 @@ const NO_STORAGE = { cookie: '', databases: [], local: 0, serviceWorkers: 0, ses
 const FORBIDDEN_CONTROL = /\b(edit|delete|add|save|import|upload|record|start|finish|pause|resume|simulat\w*|sign in|sign out|log in|demo runner|demo coach|draft|generate|ask|share|refresh|retry)\b/iu;
 
 async function expectReadOnlyView(page: Page) {
-  await expect(page.getByText(LABEL, { exact: true })).toBeVisible();
-  await expect(page.locator('a[data-app-link="configured"]')).toHaveAttribute('href', showcaseBuild.appUrl);
+  await expectSourceLink(page);
   const controls = await page.locator('main button, main a, main input:not([type="radio"]), main textarea, main [contenteditable="true"], form').evaluateAll((nodes) =>
     nodes.map((node) => `${node.tagName.toLowerCase()}:${(node.textContent ?? '').trim()}|${node.getAttribute('aria-label') ?? ''}|${node.getAttribute('type') ?? ''}`),
   );
   expect(controls.filter((control) => FORBIDDEN_CONTROL.test(control) || /^(?:input|textarea|form)/u.test(control))).toEqual([]);
   await expect(page.getByRole('button', { name: /Demo (runner|coach)/u })).toHaveCount(0);
+}
+
+/** The label and the one way on, the same in every state: the public source code, and where the full application runs. */
+async function expectSourceLink(page: Page) {
+  await expect(page.getByText(LABEL, { exact: true })).toBeVisible();
+  const source = page.locator('a[data-source-link]');
+  await expect(source).toHaveCount(1);
+  await expect(source).toHaveText('Source code on GitHub');
+  await expect(source).toHaveAttribute('href', showcaseBuild.sourceUrl);
+  await expect(page.locator('[data-showcase-banner]')).toContainText('The full application, with sign-in, recording and editing, is not hosted: it runs locally from the source');
+  await expect(page.getByText(/not configured|invite-only/u)).toHaveCount(0);
 }
 
 /** A select by the text of the label that wraps it (its accessible name also contains the selected option). */
@@ -116,7 +127,7 @@ function rowOf(page: Page, date: string): Locator {
 
 test.describe('the public read-only showcase, static production build, no API server', () => {
   test('follows the journey Today → Weekly review → Trends → the original day or its meals, and back @cross-browser', PHONE, async ({ page }) => {
-    await page.goto('/');
+    await page.goto('./');
     // Today on the sample date, the snapshot's anchor (the browser runs in Auckland on today's clock: neither matters).
     await expect(page.getByRole('heading', { level: 1, name: 'Today' })).toBeVisible();
     await expect(page.locator('.today-day')).toHaveText('Showing Sat, 21 Nov 2026 (sample date) in the time zone Europe/Warsaw.');
@@ -179,8 +190,8 @@ test.describe('the public read-only showcase, static production build, no API se
     expect(await storageState(page)).toEqual(NO_STORAGE);
   });
 
-  test('every view carries the label, its date or range, the application link and no mutation control', PHONE, async ({ page }) => {
-    await page.goto('/');
+  test('every view carries the label, its date or range, the source link and no mutation control', PHONE, async ({ page }) => {
+    await page.goto('./');
     const navigation = page.getByRole('navigation', { name: 'Showcase view' });
     for (const view of ['Today', 'Weekly review', 'Trends'] as const) {
       await navigation.getByRole('button', { name: view }).click();
@@ -209,25 +220,25 @@ test.describe('the public read-only showcase, static production build, no API se
 
   test('works with the keyboard and at 375 px, with the label always in view', PHONE, async ({ browserName, page }) => {
     await page.setViewportSize({ height: 812, width: 375 });
-    await page.goto('/');
+    await page.goto('./');
     await expect(page.getByRole('heading', { level: 1, name: 'Today' })).toBeVisible();
     const fits = async () => expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375);
     await fits();
 
-    // Tab reaches the application link first, then the three views in order; Enter opens one and focuses its heading.
+    // Tab reaches the source link first, then the three views in order; Enter opens one and focuses its heading.
     const navigation = page.getByRole('navigation', { name: 'Showcase view' });
-    const appLink = page.locator('a[data-app-link="configured"]');
+    const sourceLink = page.locator('a[data-source-link]');
     if (browserName === 'webkit') {
       // WebKit, like Safari with its default settings, moves Tab between controls and skips links (neither Tab nor
       // Alt+Tab focuses a link in Playwright WebKit; release step 6). So the first Tab lands on the first view, and the
       // link is focused directly to check the same order from it.
       await page.keyboard.press('Tab');
       await expect(navigation.getByRole('button', { name: 'Today' })).toBeFocused();
-      await appLink.focus();
+      await sourceLink.focus();
     } else {
       await page.keyboard.press('Tab');
     }
-    await expect(appLink).toBeFocused();
+    await expect(sourceLink).toBeFocused();
     for (const name of ['Today', 'Weekly review', 'Trends']) {
       await page.keyboard.press('Tab');
       await expect(navigation.getByRole('button', { name })).toBeFocused();
@@ -271,17 +282,16 @@ test.describe('the public read-only showcase, static production build, no API se
     ['A snapshot that is not JSON', { body: '{ "format": ', contentType: 'application/json', status: 200 }, 'The showcase data file is damaged: it is not valid JSON.'],
     ['A snapshot of another format', { body: JSON.stringify({ format: 'somalane-showcase-snapshot', version: 2 }), contentType: 'application/json', status: 200 }, 'The showcase data file does not match the format this page expects'],
   ] as const) {
-    test(`${name} is reported on the page, with the label and link, and nothing else is asked`, async ({ page }) => {
+    test(`${name} is reported on the page, with the label and the source link, and nothing else is asked`, async ({ page }) => {
       let snapshotRequests = 0;
       await page.route('**/showcase-snapshot.json', async (route) => {
         snapshotRequests += 1;
         await route.fulfill(fulfil);
       });
-      await page.goto('/');
+      await page.goto('./');
       await expect(page.getByRole('alert')).toContainText(message);
       await expect(page.getByRole('alert')).toContainText('it never asks the application for data');
-      await expect(page.getByText(LABEL, { exact: true })).toBeVisible();
-      await expect(page.locator('a[data-app-link="configured"]')).toHaveAttribute('href', showcaseBuild.appUrl);
+      await expectSourceLink(page);
       await expect(page.getByRole('navigation', { name: 'Showcase view' })).toHaveCount(0);
       // Try again asks for the same file again, and only for it.
       await page.getByRole('button', { name: 'Try again' }).click();
@@ -291,36 +301,83 @@ test.describe('the public read-only showcase, static production build, no API se
     });
   }
 
-  test('the request guard catches and fails an /api request, including auth and health @cross-browser', async ({ guard, page }) => {
-    await page.goto('/');
+  test('the request guard catches and fails an /api request, including auth and health, and one outside /SomaLane/ @cross-browser', async ({ guard, page }) => {
+    await page.goto('./');
     await expect(page.getByRole('heading', { level: 1, name: 'Today' })).toBeVisible();
     // Prove the instrument: requests made on purpose from the page are aborted and recorded.
     const outcomes = await page.evaluate(async () =>
-      Promise.all(['/api/health/ready', '/api/session', '/api/auth/login'].map((path) => fetch(path).then(() => 'answered', () => 'failed'))),
+      // The last one is the snapshot's name at the origin's root, outside /SomaLane/: on Pages that is another site.
+      Promise.all(['/api/health/ready', '/api/session', '/api/auth/login', '/showcase-snapshot.json'].map((path) => fetch(path).then(() => 'answered', () => 'failed'))),
     );
-    expect(outcomes).toEqual(['failed', 'failed', 'failed']);
-    expect(guard.forbidden.map((entry) => new URL(entry.split(' ')[1]!).pathname)).toEqual(['/api/health/ready', '/api/session', '/api/auth/login']);
+    expect(outcomes).toEqual(['failed', 'failed', 'failed', 'failed']);
+    expect(guard.forbidden.map((entry) => new URL(entry.split(' ')[1]!).pathname)).toEqual(['/api/health/ready', '/api/session', '/api/auth/login', '/showcase-snapshot.json']);
     // Reset, so the guard's own end-of-test check covers only what the showcase itself did.
     guard.forbidden.length = 0;
     guard.requests.length = 0;
     await page.reload();
     await expect(page.getByRole('heading', { level: 1, name: 'Today' })).toBeVisible();
-    // The page asked for its own HTML, scripts, stylesheet and snapshot file only.
-    const paths = guard.requests.map((url) => new URL(url).pathname);
-    expect(paths.every((path) => path === '/' || path === '/showcase-snapshot.json' || /^\/assets\/[\w.-]+\.(?:js|css)$/u.test(path))).toBe(true);
-    expect(paths).toContain('/showcase-snapshot.json');
+    // The page asked for its own HTML, scripts, stylesheet and snapshot file only, all under /SomaLane/.
+    expect(guard.requests.map((url) => new URL(url).pathname).filter((path) => !ownFile(path))).toEqual([]);
+    expect(guard.requests.map((url) => new URL(url).pathname)).toContain('/SomaLane/showcase-snapshot.json');
   });
 
-  test('the built files contain no API route, storage or sign-in code', () => {
+  test('loads every file from under /SomaLane/, also on a direct reload and when opened as index.html @cross-browser', PHONE, async ({ guard, page }) => {
+    const answered: string[] = [];
+    page.on('response', (response) => answered.push(`${String(response.status())} ${new URL(response.url()).pathname}`));
+    await page.goto('./');
+    await expect(page.getByRole('heading', { level: 1, name: 'Today' })).toBeVisible();
+    // Somewhere else in the journey, then a reload of the address bar's URL: the page starts again on the sample date,
+    // since the navigation lives only in memory.
+    await page.getByRole('navigation', { name: 'Showcase view' }).getByRole('button', { name: 'Trends' }).click();
+    await expect(page.getByRole('heading', { level: 1, name: 'Trends' })).toBeFocused();
+    expect(new URL(page.url()).pathname).toBe('/SomaLane/');
+    await page.reload();
+    await expect(page.getByRole('heading', { level: 1, name: 'Today' })).toBeVisible();
+    await expect(page.locator('.today-day')).toHaveText('Showing Sat, 21 Nov 2026 (sample date) in the time zone Europe/Warsaw.');
+    await expectReadOnlyView(page);
+    await page.goto('./index.html');
+    await expect(page.getByRole('heading', { level: 1, name: 'Today' })).toBeVisible();
+    await expectSourceLink(page);
+
+    const paths = guard.requests.map((url) => new URL(url).pathname);
+    expect(paths.filter((path) => !ownFile(path) && path !== '/SomaLane/index.html')).toEqual([]);
+    // Each of the three loads fetched the snapshot and both assets again from under the base path, and every answer was 200.
+    expect(paths.filter((path) => path === '/SomaLane/showcase-snapshot.json')).toHaveLength(3);
+    expect(paths.filter((path) => /^\/SomaLane\/assets\/[\w.-]+\.js$/u.test(path)).length).toBeGreaterThanOrEqual(3);
+    expect(paths.filter((path) => /^\/SomaLane\/assets\/[\w.-]+\.css$/u.test(path)).length).toBeGreaterThanOrEqual(3);
+    expect(answered.filter((entry) => !entry.startsWith('200 ') && !entry.startsWith('304 '))).toEqual([]);
+    expect(await storageState(page)).toEqual(NO_STORAGE);
+  });
+
+  test('the built output is exactly the static files to publish, with no API route, storage, sign-in or configured address', () => {
+    // What the Pages workflow uploads, file for file (it compares this output with apps/web/dist-showcase/ first).
+    const listing = readdirSync(showcaseBuild.outDir, { recursive: true, withFileTypes: true })
+      .filter((entry) => !entry.isDirectory())
+      .map((entry) => relative(showcaseBuild.outDir, join(entry.parentPath, entry.name)).replaceAll('\\', '/'))
+      .sort();
+    expect(listing.filter((path) => !/^(?:index\.html|showcase-snapshot\.json|assets\/index-[\w-]+\.(?:js|css))$/u.test(path))).toEqual([]);
+    expect(listing.filter((path) => path.endsWith('.js'))).toHaveLength(1);
+    expect(listing.filter((path) => path.endsWith('.css'))).toHaveLength(1);
+    const snapshot = JSON.parse(readFileSync(join(showcaseBuild.outDir, 'showcase-snapshot.json'), 'utf8')) as { dataset: { synthetic: unknown } };
+    expect(snapshot.dataset.synthetic).toBe(true);
+
     const assets = join(showcaseBuild.outDir, 'assets');
-    const files = readdirSync(assets).filter((file) => /\.(?:js|css)$/u.test(file));
-    expect(files.length).toBeGreaterThan(0);
-    for (const file of files) {
+    const scripts: string[] = [];
+    for (const file of readdirSync(assets)) {
       const text = readFileSync(join(assets, file), 'utf8');
-      expect(text, file).not.toMatch(/\/api\/|localStorage|sessionStorage|indexedDB|serviceWorker|X-CSRF|Demo runner|Demo coach/u);
+      expect(text, file).not.toMatch(/\/api\/|localStorage|sessionStorage|indexedDB|serviceWorker|X-CSRF|Demo runner|Demo coach|not configured|invite-only/u);
+      if (file.endsWith('.js')) scripts.push(text);
     }
+    expect(scripts.join('\n')).toContain(showcaseBuild.sourceUrl);
     const html = readFileSync(join(showcaseBuild.outDir, 'index.html'), 'utf8');
     expect(html).toContain('<title>SomaLane · Read-only showcase · synthetic data</title>');
+    // Relative references only, so the files work under /SomaLane/ (or any other path) without a rebuild.
     expect(html).not.toMatch(/src="\/|href="\//u);
+    expect([...html.matchAll(/\s(?:src|href)="([^"]*)"/gu)].map((match) => match[1]!).filter((ref) =>!ref.startsWith('data:') && !ref.startsWith('./assets/'))).toEqual([]);
   });
 });
+
+/** A file of the published page: the page, its snapshot, or one of its built assets, all under /SomaLane/. */
+function ownFile(path: string): boolean {
+  return path === '/SomaLane/' || path === '/SomaLane/showcase-snapshot.json' || /^\/SomaLane\/assets\/[\w.-]+\.(?:js|css)$/u.test(path);
+}

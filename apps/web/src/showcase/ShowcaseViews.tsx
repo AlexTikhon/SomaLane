@@ -37,14 +37,15 @@ function datasetSpan(snapshot: ShowcaseSnapshot): string {
   return `${formatCheckInDate(previous.startDate)} to ${formatCheckInDate(current.endDate)}`;
 }
 
-export function ApplicationLink({ appUrl }: { appUrl: string | null }) {
-  if (appUrl === null) {
-    return <p className="showcase-banner__app" data-app-link="not-configured">The address of the invite-only application is not configured in this build.</p>;
-  }
+/** The public repository. The showcase links here, not to a hosted application: none is hosted (ADR-0101). */
+export const SOURCE_REPOSITORY_URL = 'https://github.com/AlexTikhon/SomaLane';
+
+/** The way on from the showcase, the same in every state: the source code, and where the full application runs. */
+export function SourceLink() {
   return (
-    <p className="showcase-banner__app">
-      <a data-app-link="configured" href={appUrl} rel="noopener noreferrer">Open the invite-only application</a>
-      <span> (sign-in by invitation only; this showcase has no sign-in)</span>
+    <p className="showcase-banner__source">
+      <a data-source-link="" href={SOURCE_REPOSITORY_URL} rel="noopener noreferrer">Source code on GitHub</a>
+      <span> · The full application, with sign-in, recording and editing, is not hosted: it runs locally from the source, as the README describes.</span>
     </p>
   );
 }
@@ -55,15 +56,13 @@ const NAVIGATION: readonly { label: string; view: 'review' | 'today' | 'trends' 
   { label: 'Trends', view: 'trends' },
 ];
 
-/** The frame of every state and view: the persistent label, what the data is, the application link, the navigation. */
+/** The frame of every state and view: the persistent label, what the data is, the source link, the navigation. */
 export function ShowcaseFrame({
-  appUrl,
   children,
   dispatch,
   snapshot,
   view,
 }: {
-  appUrl: string | null;
   children: ReactNode;
   dispatch?: Dispatch | undefined;
   snapshot: ShowcaseSnapshot | null;
@@ -81,7 +80,7 @@ export function ShowcaseFrame({
             ? 'Generated data of one fictional person; nothing here belongs to a real person.'
             : `Generated data of one fictional person, ${datasetSpan(snapshot)} in ${snapshot.dataset.timeZone}; sample date ${formatCheckInDate(snapshot.selections.sampleDate)}. Nothing here belongs to a real person, and nothing can be changed.`}
         </p>
-        <ApplicationLink appUrl={appUrl} />
+        <SourceLink />
       </header>
       {snapshot !== null && view !== null && dispatch !== undefined && (
         <nav aria-label="Showcase view" className="view-switcher showcase-navigation">
@@ -124,7 +123,7 @@ export function ShowcaseProvenance({ snapshot }: { snapshot: ShowcaseSnapshot })
   );
 }
 
-/** Loading and failure of the snapshot file: local, with the label and link still shown, and no other source. */
+/** Loading and failure of the snapshot file: local, with the label and the source link still shown, and no other file. */
 export function ShowcaseLoadState({ load, onRetry }: { load: Exclude<SnapshotLoad, { kind: 'ready' }>; onRetry: () => void }) {
   if (load.kind === 'loading') {
     return (

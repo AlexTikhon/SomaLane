@@ -1,0 +1,104 @@
+name: Showcase on GitHub Pages
+
+# Publishes ONLY the public read-only synthetic showcase (ADR-0099, ADR-0101; release step 7 prepares this workflow, step 8
+# runs it): the static files of `npm run build:showcase`, built from the committed snapshot
+# (apps/web/showcase/public/showcase-snapshot.json). No Docker, database, dataset export, API server or application secret
+# is involved, and nothing of the full application is built or uploaded. Operated by docs/runbooks/showcase.md.
+#
+# Manual only, from main. Job 1 validates and builds with read access to the repository and nothing else; job 2, which
+# starts only after job 1 succeeded, is the only one allowed to deploy (pages: write, id-token: write) and reports the
+# address actions/deploy-pages actually published. The expected project address is https://alextikhon.github.io/SomaLane/
+# until a run confirms it. scripts/showcase-pages-workflow.test.mjs pins this structure.
+
+on:
+  workflow_dispatch:
+
+# Nothing by default; each job names what it needs.
+permissions: {}
+
+# One publication at a time; a run in progress is never cancelled half-way (the official Pages starter's setting).
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  # Job 1: validate the showcase and build the files to publish. Read-only access to the repository.
+  build:
+    name: validate and build the showcase
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    steps:
+      - name: Refuse any ref but main
+        if: github.ref != 'refs/heads/main'
+        run: |
+          echo "::error::The showcase is published from main only; this run was started for ${GITHUB_REF}."
+          exit 1
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          cache: npm
+          node-version-file: .nvmrc
+      - run: npm ci
+      # The committed snapshot against the contract schemas, the views, the source link and the module boundary
+      # (pretest builds the contracts and fixtures packages the showcase imports).
+      - name: Showcase unit tests
+        run: npm run test --workspace=@running-tracker/web -- src/showcase
+      # The browsers pinned by the installed @playwright/test, with their system libraries.
+      - name: Install Chromium, Firefox and WebKit for the browser checks
+        run: npx playwright install --with-deps chromium firefox webkit
+        working-directory: tests/e2e
+      - name: Build the showcase for the browser checks
+        run: node --import tsx support/showcase-build.ts
+        working-directory: tests/e2e
+      # Served by `vite preview` under /SomaLane/ with no API server: the journey, labels and source link, a direct
+      # reload, a broken data file, the request and storage guards, and the exact file set. Chromium, the Firefox subset,
+      # and the WebKit gate's desktop and phone-sized settings (WebKit automation, not Safari).
+      - name: Browser checks under /SomaLane/, no API server
+        run: npx playwright test --config=playwright.showcase.config.ts --project=showcase-chromium --project=showcase-firefox --project=showcase-webkit --project=showcase-webkit-phone
+        working-directory: tests/e2e
+      - name: Build the files to publish
+        run: npm run build:showcase
+      # The upload below is the very output the browser checks tested, file for file.
+      - name: The files to publish are the tested build
+        run: diff -r .local/showcase/e2e/dist apps/web/dist-showcase
+      - name: Upload the showcase, and only the showcase
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: apps/web/dist-showcase
+
+  # Job 2: publish the artifact of job 1. The only job with Pages and OIDC token permissions; no checkout, no build.
+  deploy:
+    name: deploy to GitHub Pages
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      # Fails early, with GitHub's own message, when Pages is not enabled with "GitHub Actions" as its source.
+      - id: pages
+        uses: actions/configure-pages@v6
+      - id: deployment
+        uses: actions/deploy-pages@v5
+      - name: Report the published address
+        env:
+          BASE_URL: ${{ steps.pages.outputs.base_url }}
+          PAGE_URL: ${{ steps.deployment.outputs.page_url }}
+        run: |
+          echo "Published at ${PAGE_URL}"
+          {
+            echo "### Showcase published"
+            echo ""
+            echo "- Page URL reported by actions/deploy-pages: ${PAGE_URL}"
+            echo "- Site base URL reported by actions/configure-pages: ${BASE_URL}"
+            echo "- Expected: https://alextikhon.github.io/SomaLane/ (confirmed only by the hosted checks of release step 8)"
+          } >> "$GITHUB_STEP_SUMMARY"

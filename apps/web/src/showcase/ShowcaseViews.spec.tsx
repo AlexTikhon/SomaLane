@@ -3,16 +3,16 @@ import { describe, expect, it } from 'vitest';
 
 import { initialShowcaseState, showcaseReducer, type ShowcaseAction, type ShowcaseState } from './showcase-state.js';
 import { committedSnapshot } from './showcase-test-support.js';
-import { SHOWCASE_LABEL, ShowcaseFrame, ShowcaseLoadState, ShowcaseMeals, ShowcaseReview, ShowcaseToday, ShowcaseTrends } from './ShowcaseViews.js';
+import { SHOWCASE_LABEL, ShowcaseFrame, ShowcaseLoadState, ShowcaseMeals, ShowcaseReview, ShowcaseToday, ShowcaseTrends, SOURCE_REPOSITORY_URL } from './ShowcaseViews.js';
 
 const snapshot = committedSnapshot();
 const noop = () => undefined;
 const state = (actions: ShowcaseAction[] = []): ShowcaseState => actions.reduce((current, action) => showcaseReducer(snapshot, current, action), initialShowcaseState(snapshot));
 
-function page(view: ShowcaseState, appUrl: string | null = 'https://app.example.org/'): string {
+function page(view: ShowcaseState): string {
   const props = { dispatch: noop, snapshot, state: view };
   return renderToStaticMarkup(
-    <ShowcaseFrame appUrl={appUrl} dispatch={noop} snapshot={snapshot} view={view.view}>
+    <ShowcaseFrame dispatch={noop} snapshot={snapshot} view={view.view}>
       {view.view === 'today' && <ShowcaseToday {...props} />}
       {view.view === 'review' && <ShowcaseReview {...props} />}
       {view.view === 'trends' && <ShowcaseTrends {...props} />}
@@ -33,13 +33,13 @@ const FORBIDDEN_CONTROLS = /\b(Edit|Delete|Add|Save|Import|Upload|Record|Start|F
 const controlTexts = (html: string) => [...html.matchAll(/<(button|a)\b[^>]*>(.*?)<\/\1>/gsu)].map((match) => match[2]!.replace(/<[^>]+>/gu, ''));
 
 describe('every showcase view', () => {
-  it.each(Object.entries(views))('%s carries the read-only, synthetic label, the data it shows and the application link', (_name, view) => {
+  it.each(Object.entries(views))('%s carries the read-only, synthetic label, the data it shows and the source link', (_name, view) => {
     const html = page(view);
     expect(html).toContain(`<strong>${SHOWCASE_LABEL}</strong>`);
     expect(SHOWCASE_LABEL).toBe('Read-only showcase · synthetic data');
     expect(html).toContain('Generated data of one fictional person, Sun, 27 Sept 2026 to Sat, 21 Nov 2026 in Europe/Warsaw; sample date Sat, 21 Nov 2026.');
-    expect(html).toContain('href="https://app.example.org/"');
-    expect(html).toContain('Open the invite-only application');
+    expect(html).toContain('>Source code on GitHub</a>');
+    expect(html).toContain('The full application, with sign-in, recording and editing, is not hosted: it runs locally from the source, as the README describes.');
     expect(html).toContain('Optional AI features are off by default and are not part of this showcase.');
   });
 
@@ -49,10 +49,11 @@ describe('every showcase view', () => {
     expect(html).not.toMatch(/<form|<textarea|type="file"|type="date"|contenteditable/u);
   });
 
-  it('says so when the application link is not configured, and links nowhere', () => {
-    const html = page(views.today, null);
-    expect(html).toContain('The address of the invite-only application is not configured in this build.');
-    expect(html).not.toContain('<a ');
+  it.each(Object.entries(views))('%s links only to the public source repository, with nothing left to configure', (_name, view) => {
+    const html = page(view);
+    expect(SOURCE_REPOSITORY_URL).toBe('https://github.com/AlexTikhon/SomaLane');
+    expect([...html.matchAll(/\shref="([^"]*)"/gu)].map((match) => match[1])).toEqual([SOURCE_REPOSITORY_URL]);
+    expect(html).not.toMatch(/not configured|invite-only/u);
   });
 });
 
@@ -143,9 +144,9 @@ describe('the read-only meal list', () => {
 });
 
 describe('the snapshot’s loading and failure', () => {
-  it('keeps the label and the link, says what failed and offers only to load the file again', () => {
+  it('keeps the label and the source link, says what failed and offers only to load the file again', () => {
     const html = renderToStaticMarkup(
-      <ShowcaseFrame appUrl={null} snapshot={null} view={null}>
+      <ShowcaseFrame snapshot={null} view={null}>
         <ShowcaseLoadState load={{ kind: 'error', message: 'The showcase data file is not available (HTTP 404). This build may be incomplete.' }} onRetry={noop} />
       </ShowcaseFrame>,
     );
@@ -153,13 +154,20 @@ describe('the snapshot’s loading and failure', () => {
     expect(html).toContain('role="alert"');
     expect(html).toContain('The showcase data file is not available (HTTP 404).');
     expect(html).toContain('it never asks the application for data');
-    expect(controlTexts(html)).toEqual(['Try again']);
+    expect(controlTexts(html)).toEqual(['Source code on GitHub', 'Try again']);
+    expect(html).toContain(`href="${SOURCE_REPOSITORY_URL}"`);
     expect(html).not.toContain('Showcase view');
   });
 
-  it('shows a polite loading state', () => {
-    const html = renderToStaticMarkup(<ShowcaseLoadState load={{ kind: 'loading' }} onRetry={noop} />);
+  it('shows a polite loading state, with the label and the source link', () => {
+    const html = renderToStaticMarkup(
+      <ShowcaseFrame snapshot={null} view={null}>
+        <ShowcaseLoadState load={{ kind: 'loading' }} onRetry={noop} />
+      </ShowcaseFrame>,
+    );
     expect(html).toContain('Loading the synthetic snapshot…');
     expect(html).toContain('role="status"');
+    expect(html).toContain(SHOWCASE_LABEL);
+    expect(controlTexts(html)).toEqual(['Source code on GitHub']);
   });
 });

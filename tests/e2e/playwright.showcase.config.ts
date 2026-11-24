@@ -5,10 +5,11 @@ import { defineConfig } from '@playwright/test';
 import { showcaseBuild } from './support/showcase.js';
 import { webkitDesktop, webkitPhone, webkitResults } from './support/webkit-gate.js';
 
-// The public read-only showcase against its STATIC PRODUCTION OUTPUT (release step 5, ADR-0099):
+// The public read-only showcase against its STATIC PRODUCTION OUTPUT (release steps 5 and 7, ADR-0099, ADR-0101):
 // `npm run test:e2e:showcase`. The npm script builds the output first (support/showcase-build.ts); here `vite preview`
-// only serves those files. There is no API server, no database and no proxy in this configuration, and the tests fail on
-// any request to /api or to another origin. No test database variables are read: nothing here can write anywhere.
+// only serves those files, under /SomaLane/ as GitHub Pages does. There is no API server, no database and no proxy in this
+// configuration, and the tests fail on any request to /api, outside /SomaLane/ or to another origin. No test database
+// variables are read: nothing here can write anywhere.
 const webRoot = resolve(import.meta.dirname, '..', '..', 'apps', 'web');
 
 export default defineConfig({
@@ -20,7 +21,8 @@ export default defineConfig({
   testDir: 'showcase',
   timeout: 60_000,
   use: {
-    baseURL: showcaseBuild.webOrigin,
+    // Tests open './' (the page under /SomaLane/), never '/' (the origin's root, where Pages serves nothing of ours).
+    baseURL: showcaseBuild.pageUrl,
     locale: 'en-GB',
     screenshot: 'only-on-failure',
     // The visitor's own zone and clock play no part: the showcase follows the snapshot. A zone far from the dataset's
@@ -40,13 +42,13 @@ export default defineConfig({
     { grep: /@phone/u, name: 'showcase-webkit-phone', outputDir: webkitResults('showcase-phone'), use: webkitPhone },
   ],
   webServer: {
-    command: `node ${JSON.stringify(resolve(webRoot, '..', '..', 'node_modules', 'vite', 'bin', 'vite.js'))} preview --config vite.showcase.config.ts --outDir ${JSON.stringify(showcaseBuild.outDir)} --host 127.0.0.1 --port ${new URL(showcaseBuild.webOrigin).port} --strictPort`,
+    command: `node ${JSON.stringify(resolve(webRoot, '..', '..', 'node_modules', 'vite', 'bin', 'vite.js'))} preview --config vite.showcase.config.ts --outDir ${JSON.stringify(showcaseBuild.outDir)} --base ${showcaseBuild.basePath} --host 127.0.0.1 --port ${new URL(showcaseBuild.webOrigin).port} --strictPort`,
     cwd: webRoot,
     // Serves the built files as they are; `vite preview` never rebuilds them.
     reuseExistingServer: false,
     stderr: 'pipe',
     stdout: 'pipe',
-    url: showcaseBuild.webOrigin,
+    url: showcaseBuild.pageUrl,
   },
   workers: 1,
 });

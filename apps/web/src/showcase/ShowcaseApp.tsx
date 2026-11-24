@@ -10,7 +10,7 @@ import { ShowcaseFrame, ShowcaseLoadState, ShowcaseMeals, ShowcaseReview, Showca
 
 const HEADING_OF: Record<ShowcaseState['view'], string> = { meals: 'meals-title', review: 'review-title', today: 'today-title', trends: 'trends-title' };
 
-function ShowcaseViews({ appUrl, snapshot }: { appUrl: string | null; snapshot: ShowcaseSnapshot }) {
+function ShowcaseViews({ snapshot }: { snapshot: ShowcaseSnapshot }) {
   const [state, dispatch] = useReducer(
     (current: ShowcaseState, action: ShowcaseAction) => showcaseReducer(snapshot, current, action),
     snapshot,
@@ -22,7 +22,7 @@ function ShowcaseViews({ appUrl, snapshot }: { appUrl: string | null; snapshot: 
   }, [state.focusKey, state.view]);
   const props = { dispatch, snapshot, state };
   return (
-    <ShowcaseFrame appUrl={appUrl} dispatch={dispatch} snapshot={snapshot} view={state.view}>
+    <ShowcaseFrame dispatch={dispatch} snapshot={snapshot} view={state.view}>
       {state.view === 'today' && <ShowcaseToday {...props} />}
       {state.view === 'review' && <ShowcaseReview {...props} />}
       {state.view === 'trends' && <ShowcaseTrends {...props} />}
@@ -32,14 +32,12 @@ function ShowcaseViews({ appUrl, snapshot }: { appUrl: string | null; snapshot: 
 }
 
 export interface ShowcaseAppProps {
-  /** The invite-only application's validated address, compiled in at build time, or null when not configured. */
-  appUrl: string | null;
   /** The snapshot file's URL, resolved against the page. */
   snapshotUrl: string;
   fetchFile?: typeof fetch;
 }
 
-export function ShowcaseApp({ appUrl, fetchFile = fetch.bind(globalThis), snapshotUrl }: ShowcaseAppProps) {
+export function ShowcaseApp({ fetchFile = fetch.bind(globalThis), snapshotUrl }: ShowcaseAppProps) {
   const [load, setLoad] = useState<SnapshotLoad>({ kind: 'loading' });
   const [attempt, setAttempt] = useState(0);
   const fetchRef = useRef(fetchFile);
@@ -57,10 +55,10 @@ export function ShowcaseApp({ appUrl, fetchFile = fetch.bind(globalThis), snapsh
 
   if (load.kind !== 'ready') {
     return (
-      <ShowcaseFrame appUrl={appUrl} snapshot={null} view={null}>
+      <ShowcaseFrame snapshot={null} view={null}>
         <ShowcaseLoadState load={load} onRetry={retry} />
       </ShowcaseFrame>
     );
   }
-  return <ShowcaseViews appUrl={appUrl} snapshot={load.snapshot} />;
+  return <ShowcaseViews snapshot={load.snapshot} />;
 }
