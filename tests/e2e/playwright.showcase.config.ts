@@ -3,6 +3,7 @@ import { resolve } from 'node:path';
 import { defineConfig } from '@playwright/test';
 
 import { showcaseBuild } from './support/showcase.js';
+import { webkitDesktop, webkitPhone, webkitResults } from './support/webkit-gate.js';
 
 // The public read-only showcase against its STATIC PRODUCTION OUTPUT (release step 5, ADR-0099):
 // `npm run test:e2e:showcase`. The npm script builds the output first (support/showcase-build.ts); here `vite preview`
@@ -32,6 +33,11 @@ export default defineConfig({
     { name: 'showcase-chromium', use: { browserName: 'chromium' } },
     // The journey and the request guard also in Firefox.
     { grep: /@cross-browser/u, name: 'showcase-firefox', use: { browserName: 'firefox' } },
+    // The WebKit gate (release step 6, ADR-0100), selected only by `npm run test:e2e:webkit`: every test at the desktop
+    // setting, and the journey, the read-only boundary with its missing and zero states, and keyboard and 375 px at the
+    // phone-sized setting. The request and storage guards apply to every one of them.
+    { name: 'showcase-webkit', outputDir: webkitResults('showcase'), use: webkitDesktop },
+    { grep: /@phone/u, name: 'showcase-webkit-phone', outputDir: webkitResults('showcase-phone'), use: webkitPhone },
   ],
   webServer: {
     command: `node ${JSON.stringify(resolve(webRoot, '..', '..', 'node_modules', 'vite', 'bin', 'vite.js'))} preview --config vite.showcase.config.ts --outDir ${JSON.stringify(showcaseBuild.outDir)} --host 127.0.0.1 --port ${new URL(showcaseBuild.webOrigin).port} --strictPort`,

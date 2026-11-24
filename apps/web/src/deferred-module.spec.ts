@@ -70,6 +70,21 @@ describe('a deferred module', () => {
     expect(importUrl).not.toHaveBeenCalled();
   });
 
+  it('retries by importing again in WebKit, whose message names no URL, so no other URL is ever imported', async () => {
+    // Observed in Playwright WebKit 26.6 (release step 6): the same message for a network failure and an HTTP error, and
+    // a repeated import() of the same URL is fetched again, so the second attempt of the importer itself loads it.
+    const webkitFailure = () => new TypeError('Importing a module script failed.');
+    const importer = vi.fn().mockRejectedValueOnce(webkitFailure()).mockRejectedValueOnce(webkitFailure()).mockResolvedValueOnce(views);
+    const importUrl = vi.fn<(url: string) => Promise<unknown>>();
+    const module = deferred(importer, importUrl);
+    await expect(module.load()).rejects.toThrow('Importing a module script failed.');
+    await expect(module.load()).rejects.toThrow('Importing a module script failed.');
+    expect(await module.load()).toBe(views);
+    expect(importer).toHaveBeenCalledTimes(3);
+    expect(importUrl).not.toHaveBeenCalled();
+    expect(failedModuleUrl(new TypeError('Importing a module script failed.'), ORIGIN)).toBeNull();
+  });
+
   it('retries a module the browser keeps failed (Chromium) through a new URL, one per attempt', async () => {
     const importer = vi.fn().mockRejectedValue(chromiumFailure());
     const importUrl = vi.fn<(url: string) => Promise<unknown>>()

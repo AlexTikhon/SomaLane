@@ -161,6 +161,12 @@ test('loading and failure stay in the view’s area, and Try again fetches the c
   // Chromium keeps a failed module failed for the page, so its retries use a new URL; Firefox fetches the same URL again.
   if (browserName === 'chromium') expect(chunkRequests.slice(1).every((request) => /[?&]retry=\d+$/u.test(request))).toBe(true);
   if (browserName === 'firefox') expect(chunkRequests.slice(1)).toContain(files.secondaryViews);
+  // WebKit's import error names no URL, so the new-URL fallback is never taken; it fetches the same URL again instead,
+  // and every retry (the one that failed and the one that loaded) is a request for exactly that file.
+  if (browserName === 'webkit') {
+    expect(chunkRequests.length).toBeGreaterThanOrEqual(3);
+    expect(chunkRequests.every((request) => request === files.secondaryViews)).toBe(true);
+  }
 
   // Navigation and the kept date are intact, and another secondary view now opens with no further request.
   await viewButton(page, 'Today').click();

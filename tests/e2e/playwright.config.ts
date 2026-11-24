@@ -4,6 +4,7 @@ import { defineConfig } from '@playwright/test';
 
 import { loadE2eEnvironment } from './support/environment.js';
 import { liveTrackCursorSigningKey, localSessionApi, suiteSettings, webApp } from './support/suite-config.js';
+import { webkitDesktop, webkitPhone, webkitResults } from './support/webkit-gate.js';
 
 // Throws before any server starts when the test database variables are missing or point elsewhere,
 // so a wrong database never reaches the API process.
@@ -20,6 +21,15 @@ const mapPlaceholderToken = 'pk.e2e-local-placeholder';
 // excluded, so Firefox runs the fake-runtime map lifecycle but not WebGL.
 const firefoxCoreSpecs =
   /[\\/](record|reload-offline|second-tab|gps-recovery|run-sharing|archive-sharing|coach-map)\.spec\.ts$/;
+
+// The bounded WebKit gate (release step 6, ADR-0100; `npm run test:e2e:webkit`, which also runs the production-build
+// and showcase configurations). Desktop: the Firefox core specs above (the same @real-map-runtime exclusion), plus the
+// primary journey (records → Today → Weekly review → Trends → records, capture and upload while other views are shown,
+// reload away from Runner, 375 px and keyboard) and session loss and revalidation, which the Firefox gate does not
+// cover. Phone-sized: the primary journey only. Like Firefox, neither runs unless selected by name.
+const webkitDesktopSpecs =
+  /[\\/](record|reload-offline|second-tab|gps-recovery|run-sharing|archive-sharing|coach-map|session-revalidation|primary-journey)\.spec\.ts$/;
+const webkitPhoneSpecs = /[\\/]primary-journey\.spec\.ts$/;
 
 export default defineConfig({
   ...suiteSettings(environment),
@@ -45,6 +55,14 @@ export default defineConfig({
       testMatch: firefoxCoreSpecs,
       use: { browserName: 'firefox' },
     },
+    {
+      grepInvert: /@real-map-runtime/,
+      name: 'webkit-desktop',
+      outputDir: webkitResults('desktop'),
+      testMatch: webkitDesktopSpecs,
+      use: webkitDesktop,
+    },
+    { name: 'webkit-phone', outputDir: webkitResults('phone'), testMatch: webkitPhoneSpecs, use: webkitPhone },
   ],
   webServer: [
     localSessionApi(environment, {

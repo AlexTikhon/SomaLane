@@ -20,7 +20,7 @@ function jobBlock(name) {
   return next < 0 ? rest : rest.slice(0, next + 3);
 }
 
-const databaseJobs = ['integration', 'e2e', 'e2e-firefox'];
+const databaseJobs = ['integration', 'e2e', 'e2e-firefox', 'e2e-webkit'];
 
 test('CI: the workflow refers to no secret and grants only read access to the repository', () => {
   assert.doesNotMatch(workflow, /secrets\./u);
@@ -90,6 +90,41 @@ test('CI: the Chromium suite runs sharded, and a failure uploads one merged HTML
   assert.match(report, /if: \$\{\{ !cancelled\(\) && needs\.e2e\.result == 'failure' \}\}/u);
   assert.match(report, /merge-reports --reporter html/u);
   assert.match(report, /path: tests\/e2e\/playwright-report\n/u);
+});
+
+test('CI: the WebKit gate installs the pinned WebKit build, runs its three parts in order and keeps a failure\'s traces', () => {
+  const block = jobBlock('e2e-webkit');
+  assert.match(block, /key: playwright-\$\{\{ runner\.os \}\}-\$\{\{ steps\.playwright-version\.outputs\.version \}\}-webkit\n/u);
+  assert.match(block, /- if: steps\.browser-cache\.outputs\.cache-hit != 'true'\n {8}run: npx playwright install --with-deps webkit\n/u);
+  assert.match(block, /- if: steps\.browser-cache\.outputs\.cache-hit == 'true'\n {8}run: npx playwright install-deps webkit\n/u);
+  const migrate = block.indexOf('- run: npm run db:migrate:test');
+  const install = block.indexOf('npx playwright install --with-deps webkit');
+  const parts = ['dev-server', 'production-build', 'showcase'].map((part) => block.indexOf(`run: npm run e2e:webkit:${part}\n`));
+  assert.ok(parts.every((index) => index >= 0), 'all three parts run');
+  assert.ok(migrate < install && install < parts[0] && parts[0] < parts[1] && parts[1] < parts[2], 'migrate, install, then the parts in order');
+  // The later parts also run after the first one failed, and only when it ran at all.
+  const ranFirst = "if: ${{ !cancelled() && (steps.webkit-dev-server.outcome == 'success' || steps.webkit-dev-server.outcome == 'failure') }}";
+  assert.equal(block.split(ranFirst).length - 1, 2);
+  assert.match(block, /- id: webkit-dev-server\n/u);
+  assert.match(block, /if: failure\(\)\n {8}with:\n {10}name: playwright-webkit-gate\n {10}path: \|\n {12}tests\/e2e\/webkit-results\n {12}tests\/e2e\/blob-report\n/u);
+  // No retry flag for the browser runs (the database service's --health-retries is not one).
+  assert.doesNotMatch(block, /playwright test[^\n]*--retries|e2e:webkit[^\n]*--retries/u);
+});
+
+test('CI and npm: the existing browser jobs and commands never select WebKit, and WebKit has its own commands', () => {
+  // Comment lines are left out: a job's block also carries the comment that introduces the next job.
+  for (const job of ['e2e', 'e2e-firefox']) assert.doesNotMatch(jobBlock(job).replace(/^ *#.*$/gmu, ''), /webkit/iu, job);
+  const scripts = JSON.parse(read('tests/e2e/package.json')).scripts;
+  for (const name of ['e2e', 'e2e:firefox', 'e2e:production-build', 'e2e:showcase', 'e2e:smoke', 'e2e:smoke:firefox']) {
+    assert.doesNotMatch(scripts[name], /webkit/iu, name);
+  }
+  // The two configurations that now also define WebKit projects are run by name, project by project.
+  assert.match(scripts['e2e:production-build'], /--project=production-chromium --project=production-firefox$/u);
+  assert.match(scripts['e2e:showcase'], /--project=showcase-chromium --project=showcase-firefox$/u);
+  assert.equal(scripts['e2e:webkit'], 'npm run e2e:webkit:dev-server && npm run e2e:webkit:production-build && npm run e2e:webkit:showcase');
+  assert.match(scripts['e2e:webkit:dev-server'], /^playwright test --project=webkit-desktop --project=webkit-phone$/u);
+  assert.match(scripts['e2e:webkit:production-build'], /^node \.\.\/\.\.\/scripts\/measure-web-bundle\.mjs --out \S+ && playwright test --config=playwright\.production-build\.config\.ts --project=production-webkit$/u);
+  assert.match(scripts['e2e:webkit:showcase'], /^node --import tsx support\/showcase-build\.ts && playwright test --config=playwright\.showcase\.config\.ts --project=showcase-webkit --project=showcase-webkit-phone$/u);
 });
 
 test('CI: the README shows this workflow\'s status badge', () => {

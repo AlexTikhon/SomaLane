@@ -12,6 +12,9 @@ import { showcaseBuild } from '../support/showcase.js';
 
 const LABEL = 'Read-only showcase · synthetic data';
 
+// Also run at the WebKit gate's phone-sized setting (showcase-webkit-phone, release step 6). A tag, not a title change.
+const PHONE = { tag: '@phone' };
+
 interface Guard {
   forbidden: string[];
   requests: string[];
@@ -112,7 +115,7 @@ function rowOf(page: Page, date: string): Locator {
 }
 
 test.describe('the public read-only showcase, static production build, no API server', () => {
-  test('follows the journey Today → Weekly review → Trends → the original day or its meals, and back @cross-browser', async ({ page }) => {
+  test('follows the journey Today → Weekly review → Trends → the original day or its meals, and back @cross-browser', PHONE, async ({ page }) => {
     await page.goto('/');
     // Today on the sample date, the snapshot's anchor (the browser runs in Auckland on today's clock: neither matters).
     await expect(page.getByRole('heading', { level: 1, name: 'Today' })).toBeVisible();
@@ -176,7 +179,7 @@ test.describe('the public read-only showcase, static production build, no API se
     expect(await storageState(page)).toEqual(NO_STORAGE);
   });
 
-  test('every view carries the label, its date or range, the application link and no mutation control', async ({ page }) => {
+  test('every view carries the label, its date or range, the application link and no mutation control', PHONE, async ({ page }) => {
     await page.goto('/');
     const navigation = page.getByRole('navigation', { name: 'Showcase view' });
     for (const view of ['Today', 'Weekly review', 'Trends'] as const) {
@@ -204,7 +207,7 @@ test.describe('the public read-only showcase, static production build, no API se
     expect(await storageState(page)).toEqual(NO_STORAGE);
   });
 
-  test('works with the keyboard and at 375 px, with the label always in view', async ({ page }) => {
+  test('works with the keyboard and at 375 px, with the label always in view', PHONE, async ({ browserName, page }) => {
     await page.setViewportSize({ height: 812, width: 375 });
     await page.goto('/');
     await expect(page.getByRole('heading', { level: 1, name: 'Today' })).toBeVisible();
@@ -212,9 +215,19 @@ test.describe('the public read-only showcase, static production build, no API se
     await fits();
 
     // Tab reaches the application link first, then the three views in order; Enter opens one and focuses its heading.
-    await page.keyboard.press('Tab');
-    await expect(page.locator('a[data-app-link="configured"]')).toBeFocused();
     const navigation = page.getByRole('navigation', { name: 'Showcase view' });
+    const appLink = page.locator('a[data-app-link="configured"]');
+    if (browserName === 'webkit') {
+      // WebKit, like Safari with its default settings, moves Tab between controls and skips links (neither Tab nor
+      // Alt+Tab focuses a link in Playwright WebKit; release step 6). So the first Tab lands on the first view, and the
+      // link is focused directly to check the same order from it.
+      await page.keyboard.press('Tab');
+      await expect(navigation.getByRole('button', { name: 'Today' })).toBeFocused();
+      await appLink.focus();
+    } else {
+      await page.keyboard.press('Tab');
+    }
+    await expect(appLink).toBeFocused();
     for (const name of ['Today', 'Weekly review', 'Trends']) {
       await page.keyboard.press('Tab');
       await expect(navigation.getByRole('button', { name })).toBeFocused();
@@ -241,7 +254,9 @@ test.describe('the public read-only showcase, static production build, no API se
     // The label stays on screen when the page is scrolled to its end.
     await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
     await expect(page.getByText(LABEL, { exact: true })).toBeInViewport();
-    await page.screenshot({ path: join(showcaseBuild.outDir, '..', 'showcase-375-scrolled.png') });
+    // One file per project, so another engine's run never replaces the Chromium picture.
+    const project = test.info().project.name;
+    await page.screenshot({ path: join(showcaseBuild.outDir, '..', project === 'showcase-chromium' ? 'showcase-375-scrolled.png' : `showcase-375-scrolled-${project}.png`) });
     for (const view of ['Today', 'Weekly review']) {
       await navigation.getByRole('button', { name: view }).click();
       await fits();

@@ -258,3 +258,90 @@ jobs:
           path: tests/e2e/playwright-report
           if-no-files-found: ignore
           retention-days: 14
+
+  # The bounded WebKit gate (release step 6, ADR-0100): Playwright's pinned WebKit build at a desktop and a phone-sized
+  # setting, in the three parts `npm run test:e2e:webkit` runs locally: the development servers (the Firefox core specs,
+  # the primary journey and session revalidation), the application's production build and the showcase's static build
+  # with no API server. Each part is its own step, so one failing still runs the others. WebKit automation on Linux, not
+  # Safari and not a phone. Like jobs 3 and 4 it waits for verify and has its own database service.
+  e2e-webkit:
+    name: e2e (webkit gate)
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgis/postgis:17-3.5@sha256:8dfee83d8bd4c2873dc4a233c13ba2799a44f2edb16a0552d58715917fac32ba
+        env:
+          POSTGRES_DB: running_tracker
+          POSTGRES_PASSWORD: running_tracker_local
+          POSTGRES_USER: running_tracker
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -h 127.0.0.1 -U running_tracker -d running_tracker"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 20
+    env:
+      APP_ENV: test
+      DATABASE_URL: postgresql://running_tracker_runtime:runtime_local_only@127.0.0.1:5432/running_tracker_main_must_not_be_used
+      TEST_BOOTSTRAP_DATABASE_URL: postgresql://running_tracker:running_tracker_local@127.0.0.1:5432/running_tracker_test
+      TEST_DATABASE_URL: postgresql://running_tracker_runtime:runtime_local_only@127.0.0.1:5432/running_tracker_test
+      TEST_MAINTENANCE_DATABASE_URL: postgresql://running_tracker_maintenance:maintenance_local_only@127.0.0.1:5432/running_tracker_test
+      TEST_MIGRATION_DATABASE_URL: postgresql://running_tracker_owner:owner_local_only@127.0.0.1:5432/running_tracker_test
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          cache: npm
+          node-version-file: .nvmrc
+      - run: npm ci
+      - name: Create the test database with the docker-compose init script
+        run: docker exec -i "${{ job.services.postgres.id }}" psql -X -v ON_ERROR_STOP=1 -U running_tracker -d running_tracker < db/test-support/20-create-test-database.sql
+      - run: npm run build --workspace=@running-tracker/contracts
+      - run: npm run build --workspace=@running-tracker/fixtures
+      - run: npm run db:bootstrap:test
+      - run: npm run db:migrate:test
+      - id: playwright-version
+        run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+        working-directory: tests/e2e
+      - id: browser-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright-version.outputs.version }}-webkit
+      # The WebKit build pinned by the installed @playwright/test; its system libraries are installed on every run.
+      - if: steps.browser-cache.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps webkit
+        working-directory: tests/e2e
+      - if: steps.browser-cache.outputs.cache-hit == 'true'
+        run: npx playwright install-deps webkit
+        working-directory: tests/e2e
+      - id: webkit-dev-server
+        name: WebKit on the development servers (webkit-desktop, webkit-phone)
+        run: npm run e2e:webkit:dev-server
+        working-directory: tests/e2e
+        env:
+          PLAYWRIGHT_BLOB_OUTPUT_DIR: blob-report/dev-server
+      # Each build is made before its servers start; the later parts run whenever the first one ran.
+      - name: WebKit on the production build (production-webkit)
+        if: ${{ !cancelled() && (steps.webkit-dev-server.outcome == 'success' || steps.webkit-dev-server.outcome == 'failure') }}
+        run: npm run e2e:webkit:production-build
+        working-directory: tests/e2e
+        env:
+          PLAYWRIGHT_BLOB_OUTPUT_DIR: blob-report/production-build
+      - name: WebKit on the showcase's static build, no API server (showcase-webkit, showcase-webkit-phone)
+        if: ${{ !cancelled() && (steps.webkit-dev-server.outcome == 'success' || steps.webkit-dev-server.outcome == 'failure') }}
+        run: npm run e2e:webkit:showcase
+        working-directory: tests/e2e
+      # On failure: every failed test's trace and screenshot (webkit-results/) and the blob reports of the first two parts.
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-webkit-gate
+          path: |
+            tests/e2e/webkit-results
+            tests/e2e/blob-report
+          if-no-files-found: ignore
+          retention-days: 14

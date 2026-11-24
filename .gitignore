@@ -13,6 +13,7 @@ coverage/
 .local/
 test-results/
 smoke-results/
+webkit-results/
 playwright-report/
 blob-report/
 all-blob-reports/

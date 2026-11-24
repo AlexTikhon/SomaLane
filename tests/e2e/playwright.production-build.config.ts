@@ -5,6 +5,7 @@ import { defineConfig } from '@playwright/test';
 import { loadE2eEnvironment } from './support/environment.js';
 import { productionBuild } from './support/production-build.js';
 import { localSessionApi, suiteSettings } from './support/suite-config.js';
+import { webkitDesktop, webkitResults } from './support/webkit-gate.js';
 
 // The bounded browser check of the PRODUCTION build (release step 4, ADR-0098): `npm run test:e2e:production-build`.
 // The development-server suites cannot show how the production bundle is split, so this one serves the real build
@@ -25,6 +26,10 @@ export default defineConfig({
     // Firefox fetches a failed module again where Chromium does not, so the loading, failure and retry check runs in
     // both; the rest is Chromium only.
     { grep: /@cross-browser/u, name: 'production-firefox', use: { baseURL: productionBuild.webOrigin, browserName: 'firefox' } },
+    // The WebKit gate (release step 6, ADR-0100), desktop only: every test here, so WebKit's own module-failure and
+    // retry behaviour, leaving a view while its code loads, and recording and reload without the chunk are all observed
+    // in WebKit rather than assumed from the other engines. Selected only by `npm run test:e2e:webkit`.
+    { name: 'production-webkit', outputDir: webkitResults('production-build'), use: { ...webkitDesktop, baseURL: productionBuild.webOrigin } },
   ],
   testDir: 'production-build',
   webServer: [
