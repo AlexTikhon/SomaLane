@@ -7,6 +7,8 @@
 - Scope: [ADR-0100](../adr/0100-bounded-webkit-gate.md). Commands: `npm run test:e2e:webkit` and its parts
   ([reference](../reference.md#browser-end-to-end-tests)).
 - Step status: see [completion](#completion).
+- Corrected 2026-11-24: the Tab behaviour of section 5.1 is that of Playwright WebKit on **Windows**; on Linux (hosted
+  CI) WebKit focuses links with Tab. See [section 10](#10-hosted-ci-correction-linux-webkit-tab-order-2026-11-24).
 
 ## 1. Environment
 
@@ -78,18 +80,19 @@ retries stayed 0.
 
 ## 5. Observed WebKit behaviour and the narrow changes made
 
-### 5.1 Tab skips links
+### 5.1 Tab skips links (Playwright WebKit on Windows)
 
 Reproduced outside the application with a minimal page (a link, two buttons, a link, an input):
 
 | Engine, setting | Tab × 4 | Alt+Tab × 4 |
 |---|---|---|
-| WebKit 26.6, desktop | button, button, input, body | button, button, input, body |
-| WebKit 26.6, phone-sized | button, button, input, body | button, button, input, body |
+| WebKit 26.6 on Windows, desktop | button, button, input, body | button, button, input, body |
+| WebKit 26.6 on Windows, phone-sized | button, button, input, body | button, button, input, body |
 | Chromium 153, both | link, button, button, link | (focus stays on body) |
 
-WebKit, like Safari with its default setting, never focuses a link with Tab. Change: in WebKit only, the showcase
-keyboard test asserts that the first Tab lands on the first view (the link is skipped), then focuses the link directly
+Playwright WebKit on Windows never focuses a link with Tab. (As first written, this sentence said "WebKit, like Safari
+with its default setting". That generalization was wrong: Linux WebKit focuses links, and Safari was not observed. See
+section 10.) Change: in WebKit only (since 2026-11-24, in WebKit on Windows only), the showcase keyboard test asserts that the first Tab lands on the first view (the link is skipped), then focuses the link directly
 and checks the same Tab order (link → Today → Weekly review → Trends) and everything after it. The Chromium and Firefox
 paths are unchanged. The application's own 375 px keyboard test (`primary-journey`) moves between buttons and passed
 unchanged.
@@ -182,7 +185,7 @@ Step 6's acceptance criteria, against the evidence:
 
 - "The WebKit gate's scenarios are listed, it has run, and its result is recorded; failures are fixed or listed as known
   limitations. Playwright WebKit is recorded as WebKit automation, not as Safari." Listed in section 2 (and ADR-0100),
-  run and recorded in sections 4 and 7 (final: 47/47); the initial failures (Tab skips links) are explained and handled
+  run and recorded in sections 4 and 7 (final: 47/47); the initial failures (Tab skips links in Windows WebKit) are explained and handled
   in the test for WebKit only (section 5.1); the remaining limits are listed below. Recorded throughout as WebKit
   automation.
 - "The physical checklist is either recorded … or explicitly left NOT RUN. If it is not run, no iPhone or Safari
@@ -198,6 +201,70 @@ bounded WebKit gate has run and its result is recorded") holds locally.
   permission prompts, background throttling, storage eviction or GPS. The phone-sized setting is a viewport with touch
   emulation (`maxTouchPoints` stayed 0), not a phone.
 - No real WebGL or Mapbox basemap in WebKit (fake runtime only); no OpenID Connect sign-in in WebKit.
-- Keyboard reachability of links under Safari's default setting is not shown (WebKit skips links on Tab).
-- Not run in hosted CI; the Linux WebKit build in CI may behave differently from the Windows build observed here.
+- Keyboard reachability of links under Safari's default setting is not shown (Windows WebKit skips links on Tab, Linux
+  WebKit does not, and neither is Safari).
+- Not run in hosted CI when written. It then ran, and the Linux WebKit build did behave differently from the Windows
+  build: see section 10.
 - AI-quality limitations are unchanged; no model was run.
+
+## 10. Hosted CI correction: Linux WebKit Tab order (2026-11-24)
+
+Kind of evidence: hosted CI logs and artifacts (read with `gh`), then agent-run checks on the Windows workstation and in
+a local Linux container. Application code unchanged. Nothing staged, committed or pushed.
+
+**Hosted failure.** The WebKit job ran in hosted CI for the first time and failed twice, on the same step:
+
+| Run | Commit | `e2e (webkit gate)` | Other jobs |
+|---|---|---|---|
+| [45342998163](https://github.com/AlexTikhon/SomaLane/actions/runs/45342998163) | `68b5e4b` (step 6) | development servers 32 passed, production build 4 passed, showcase (11 tests) **9 passed, 2 failed** | all `success`; `e2e-report` skipped |
+| [45354574755](https://github.com/AlexTikhon/SomaLane/actions/runs/45354574755) | `6ceb34e` (step 7) | development servers 32 passed, production build 4 passed, showcase (13 tests after step 7) **11 passed, 2 failed**: the same two failures | `e2e (firefox-core)` **cancelled at the 15 min job limit** (below); the others `success`; `e2e-report` skipped |
+
+Both failures were the keyboard/375 px test at `showcase-webkit` and `showcase-webkit-phone`: after the first Tab,
+`expect(Today).toBeFocused()` received `inactive` (line 236). The failure screenshots of the second run (artifact
+`playwright-webkit-gate`) show the focus ring on **Source code on GitHub**, at both settings; the traces record
+`platform: linux`, `browserName: webkit`, Playwright 1.63.0.
+
+**Cause.** The step-6 test applied the Windows WebKit observation (section 5.1) to every WebKit platform. The same
+WebKit version tabs to links on Linux. Reproduced and probed in a local Linux container:
+`mcr.microsoft.com/playwright:v1.63.0-noble` (Ubuntu 24.04, Node 24.20.0) under Docker Desktop 29.9.3, with `npm ci` and
+the CI job's contracts and fixtures builds. The hosted runner was Ubuntu 26.04 (`resolute`) with
+`playwright install --with-deps webkit`, so the container is close to it but not the same image.
+
+- Committed `6ceb34e`, `npm run e2e:webkit:showcase` in the container: **11 passed, 2 failed**: the same test, line and
+  `inactive` as hosted CI.
+- A focus probe (Tab × 4 on the minimal page of section 5.1; `document.activeElement` after one Tab on the built
+  showcase under `/SomaLane/`), run in both environments on the same day:
+
+| Platform | Engine, setting | Minimal page, Tab × 4 | Showcase, first Tab |
+|---|---|---|---|
+| Linux (container) | WebKit 26.6, desktop and phone-sized | link, button, button, link | Source code on GitHub |
+| Linux (container) | Chromium 153, both | link, button, button, link | Source code on GitHub |
+| Windows | WebKit 26.6, desktop and phone-sized | button, button, input, body | Today |
+| Windows | Chromium 153, both | link, button, button, link | Source code on GitHub |
+
+**Change** (`tests/e2e/showcase/showcase.spec.ts`, keyboard/375 px test only). The link-skipping path is now taken when
+`browserName === 'webkit' && process.platform === 'win32'`, not for every WebKit. There, the first Tab must land on
+Today and the link is then focused directly. On every other platform, WebKit on Linux included, the first Tab must land
+on the link, as in Chromium and Firefox. Everything after that is unchanged and shared: Tab order link → Today → Weekly
+review → Trends, Enter focuses the Trends heading, arrow-key radio selection, Enter on a row's Open and on Back to
+Trends, no horizontal scroll at 375 px, the label in view, no storage. No sleep, retry, skip or looser assertion was
+added. The comment no longer likens the behaviour to Safari, and says that macOS WebKit is not run by this gate.
+
+| Check (fresh, this correction) | Result |
+|---|---|
+| Linux container, corrected spec, `--project=showcase-chromium --project=showcase-firefox --project=showcase-webkit --project=showcase-webkit-phone` | **25 passed** (Chromium 9, Firefox 3, WebKit desktop 9, WebKit phone-sized 4) |
+| Linux container, corrected spec, `npm run e2e:webkit:showcase` (the CI step's command) | **13 passed** |
+| Windows, corrected spec, the same four projects | **25 passed** (Chromium 9, Firefox 3, WebKit desktop 9, WebKit phone-sized 4) |
+| `npm run verify` (Windows) | exit 0: lint, typecheck (e2e included), scripts 130, API 2,832, web 1,523, contracts 325, fixtures 14, simulator 3, build |
+| `git diff --check` | clean |
+
+**`e2e (firefox-core)` in run 45354574755.** Cancelled at the job's 15-minute limit during
+`npx playwright install --with-deps firefox`, before any test ran: the Ubuntu package mirror was slow (for example,
+`libavcodec62`, 10.2 MB, took over two minutes). The same job succeeded in run 45342998163 one commit earlier, and its
+code is unchanged. It is recorded as a hosted infrastructure failure and not changed here. A rerun is needed for a green
+run either way.
+
+**Pending: hosted verification.** The Linux container is evidence for the repair, not hosted CI. The correction is
+uncommitted. The WebKit gate counts as passing in hosted CI only after a CI run for the commit that contains it
+concludes `success`, with `e2e (webkit gate)` and `e2e (firefox-core)` both passing, checked with `gh run view`. That
+run is also step 8's first prerequisite. Step 8 (Pages publication and the hosted smoke) is not started.

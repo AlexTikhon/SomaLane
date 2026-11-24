@@ -293,11 +293,15 @@ run, and updates the [status table](#8-status) below. A step adds no feature bey
   the network returns, leaving while loading, recording without the chunk) and the showcase's static build with no API
   server (8 at desktop, 3 at phone size, request and storage guards on). Excluded: the real Mapbox/WebGL smoke (the
   Coach map ran only with a fake runtime; no real-basemap claim) and OpenID Connect sign-in. Evidence:
-  [verification report](reports/webkit-gate-verification-2026-11-23.md): initial runs 32/32, 4/4 and 9 of 11 (WebKit's
-  Tab skips links; test adjusted for WebKit only), final run on the final code 47/47; WebKit's failed dynamic import names
-  no URL, so `deferred-module.ts`'s new-URL fallback is never taken there, and recovery works because WebKit fetches the
-  same URL again (observed, now asserted; no source change). A CI job `e2e (webkit gate)` was added; **hosted CI NOT
-  RUN**. The physical Safari checklist in [iphone-lan-pilot.md](reports/iphone-lan-pilot.md) stays **NOT RUN**: no
+  [verification report](reports/webkit-gate-verification-2026-11-23.md): initial runs 32/32, 4/4 and 9 of 11 (Windows
+  WebKit's Tab skips links; test adjusted for WebKit only), final run on the final code 47/47; WebKit's failed dynamic
+  import names no URL, so `deferred-module.ts`'s new-URL fallback is never taken there, and recovery works because WebKit
+  fetches the same URL again (observed, now asserted; no source change). A CI job `e2e (webkit gate)` was added; **hosted
+  CI NOT RUN** at the time. *Hosted CI, 2026-11-24:* runs 45342998163 and 45354574755 failed the showcase keyboard test
+  in both WebKit projects, because Linux WebKit focuses the link with Tab. The test now takes the link-skipping path for
+  WebKit on Windows only. It passed in a local Linux container; a passing hosted run is **pending**
+  ([report, section 10](reports/webkit-gate-verification-2026-11-23.md#10-hosted-ci-correction-linux-webkit-tab-order-2026-11-24)).
+  The physical Safari checklist in [iphone-lan-pilot.md](reports/iphone-lan-pilot.md) stays **NOT RUN**: no
   iPhone, Safari, background-recording or real-GPS claim. Playwright WebKit is recorded as WebKit automation, not Safari.
 
 ### Step 7. Static publication preparation
@@ -440,7 +444,7 @@ the limit.
 | Claim | Evidence required | Current status (updated 2026-11-24) |
 |---|---|---|
 | Works in desktop Chromium; Firefox core flows | Hosted CI for the commit | Met for `1dac6ed` (run 45055752618, checked 2026-11-23); earlier `6f3dc46` (run 44885261535). Later commits need their own run |
-| WebKit automation | Step-6 gate result | Met locally on 2026-11-23: 47/47 in Playwright WebKit 26.6 on Windows ([report](reports/webkit-gate-verification-2026-11-23.md)); hosted CI job added, NOT RUN. Not Safari, not a phone |
+| WebKit automation | Step-6 gate result | Met locally on 2026-11-23: 47/47 in Playwright WebKit 26.6 on Windows ([report](reports/webkit-gate-verification-2026-11-23.md)). Hosted CI (Linux) failed the showcase keyboard test in runs 45342998163 and 45354574755; corrected on 2026-11-24 and passing in a local Linux container; a passing hosted run is pending ([section 10](reports/webkit-gate-verification-2026-11-23.md#10-hosted-ci-correction-linux-webkit-tab-order-2026-11-24)). Not Safari, not a phone |
 | **iPhone / Safari compatibility** | Physical Safari checklist recorded on an iPhone | **NOT RUN**: must not be claimed |
 | **Mobile GPS accuracy** | Analysed real-device traces (D10) | **0 traces**, D10 PARTIAL: must not be claimed |
 | **Continuous or background recording** | Physical observation of a designed background mode | Not designed (capture is foreground only): must not be claimed |
@@ -551,7 +555,7 @@ No longer needed for v1, deferred with the work that needs them
 | 5. Public read-only showcase | **Done** (2026-11-23) | [ADR-0099](adr/0099-public-read-only-showcase.md), [report](reports/showcase-verification-2026-11-23.md); progress entry of 2026-11-23 (fresh local checks; not hosted; not run in CI) |
 | 6. WebKit gate and physical Safari | **Done** (2026-11-23); physical checklist **NOT RUN**, release desktop-scoped | [ADR-0100](adr/0100-bounded-webkit-gate.md), [report](reports/webkit-gate-verification-2026-11-23.md); progress entry of 2026-11-23 (agent-run workstation automation; not run in hosted CI) |
 | 7. Static publication preparation | **Done** (2026-11-24) | [ADR-0101](adr/0101-github-pages-showcase-publication.md), [report](reports/showcase-pages-preparation-2026-11-24.md); progress entry of 2026-11-24 (fresh local checks; the Pages workflow has not run; nothing published) |
-| 8. GitHub Pages publication and hosted showcase smoke | Not started (owner action; next) | — |
+| 8. GitHub Pages publication and hosted showcase smoke | Not started (owner action; next). Prerequisite open: a successful hosted CI run for the commit that contains the WebKit keyboard correction of 2026-11-24 | [WebKit report, section 10](reports/webkit-gate-verification-2026-11-23.md#10-hosted-ci-correction-linux-webkit-tab-order-2026-11-24); progress entry of 2026-11-24 (hosted WebKit correction) |
 | 9. Portfolio materials, screenshots, changelog, licence | Not started (licence decision) | — |
 | 10. Final verification, release tag, project freeze | Not started | — |
 | Deferred on 2026-11-24: real OIDC provider, single-host deployment, hosted smoke and isolated restore | **Deferred, not done** | [Section 6.1](#61-deferred-by-the-scope-change-of-2026-11-24) |

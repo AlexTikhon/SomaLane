@@ -92,11 +92,17 @@ what WebKit then does.
    WebKit failure output goes to `tests/e2e/webkit-results/<project>/`, never to `test-results/`.
 
 6. **Observed WebKit behaviour, handled narrowly in tests.**
-   - **Keyboard: Tab skips links.** In Playwright WebKit 26.6 neither Tab nor Alt+Tab focuses a link (desktop and phone
-     settings alike); buttons and inputs are tabbable. This is WebKit's (and Safari's default) keyboard model, not an
-     application defect. The showcase's keyboard test now asserts, in WebKit only, that the first Tab lands on the first
-     view (the link is skipped), then focuses the link directly and checks the same Tab order from it. Chromium and
-     Firefox assertions are unchanged.
+   - **Keyboard: Tab skips links in Playwright WebKit on Windows.** In Playwright WebKit 26.6 on Windows neither Tab
+     nor Alt+Tab focuses a link (desktop and phone settings alike); buttons and inputs are tabbable. This is not an
+     application defect. The showcase's keyboard test asserts, in Windows WebKit only, that the first Tab lands on the
+     first view (the link is skipped), then focuses the link directly and checks the same Tab order from it. Chromium
+     and Firefox assertions are unchanged.
+     *Corrected 2026-11-24:* this decision first applied the Windows observation to every WebKit platform and likened
+     it to Safari's default setting. Hosted CI (runs 45342998163 and 45354574755) showed that Playwright WebKit 26.6 on
+     Linux focuses the link with Tab, as Chromium and Firefox do, so the test failed there. The test now takes the
+     link-skipping path only for WebKit on Windows (`process.platform === 'win32'`); every other assertion is the same
+     on all platforms. Safari and macOS WebKit were not observed. Evidence:
+     [report, section 10](../reports/webkit-gate-verification-2026-11-23.md#10-hosted-ci-correction-linux-webkit-tab-order-2026-11-24).
    - **Deferred module retry.** WebKit rejects a failed dynamic import with `TypeError: Importing a module script
      failed.` (for a network failure and for an HTTP 503 alike), which names no URL, so `failedModuleUrl` returns null
      and the `?retry=` fallback is never taken. WebKit does fetch the same URL again on a repeated `import()`, so the

@@ -5944,8 +5944,10 @@ WebKit automation, not Safari and not a phone.
   user agent (it names macOS Safari 26.6 on every host; no iPhone user agent set).
 - **Existing commands.** `e2e:production-build` and `e2e:showcase` now name their projects; every existing project's
   `--list` is unchanged (192, 18, 5, 48 byte-identical; showcase 10 with the same titles, only line numbers moved).
-- **Observed WebKit behaviour, handled narrowly.** Tab never focuses a link (also with Alt+Tab): the showcase keyboard
-  test, WebKit only, checks that Tab skips the link and then the same order from the focused link. A failed dynamic
+- **Observed WebKit behaviour, handled narrowly.** In Playwright WebKit on Windows, Tab never focuses a link (also with
+  Alt+Tab): the showcase keyboard test, WebKit only, checks that Tab skips the link and then the same order from the
+  focused link. (Corrected 2026-11-24: Linux WebKit does focus the link, and the test now takes this path on Windows
+  only; see the entry "hosted WebKit keyboard correction" below.) A failed dynamic
   import names no URL in WebKit (`Importing a module script failed.`), so `deferred-module.ts`'s `?retry=` fallback is
   never taken; WebKit fetches the same URL again, so the importer's own retry recovers (now asserted in the production
   retry test and a unit test). No application source changed.
@@ -6044,3 +6046,57 @@ Evidence and limits: [verification report](reports/showcase-pages-preparation-20
 Step 7's acceptance criteria hold, so **step 7 is done; next task: release step 8**. The owner enables Pages with
 "GitHub Actions" as its source, limits the `github-pages` environment to `main`, and dispatches the workflow on `main`
 after CI succeeded for the commit. The hosted checks H1–H11 are then recorded. Changes are uncommitted.
+
+## Portfolio v1 release step 8 prerequisite: hosted WebKit keyboard correction (2026-11-24)
+
+**Hosted evidence (read with `gh run view`, logs and the `playwright-webkit-gate` artifact).** The WebKit job's first
+hosted runs both failed, at the same step of the showcase's keyboard/375 px test, in `showcase-webkit` and
+`showcase-webkit-phone`. After the first Tab, `Today` was expected to be focused but was `inactive`.
+
+- Run 45342998163 (`68b5e4b`, step 6): `e2e (webkit gate)` failed. Development servers 32 passed, production build 4
+  passed, showcase (11 tests) 9 passed and 2 failed. Every other job succeeded.
+- Run 45354574755 (`6ceb34e`, step 7): `e2e (webkit gate)` failed with the same two failures. Development servers 32
+  passed, production build 4 passed, showcase (13 tests after step 7) 11 passed and 2 failed. `e2e (firefox-core)` was also cancelled at its 15-minute
+  limit, during `playwright install --with-deps firefox`, before any test ran: the Ubuntu mirror was slow, and the same
+  job had passed one commit earlier. This is a hosted infrastructure failure, and nothing was changed for it.
+
+The failure screenshots show the focus ring on **Source code on GitHub**. The traces record `platform: linux`.
+
+**Cause.** The step-6 test applied a Windows observation to every WebKit platform: Playwright WebKit 26.6 on Windows
+skips links on Tab, and the same version on Linux does not. Evidence came from a local Linux container
+(`mcr.microsoft.com/playwright:v1.63.0-noble` under Docker Desktop, `npm ci`, plus the CI job's contracts and fixtures
+builds):
+
+- Committed `6ceb34e` reproduced the hosted failure exactly: 11 passed, 2 failed, same line, `inactive`.
+- A focus probe on the minimal page and on the built showcase showed WebKit focusing link → button → button → link on
+  Linux, and the showcase's first Tab landing on the link. On Windows, WebKit gave button → button → input → body, and
+  the first Tab landed on Today.
+
+**Change.** In `tests/e2e/showcase/showcase.spec.ts`, keyboard test only, the link-skipping path now applies to
+`browserName === 'webkit' && process.platform === 'win32'` and no longer to every WebKit platform. Elsewhere, the first
+Tab must reach the link, as in Chromium and Firefox. The shared journey is unchanged: Tab order, Enter and heading
+focus, radio selection, row Open and Back to Trends, 375 px fit, label in view and no storage. No sleep, retry, skip or
+looser assertion was added. The comment no longer generalizes to WebKit or Safari. The same correction was made in the
+prose of ADR-0100 (decision 6), the step-6 report (section 5.1, completion, limits, new section 10) and the release plan
+(step 6 status, the WebKit capability row, and step 8's status, which now names this prerequisite). Application
+behaviour is unchanged.
+
+| Check (fresh, this change) | Result |
+|---|---|
+| Linux container, corrected spec, `showcase-chromium`, `showcase-firefox`, `showcase-webkit`, `showcase-webkit-phone` | **25 passed** (9, 3, 9, 4) |
+| Linux container, `npm run e2e:webkit:showcase` (the CI step's command) | **13 passed** |
+| Windows, corrected spec, the same four projects | **25 passed** (9, 3, 9, 4) |
+| `npm run verify` (Windows) | exit 0: lint, typecheck (e2e included), scripts 130, API 2,832, web 1,523, contracts 325, fixtures 14, simulator 3, build |
+| `git diff --check` | clean |
+
+Evidence and limits: [step-6 report, section 10](reports/webkit-gate-verification-2026-11-23.md#10-hosted-ci-correction-linux-webkit-tab-order-2026-11-24).
+`openapi.json`, rewritten with line endings only by the contracts builds, was restored.
+
+- **Pending hosted verification.** The Linux container is close to the hosted runner but is not hosted CI (hosted:
+  Ubuntu 26.04; container: Ubuntu 24.04, same Playwright 1.63.0 and WebKit 26.6). The fix counts as verified in hosted CI
+  only when a CI run for the commit that contains it concludes `success`, with `e2e (webkit gate)` and `e2e (firefox-core)`
+  both passing. That run is step 8's first prerequisite.
+- **Not rerun:** the WebKit gate's development-server and production-build parts (both passed in both hosted runs and
+  were not touched), the full Chromium/OIDC suite and the integration suite.
+- **Not done:** no deploy, no repository or GitHub setting changed, no workflow dispatched. Nothing staged, committed or
+  pushed. **Step 8 is not started**: Pages enablement, publication and the hosted checks H1–H11 are still pending.
