@@ -2,6 +2,7 @@ import type { Locator, Page } from '@playwright/test';
 
 import { expect, test } from './support/fixtures.js';
 import { expectOrganizationSelected, expectSignedIn, expectSignedOut } from './support/session.js';
+import { expectTrendsRowActionsOnOneLine } from './support/trends-layout.js';
 
 // Nutrition Trends v2 (ADR-0096): the demo runner logs the required fixture through the Meal log (date A: three entries,
 // one title-only; date B: one entry; date C: nothing), reads each nutrition series on Trends with its coverage, zero and
@@ -118,6 +119,8 @@ test('Nutrition Trends: each nutrient with coverage, zero and missing states; a 
     await expect(trends.row(C)).toContainText('No entry logged');
     await expect(trends.row(C).getByRole('button', { name: /^Open Meal log on / })).toBeVisible();
   }
+  // Open and Meal log on every row, each label on one line at desktop width (release step 9, finding 1).
+  expect(await expectTrendsRowActionsOnOneLine(trends.screen.getByRole('region', { exact: true, name: 'Every date' }))).toBe(56);
   // Fat on A is a recorded zero covering 1 of 3 entries: a dot on the baseline, labelled partial.
   await expect(trends.row(A)).toContainText('0 g');
   await expect(trends.row(A)).toContainText('Partial: 1 of 3 entries with fat');
@@ -242,6 +245,7 @@ test('Nutrition Trends at 375 px: figures, row actions and the Meal log round tr
   await inside(trends.row(yesterday).getByRole('button', { name: /^Open Today on / }), 'Open');
   await inside(trends.row(yesterday).getByRole('button', { name: /^Open Meal log on / }), 'Meal log');
   await inside(trends.row(yesterday).locator('.trends-table__detail'), 'coverage detail');
+  expect(await expectTrendsRowActionsOnOneLine(trends.screen.getByRole('region', { exact: true, name: 'Every date' }))).toBe(56);
   await trends.screen.getByRole('radio', { exact: true, name: 'Food energy' }).check();
   await expect(trends.figure('Recorded total')).toHaveText('19,999.9 kcal');
   expect(await fits(page)).toBe(true);

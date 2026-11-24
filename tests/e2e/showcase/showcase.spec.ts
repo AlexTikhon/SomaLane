@@ -4,6 +4,7 @@ import { join, relative } from 'node:path';
 import { expect, test as base, type Locator, type Page } from '@playwright/test';
 
 import { showcaseBuild } from '../support/showcase.js';
+import { expectTrendsRowActionsOnOneLine } from '../support/trends-layout.js';
 
 // The public read-only showcase (release steps 5 and 7, ADR-0099, ADR-0101) in its static production build, served with
 // NO API server under /SomaLane/, the path of the GitHub Pages project site. Every test runs behind a request guard that
@@ -274,6 +275,30 @@ test.describe('the public read-only showcase, static production build, no API se
     }
     await page.getByRole('button', { name: /^Open 28-day trends ending on/u }).click();
     await fits();
+    expect(await storageState(page)).toEqual(NO_STORAGE);
+  });
+
+  test('keeps each Trends row action on one line, Open alone and Open with Meals, at 1280 and 375 px @cross-browser', PHONE, async ({ page }) => {
+    for (const width of [1280, 375]) {
+      await page.setViewportSize({ height: width === 375 ? 812 : 900, width });
+      await page.goto('./');
+      await page.getByRole('navigation', { name: 'Showcase view' }).getByRole('button', { name: 'Trends' }).click();
+      await expect(page.getByRole('heading', { level: 1, name: 'Trends' })).toBeVisible();
+      const table = page.locator('section[aria-labelledby="trends-table-title"]');
+      for (const [series, actions] of [['Weight', ['Open']], ['Food energy', ['Open', 'Meals']]] as const) {
+        await page.getByRole('radio', { name: series }).check();
+        const row = rowOf(page, '2026-11-21');
+        await expect(row.getByRole('button')).toHaveText([...actions]);
+        // Every row of the 28-day range: 28 buttons, or 56 with Meals.
+        expect(await expectTrendsRowActionsOnOneLine(table), `${series} at ${String(width)} px`).toBe(28 * actions.length);
+        expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+        if (width === 1280 && actions.length === 2) {
+          // At desktop width the two actions sit side by side; they stack only when narrow.
+          const [open, meals] = await Promise.all(['Open Today on Sat, 21 Nov 2026', 'Open the logged meals of Sat, 21 Nov 2026'].map((name) => row.getByRole('button', { name }).boundingBox()));
+          expect(Math.abs((open?.y ?? 0) - (meals?.y ?? 1000))).toBeLessThan(2);
+        }
+      }
+    }
     expect(await storageState(page)).toEqual(NO_STORAGE);
   });
 

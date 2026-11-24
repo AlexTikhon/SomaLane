@@ -4,6 +4,7 @@ import { authedApi, signIn } from './support/api.js';
 import { expect, test } from './support/fixtures.js';
 import { RunnerPage } from './support/runner-page.js';
 import { expectOrganizationSelected, expectSignedIn, expectSignedOut } from './support/session.js';
+import { expectTrendsRowActionsOnOneLine } from './support/trends-layout.js';
 
 // Trends (ADR-0084): the demo runner records values through the existing editors (check-in, movement, meal log), opens
 // Trends from Today, inspects four series with their coverage, gaps and recorded zero, opens a date on Today, edits and
@@ -133,6 +134,8 @@ test('Trends: values recorded through the editors, coverage and gaps, a day open
   await expect(trends.row(early)).toContainText('0 steps');
   await expect(trends.row(today)).toContainText('4,200 steps');
   await expect(trends.row(yesterday)).toContainText('Not recorded');
+  // Each row's Open shows its label on one line at desktop width (release step 9, finding 1).
+  expect(await expectTrendsRowActionsOnOneLine(trends.screen.getByRole('region', { exact: true, name: 'Every date' }))).toBe(28);
   await expect(trends.chart.locator('circle')).toHaveCount(2);
   await expect(trends.chart.locator('polyline')).toHaveCount(0);
   await expect(trends.chart.locator('[data-missing-date]')).toHaveCount(26);
@@ -241,6 +244,7 @@ test('Trends at 375 px: usable without horizontal scrolling, and a late answer f
   for (const name of ['Weight', 'Sleep', 'Steps', 'Food energy']) await inside(trends.screen.getByRole('radio', { name }), name);
   await inside(trends.chart, 'chart');
   await inside(trends.row(today).getByRole('button', { name: /^Open Today on / }), 'Open today');
+  expect(await expectTrendsRowActionsOnOneLine(trends.screen.getByRole('region', { exact: true, name: 'Every date' }))).toBe(28);
   await expect(trends.row(today)).toContainText('123,456 steps');
   await expect(trends.row(chosen)).toContainText('0 steps');
   await trends.screen.getByRole('radio', { name: 'Food energy' }).check();

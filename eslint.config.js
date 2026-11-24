@@ -4,7 +4,9 @@ import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
   {
-    ignores: ['**/coverage/**', '**/dist/**', '**/dist-showcase/**', '**/node_modules/**'],
+    // tests/e2e/.local/ is git-ignored scratch space for agent-run browser scripts (hosted checks, captures,
+    // measurements); it is never committed and has no tsconfig, so it is not linted. Tracked e2e files still are.
+    ignores: ['**/coverage/**', '**/dist/**', '**/dist-showcase/**', '**/node_modules/**', 'tests/e2e/.local/**'],
   },
   eslint.configs.recommended,
   ...tseslint.configs.recommendedTypeChecked,

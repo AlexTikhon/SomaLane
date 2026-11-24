@@ -8,7 +8,9 @@
   <https://alextikhon.github.io/SomaLane/> from `3bbe2b2`, 2026-11-24: hosted CI run 45385170103, Pages run 45387434787,
   hosted checks H1–H11 passed) and 9 (portfolio materials, screenshots of the live showcase, a changelog and the MIT
   licence, 2026-11-24) of 10 are done. The **next task is step 10** (final verification, release tag and project
-  freeze).
+  freeze). Step 9's recorded Trends row-action defect was repaired before step 10 (2026-11-24, one CSS rule, local
+  evidence; [report](reports/trends-row-actions-repair-2026-11-24.md)). The live showcase shows it until the next
+  publication.
 - **Scope change (2026-11-24, the owner's decision).** Only the public read-only synthetic showcase is published (on
   GitHub Pages), and the full application stays available for local demonstrations. Deferred: real external OIDC
   verification, full-application hosting and hosted backup/restore verification
@@ -445,6 +447,27 @@ deployment) and 9 (hosted smoke and isolated restore) are deferred with their re
   - **Recorded defect, not fixed.** At 1280 px the Trends table's row buttons wrap one letter per line. The cause is a
     shared CSS rule (`width: 1%` with `overflow-wrap: anywhere`). The buttons still work. Fixing it would change the
     application, so it needs a decision before step 10 ([report, section 8](reports/portfolio-materials-verification-2026-11-24.md#8-findings)).
+  - **Recorded defect repaired (2026-11-24, local evidence; not committed, not published).**
+    [Repair report](reports/trends-row-actions-repair-2026-11-24.md).
+    - **Change.** In `apps/web/src/styles.css`, `.trends-table__actions` drops `flex-wrap: wrap`, and its buttons get
+      `white-space: nowrap`. The shrink-to-fit actions column now has the buttons' real width. The rules shared with
+      the activity and comparison tables are unchanged, and those tables' column widths were measured identical before
+      and after.
+    - **Layout.** At 1280 px, Open and Meals (or Meal log) each sit on one line, side by side. At 420 px and below they
+      stack, as the existing media query intends. The application had the same defect, now observed.
+    - **Tests.** A shared assertion counts each label's line boxes, because a page-width check had missed the defect.
+      It runs in a new showcase test (all four showcase projects) and in the application's Trends and nutrition specs.
+      It was shown to fail on the old rule.
+    - **Checks.** Showcase Chromium and Firefox: 14 passed. Showcase WebKit desktop and phone-sized: 15 passed.
+      Focused application Trends specs: 8 passed. The verify chain passed with the git-ignored `tests/e2e/.local/`
+      excluded from lint. `npm run verify` run as it is fails only on those local agent scripts. `git diff --check` is
+      clean.
+    - **Lint scope follow-up.** `eslint.config.js` now ignores the git-ignored scratch folder `tests/e2e/.local/**`
+      globally, and tracked e2e files are still linted. After that, the standard `npm run verify`, with no exclusion,
+      **passed (exit 0)**, and `git diff --check` is clean. The earlier failed run stays recorded
+      ([report, section 7.1](reports/trends-row-actions-repair-2026-11-24.md#71-lint-scope-the-git-ignored-scratch-folder-follow-up-2026-11-24)).
+    - **Hosted.** Not verified. The live site still serves `3bbe2b2`, with the defect, until step 10 publishes a new
+      commit.
 
 ### Step 10. Final verification, release tag and project freeze
 
@@ -606,6 +629,6 @@ No longer needed for v1, deferred with the work that needs them
 | 6. WebKit gate and physical Safari | **Done** (2026-11-23); physical checklist **NOT RUN**, release desktop-scoped | [ADR-0100](adr/0100-bounded-webkit-gate.md), [report](reports/webkit-gate-verification-2026-11-23.md); progress entry of 2026-11-23 (agent-run workstation automation; not run in hosted CI) |
 | 7. Static publication preparation | **Done** (2026-11-24) | [ADR-0101](adr/0101-github-pages-showcase-publication.md), [report](reports/showcase-pages-preparation-2026-11-24.md); progress entry of 2026-11-24 (fresh local checks; the Pages workflow has not run; nothing published) |
 | 8. GitHub Pages publication and hosted showcase smoke | **Done** (2026-11-24): published at <https://alextikhon.github.io/SomaLane/> from `3bbe2b2` | [Report](reports/showcase-hosted-verification-2026-11-24.md); hosted CI run [45385170103](https://github.com/AlexTikhon/SomaLane/actions/runs/45385170103) and Pages run [45387434787](https://github.com/AlexTikhon/SomaLane/actions/runs/45387434787), both `success`; H1–H11 passed (agent-run hosted checks in desktop Chromium and Firefox automation); progress entry of 2026-11-24 (step 8) |
-| 9. Portfolio materials, screenshots, changelog, licence | **Done** (2026-11-24): README, four screenshots of the live showcase, interview package, `CHANGELOG.md`, MIT `LICENSE` | [Report](reports/portfolio-materials-verification-2026-11-24.md); progress entry of 2026-11-24 (step 9; documentation and assets, fresh checks; nothing committed or redeployed) |
+| 9. Portfolio materials, screenshots, changelog, licence | **Done** (2026-11-24): README, four screenshots of the live showcase, interview package, `CHANGELOG.md`, MIT `LICENSE` | [Report](reports/portfolio-materials-verification-2026-11-24.md); progress entry of 2026-11-24 (step 9; documentation and assets, fresh checks; nothing committed or redeployed). Its recorded Trends row-action defect was repaired on 2026-11-24: [repair report](reports/trends-row-actions-repair-2026-11-24.md) (local checks; not hosted) |
 | 10. Final verification, release tag, project freeze | Not started (**next**) | — |
 | Deferred on 2026-11-24: real OIDC provider, single-host deployment, hosted smoke and isolated restore | **Deferred, not done** | [Section 6.1](#61-deferred-by-the-scope-change-of-2026-11-24) |

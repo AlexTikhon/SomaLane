@@ -6211,3 +6211,77 @@ documentation and assets on the Windows workstation, and agent-run captures from
 - **Not run.** `npm run verify`, integration, browser suites, any database or demo; hosted CI; a Pages dispatch. No
   application, API, authentication, workflow or dependency change. Nothing was staged, committed, pushed, tagged or
   released, and the live site still serves `3bbe2b2`. **Step 9 is done; step 10 is next.**
+
+## Portfolio v1: Trends table row-action layout repair, recorded defect before step 10 (2026-11-24)
+
+Evidence: [repair report](reports/trends-row-actions-repair-2026-11-24.md). Local checks on the Windows workstation
+only (Node 24.11.1, Playwright 1.63.0 with Chromium 153, Firefox 155 and WebKit 26.6). No hosted CI, Pages run or check
+against the live site. Baseline `8f66554`. This repairs the defect recorded by step 9
+([report, section 8](reports/portfolio-materials-verification-2026-11-24.md#8-findings)). The release plan allows only
+recorded defects to change at this stage.
+
+- **Change** (`apps/web/src/styles.css`). `.trends-table__actions` no longer has `flex-wrap: wrap`, and
+  `.trends-table__actions button { white-space: nowrap; }` is new.
+  - Cause: the actions column's `width: 1%` sizes it to min-content. Buttons inherit `overflow-wrap: anywhere` from
+    the cell, which made that min-content one glyph.
+  - Now: the column is as wide as the buttons. At 1280 px they sit side by side on one line each; at 420 px and below
+    they stack, through the existing media query.
+  - No markup, component, data, contract or authentication change. The rules shared with the activity and comparison
+    tables are untouched.
+- **Before** (showcase build at `8f66554`, the asset names the live site serves). In Chromium, Firefox and WebKit, at
+  1280 and 375 px, every row button's label broke over 4 lines. At 1280 px "Open" was 38.5 × 98 px in a 49.7 px column.
+  `scrollWidth` stayed within the viewport, which is why the width checks passed. The application showed the same
+  defect, now observed: "Open" over 4 lines, "Meal log" over 5.
+- **After.** In all three engines, 0 of 28 (Open only) and 0 of 56 (Open + Meals) buttons wrap.
+  - At 1280 px: Open 64 × 38 px and Meals 67.3 × 38 px, side by side.
+  - At 375 px: stacked, with dates and coverage details still wrapping.
+  - From 421 to 768 px, even with "Meal log" in Verdana: one row, nothing wraps or overflows.
+  - The activity comparison and activity "every date" tables have identical column widths before and after, to 0.1 px.
+  - The showcase JavaScript is byte-identical, and only the stylesheet changed.
+- **Tests.** `tests/e2e/support/trends-layout.ts` (`expectTrendsRowActionsOnOneLine`) counts each label's line boxes
+  and checks for clipping.
+  - Used by a new showcase test, tagged `@cross-browser` and `@phone`: Weight and Food energy at 1280 and 375 px, plus
+    side by side at 1280 px.
+  - Also used by `trends.spec.ts` and `trends-nutrition.spec.ts`, at 1280 and 375 px.
+  - Red first: the showcase test failed on the pre-fix build, and the four application tests failed with the old rule
+    restored, each on this assertion.
+- **Database for the application specs, checked first.** Every test URL points at `127.0.0.1:5433`, database
+  `running_tracker_test`, roles `running_tracker_runtime`, `running_tracker_maintenance` and `running_tracker_owner`.
+  That is the local `running-tracker-postgres-1` container. No shell override of `.env`, and the suite's `_test` guard
+  applies.
+- **Screenshots.** Eight before/after images (showcase and application, 1280 and 375 px) are in
+  `docs/assets/evidence/trends-row-actions-2026-11-24/`, with their digests in the report. The step-9 README
+  screenshots are unchanged.
+
+| Check | Result |
+|---|---|
+| New showcase test on the pre-fix build; application Trends tests with the old rule | failed as intended (1 and 4), each on the new assertion |
+| `npm run test:e2e:showcase` (Chromium, Firefox) | 14 passed |
+| `npm run e2e:webkit:showcase -w @running-tracker/e2e` (WebKit desktop, phone-sized) | 15 passed |
+| `playwright test --project=chromium trends.spec.ts trends-nutrition.spec.ts` (also selects `activity-trends.spec.ts`) | 8 passed |
+| `npm run verify` | `npm run verify` itself **failed at lint**, only on git-ignored agent scripts under `tests/e2e/.local/` (`hosted/` and `screenshots/` from steps 8–9, and `layout/` from this repair), which ESLint reads because it does not use `.gitignore`. No tracked file had a problem. The same chain with only that folder excluded (`eslint . --ignore-pattern "tests/e2e/.local/**"`, then `npm run typecheck`, `npm test` and `npm run build`) **passed**: lint clean; typecheck clean; tests 130 (migration scripts) + 2832 + 1523 + 325 + 14 + 3, 0 failed; build OK (only Vite's existing large-chunk warning for Mapbox) |
+| `git diff --check` | clean (exit 0); the new files have no whitespace errors |
+
+- **Not done.** The live showcase still serves `3bbe2b2`, with the defect. Hosted verification of the repair belongs
+  to step 10, which was not started. Nothing was staged, committed, pushed, deployed or tagged.
+
+### Follow-up: lint scope for the git-ignored scratch folder (2026-11-24)
+
+The first `npm run verify` in the table above failed at lint, only on agent scratch scripts in the git-ignored
+`tests/e2e/.local/`. ESLint does not read `.gitignore`, and those scripts have no tsconfig. That result stays recorded.
+
+- **Change.** `eslint.config.js`: `'tests/e2e/.local/**'` added to the existing global `ignores` list, with a comment.
+  No rule, parser option or other pattern changed.
+- **Scope checked.** A scratch script is now reported as ignored. The tracked `tests/e2e/support/trends-layout.ts`,
+  `showcase/showcase.spec.ts`, `trends.spec.ts` and `trends-nutrition.spec.ts` are still linted with the type-aware
+  rules (0 errors).
+- **Preserved.** Every file in `tests/e2e/.local/` (`hosted/`, `layout/`, `screenshots/`) is untouched. The CSS
+  repair, the browser assertions, the screenshots and the dependencies are unchanged.
+
+| Check (after the change) | Result |
+|---|---|
+| `npm run verify`, standard, no command-line exclusion | **passed** (exit 0): lint and typecheck clean; tests 130 + 2832 + 1523 + 325 + 14 + 3, 0 failed; build OK (Vite's existing Mapbox chunk-size warning only) |
+| `git diff --check` | clean (exit 0) |
+
+Details in the [repair report, section 7.1](reports/trends-row-actions-repair-2026-11-24.md#71-lint-scope-the-git-ignored-scratch-folder-follow-up-2026-11-24).
+Nothing was staged, committed, pushed, deployed or tagged.

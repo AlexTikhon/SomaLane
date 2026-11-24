@@ -182,3 +182,11 @@ boundaries the README lists, not a claim that the showcase "cannot leak".
   was the runbook link fixed above. This correction renames no heading.
 - `git diff --check`: clean.
 - Nothing was staged, committed, pushed, deployed or tagged.
+
+## 11. Finding 1 repaired (2026-11-24)
+
+Section 8, finding 1 is kept above as recorded. It was repaired after this report, before step 10, in a separate
+change: [Trends table row-action layout repair](trends-row-actions-repair-2026-11-24.md). One CSS rule changed in
+`apps/web/src/styles.css`, and a browser assertion was added that counts each label's line boxes. The repair report
+confirms that the application showed the same defect. The four screenshots of section 2 are unchanged and remain dated
+evidence of the live site at `3bbe2b2`, which still has the defect until the next publication.
